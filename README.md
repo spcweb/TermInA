@@ -4,7 +4,13 @@
 
 Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 
-![Termina Banner](assets/banner.png)
+## 🎬 Demo Videos
+
+### Settings Panel
+<video src="./Settings.webm" controls width="600" poster="assets/banner.png"></video>
+
+### AI Command Demo
+<video src="./comand.webm" controls width="600" poster="assets/banner.png"></video>
 
 ## 🌟 Features
 
