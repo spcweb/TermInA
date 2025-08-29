@@ -11,7 +11,7 @@ Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 ![Settings Demo](assets/Settings.gif)
 
 ### AI Command Demo
-![AI Command Demo](assets/comand-ottimizzato.gif)
+![AI Command Demo](assets/comand.gif)
 
 ## 🌟 Features
 
