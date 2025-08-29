@@ -6,10 +6,10 @@
 - **File**: `dist/Termina-2.0.0-arm64.dmg` (109.6 MB)
 - **Installation**: 
   1. Double-click the `.dmg` file
-  2. Drag Termina to Applications folder
+  2. Drag Termina to the Applications folder
   3. Launch Termina from Launchpad or Applications
 
-### � Linux
+### 🐧 Linux
 - **File**: `dist/Termina-2.0.0-arm64.AppImage` (117.2 MB)
 - **Installation**:
   1. Make executable: `chmod +x Termina-2.0.0-arm64.AppImage`
@@ -19,10 +19,10 @@
 - **File**: `dist/Termina Setup 2.0.0.exe` (89.3 MB)
 - **Installation**:
   1. Double-click the installer `.exe`
-  2. Follow installation wizard
+  2. Follow the installation wizard
   3. Launch from Start Menu or Desktop
 
-### �🛠️ How to Generate Other Builds
+### 🛠️ How to Generate Other Builds
 
 #### 🐧 Linux (AppImage)
 ```bash
@@ -100,23 +100,23 @@ For custom icons, replace these files in the `build/` folder:
 ## 🚀 Distribution
 
 ### macOS
-- Il file `.dmg` può essere distribuito direttamente
-- Per App Store serve certificato sviluppatore Apple
+- The `.dmg` file can be distributed directly
+- For App Store, an Apple developer certificate is required
 
 ### Linux
-- L'`.AppImage` funziona su tutte le distro
-- Anche disponibili formati `.deb` e `.rpm`
+- The `.AppImage` works on all distributions
+- `.deb` and `.rpm` formats are also available
 
 ### Windows
-- Il file `.exe` è un installer NSIS
-- Include disinstallatore automatico
+- The `.exe` file is an NSIS installer
+- Includes automatic uninstaller
 
-## 🔧 Note Tecniche
+## 🔧 Technical Notes
 
-- **Code Signing**: Al momento disabilitato (richiede certificato sviluppatore)
-- **Auto-updater**: Configurabile aggiungendo server di update
-- **Icone**: Attualmente usando placeholder, personalizza in `build/`
+- **Code Signing**: Currently disabled (requires developer certificate)
+- **Auto-updater**: Configurable by adding an update server
+- **Icons**: Currently using placeholders, customize in `build/`
 
 ---
 
-**🎯 La tua app è pronta per essere distribuita!**
+**🎯 Your app is ready to be distributed!**
