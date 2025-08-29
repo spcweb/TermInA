@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Termina - Modern Terminal</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="simple-terminal.css">
+</head>
+<body>
+  <div id="terminal-container">
+    <!-- Top Bar (senza controlli window duplicati) -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <div class="app-title">Termina</div>
+      </div>
+      
+      <div class="top-bar-right">
+        <div class="ai-status" id="ai-status">
+          <div class="ai-status-dot"></div>
+          <span id="ai-provider-name">Gemini</span>
+        </div>
+        <button class="settings-btn" id="settings-btn" title="Impostazioni (⌘,)">
+          ⚙️
+        </button>
+      </div>
+    </div>
+    
+    <!-- Terminal Content -->
+    <div class="terminal-content">
+      <div id="terminal"></div>
+    </div>
+  </div>
+
+  <script src="simple-terminal.js"></script>
+  <!-- <script src="renderer.js"></script> -->
+</body>
+</html>

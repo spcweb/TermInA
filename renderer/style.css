@@ -1,0 +1,861 @@
+/* Warp-inspired Modern Terminal Design */
+
+/* Base Variables */
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #383838;
+  --text-primary: #ffffff;
+  --text-secondary: #d0d0d0;
+  --text-muted: #888888;
+  --accent-blue: #007acc;
+  --accent-purple: #8b5cf6;
+  --accent-green: #10b981;
+  --border-color: #444444;
+  --shadow-light: rgba(255, 255, 255, 0.1);
+  --shadow-dark: rgba(0, 0, 0, 0.5);
+  --blur-amount: blur(20px);
+}
+
+/* Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, #2a2a2a 100%);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: var(--blur-amount);
+  -webkit-backdrop-filter: var(--blur-amount);
+  overflow: hidden;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Top Bar */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  padding-left: 80px; /* Space for macOS traffic lights */
+  background: rgba(45, 45, 45, 0.9);
+  backdrop-filter: var(--blur-amount);
+  -webkit-backdrop-filter: var(--blur-amount);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 48px;
+  position: relative;
+}
+
+.top-bar-left {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* App Title */
+.app-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* AI Status */
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+.ai-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 
+    0 0 12px rgba(16, 185, 129, 0.9),
+    0 0 4px rgba(16, 185, 129, 1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  animation: pulse-bright 2s infinite;
+  flex-shrink: 0;
+  border: 1px solid #10b981;
+  position: relative;
+}
+
+.ai-status-dot::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), transparent 50%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.ai-status.offline .ai-status-dot {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 
+    0 0 12px rgba(239, 68, 68, 0.9),
+    0 0 4px rgba(239, 68, 68, 1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  border-color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-bright {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 
+      0 0 12px rgba(16, 185, 129, 0.9),
+      0 0 4px rgba(16, 185, 129, 1),
+      inset 0 1px 1px rgba(255, 255, 255, 0.4),
+      inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: scale(1.1);
+    box-shadow: 
+      0 0 20px rgba(16, 185, 129, 1),
+      0 0 8px rgba(16, 185, 129, 1),
+      inset 0 1px 1px rgba(255, 255, 255, 0.6),
+      inset 0 -1px 1px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Settings Button */
+.settings-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+/* Terminal Content */
+.terminal-content {
+  flex: 1;
+  position: relative;
+  background: rgba(30, 30, 30, 0.8);
+  padding: 16px;
+  overflow: hidden;
+}
+
+#terminal {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  outline: none;
+  cursor: text;
+}
+
+#terminal:focus {
+  outline: none;
+}
+
+/* Minimal xterm styling - don't interfere with layout */
+.xterm {
+  padding: 0;
+  margin: 0;
+}
+
+.xterm .xterm-viewport {
+  background: transparent !important;
+  overflow-y: auto;
+}
+
+.xterm .xterm-screen {
+  background: transparent !important;
+}
+
+/* Cursore super visibile - approccio aggressivo */
+/* FORZA AGGRESSIVAMENTE IL CURSORE XTERM */
+.xterm .xterm-cursor {
+    background-color: #00ff00 !important;
+    color: transparent !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    width: 3px !important;
+    height: 18px !important;
+    border-radius: 1px !important;
+    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
+    z-index: 9999 !important;
+    animation: blink-smooth 1s ease-in-out infinite !important;
+    position: relative !important;
+}
+
+/* Forza tutti i possibili selettori del cursore */
+.xterm-cursor,
+.xterm .xterm-cursor-blink,
+.xterm .xterm-cursor-bar,
+.xterm .xterm-cursor-block,
+.xterm .xterm-cursor-underline {
+    background-color: #00ff00 !important;
+    color: transparent !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    width: 3px !important;
+    height: 18px !important;
+    border-radius: 1px !important;
+    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
+    z-index: 9999 !important;
+    animation: blink-smooth 1s ease-in-out infinite !important;
+}
+
+.xterm-cursor-layer {
+    z-index: 9999 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Se ancora non funziona, creiamo un cursore con ::after */
+.xterm-screen::after {
+    content: '|';
+    color: #00ff00;
+    position: absolute;
+    left: 50px;
+    top: 400px;
+    font-size: 18px;
+    font-weight: bold;
+    animation: blink-smooth 1s ease-in-out infinite;
+    z-index: 9999;
+    pointer-events: none;
+}
+
+/* Nascondi solo il nostro cursore custom per ora */
+.custom-terminal-cursor,
+#super-cursor {
+    display: none !important;
+}
+
+/* Super visible custom cursor con animazione lampeggiante */
+.custom-terminal-cursor {
+    position: absolute !important;
+    background-color: #00ff00 !important;
+    width: 2px !important;
+    height: 18px !important;
+    border-radius: 1px !important;
+    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
+    z-index: 9999 !important;
+    animation: blink-smooth 1s ease-in-out infinite;
+}
+
+#super-cursor {
+    position: absolute !important;
+    background-color: #00ff00 !important;
+    width: 2px !important;
+    height: 18px !important;
+    border-radius: 1px !important;
+    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
+    z-index: 9999 !important;
+    animation: blink-smooth 1s ease-in-out infinite;
+    /* Rimuovo top e bottom fissi, li gestirà JavaScript */
+}
+
+/* Animazione lampeggiante fluida */
+@keyframes blink-cursor {
+    0%, 50% { 
+        opacity: 1;
+        transform: scaleY(1);
+    }
+    51%, 100% { 
+        opacity: 0.2;
+        transform: scaleY(0.95);
+    }
+}/* Cursore personalizzato come ultimo resort */
+.custom-terminal-cursor {
+  position: absolute;
+  width: 3px;
+  height: 18px;
+  background-color: #00ff00;
+  border: 1px solid #ffffff;
+  box-shadow: 0 0 10px #00ff00;
+  z-index: 1000;
+  pointer-events: none;
+  animation: super-blink 1s infinite;
+}
+
+@keyframes super-blink {
+  0%, 50% { 
+    opacity: 1;
+    background-color: #00ff00;
+    box-shadow: 0 0 15px #00ff00;
+  }
+  51%, 100% { 
+    opacity: 0.4;
+    background-color: #00aa00;
+    box-shadow: 0 0 5px #00aa00;
+  }
+}
+
+/* Make sure text selection works */
+.xterm .xterm-selection div {
+  background: rgba(0, 122, 204, 0.3) !important;
+}
+
+/* Ensure terminal can receive focus */
+.xterm textarea {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Scrollbar Styles */
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Welcome Message Styles */
+.welcome-message {
+  color: var(--accent-blue);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.ai-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  margin-bottom: 16px;
+}
+
+/* AI Response Styles */
+.ai-thinking {
+  color: var(--accent-purple);
+  font-style: italic;
+}
+
+.ai-response {
+  color: var(--accent-green);
+  margin: 8px 0;
+  padding: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border-left: 3px solid var(--accent-green);
+  border-radius: 4px;
+}
+
+.ai-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+/* Command Styles */
+.command-highlight {
+  color: var(--accent-blue);
+  font-weight: 500;
+}
+
+.directory-path {
+  color: var(--accent-purple);
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Focus and Selection */
+.xterm .xterm-selection div {
+  background: rgba(0, 122, 204, 0.3) !important;
+}
+
+.xterm.focus .xterm-cursor {
+  background: var(--accent-blue) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .top-bar {
+    padding: 6px 12px;
+  }
+  
+  .terminal-content {
+    padding: 12px;
+  }
+  
+  .xterm {
+    font-size: 12px !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  backdrop-filter: blur(var(--blur-amount));
+  -webkit-backdrop-filter: blur(var(--blur-amount));
+}
+
+/* Main Terminal Container */
+#terminal-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top Bar */
+.top-bar {
+  height: 60px;
+  background: rgba(30, 33, 36, 0.95);
+  backdrop-filter: blur(var(--blur-amount));
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 1000;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.window-controls {
+  display: flex;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.control-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.control-btn.close { 
+  background: #ff5f57; 
+}
+
+.control-btn.minimize { 
+  background: #ffbd2e; 
+}
+
+.control-btn.maximize { 
+  background: #28ca42; 
+}
+
+.control-btn:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+.app-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-left: 12px;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+/* AI Status Indicator */
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(0, 212, 170, 0.1);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-accent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-status:hover {
+  background: rgba(0, 212, 170, 0.2);
+}
+
+.ai-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Settings Button */
+.settings-btn {
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-primary);
+}
+
+/* Terminal Content */
+.terminal-content {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#terminal {
+  flex: 1;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Modern xterm styling */
+.xterm {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: text;
+}
+
+.xterm .xterm-viewport {
+  background: transparent !important;
+  overflow-y: auto;
+}
+
+.xterm .xterm-screen {
+  background: transparent !important;
+}
+
+.xterm-cursor {
+  background: var(--color-accent) !important;
+  color: var(--bg-primary) !important;
+}
+
+/* AI Response Box - Warp Style */
+.ai-box {
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.1) 0%, rgba(0, 168, 255, 0.05) 100%);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 12px;
+  margin: 16px 0;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-soft);
+}
+
+.ai-header {
+  background: rgba(0, 212, 170, 0.2);
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.ai-provider {
+  font-size: 11px;
+  color: var(--color-secondary);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.ai-content {
+  padding: 16px;
+  color: var(--color-primary);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* Command Suggestions */
+.command-suggestion {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--color-accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.command-suggestion:hover {
+  background: rgba(0, 212, 170, 0.1);
+  border-color: var(--color-accent);
+}
+
+.command-text {
+  flex: 1;
+}
+
+.execute-btn {
+  background: var(--color-accent);
+  color: var(--bg-primary);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.execute-btn:hover {
+  background: #00b894;
+  transform: translateY(-1px);
+}
+
+/* Status indicators */
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.status-success {
+  color: #2ecc71;
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+.status-info {
+  color: #3498db;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Loading animation */
+.loading-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.loading-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: loading-pulse 1.4s infinite ease-in-out;
+}
+
+.loading-dot:nth-child(1) { animation-delay: -0.32s; }
+.loading-dot:nth-child(2) { animation-delay: -0.16s; }
+.loading-dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes loading-pulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .top-bar {
+    height: 50px;
+    padding: 0 15px;
+  }
+  
+  .app-title {
+    font-size: 14px;
+  }
+  
+  #terminal {
+    padding: 15px;
+  }
+  
+  .xterm {
+    font-size: 12px !important;
+  }
+}
+
+/* Focus states */
+.xterm.focus .xterm-cursor {
+  background: var(--color-accent) !important;
+}
+
+.xterm:not(.focus) .xterm-cursor {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Selection */
+.xterm .xterm-selection div {
+  background: rgba(0, 212, 170, 0.3) !important;
+}
+
+/* Links */
+.xterm .xterm-rows a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.xterm .xterm-rows a:hover {
+  color: #00b894;
+}
+
+.xterm .xterm-viewport {
+  border-radius: 0;
+}

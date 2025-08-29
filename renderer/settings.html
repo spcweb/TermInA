@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Settings - Termina</title>
+  <link rel="stylesheet" href="settings-style.css">
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Header -->
+    <div class="settings-header">
+      <h1>Settings</h1>
+      <div class="header-actions">
+        <button id="reset-btn" class="btn btn-secondary">Reset</button>
+        <button id="save-btn" class="btn btn-success">💾 Save</button>
+        <button id="close-btn" class="btn btn-primary">Close</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="settings-content">
+      <nav class="settings-sidebar">
+        <ul class="settings-nav">
+          <li><a href="#general" class="nav-link active" data-section="general">
+            <span class="nav-icon">⚙️</span>
+            General
+          </a></li>
+          <li><a href="#appearance" class="nav-link" data-section="appearance">
+            <span class="nav-icon">🎨</span>
+            Appearance
+          </a></li>
+          <li><a href="#terminal" class="nav-link" data-section="terminal">
+            <span class="nav-icon">💻</span>
+            Terminal
+          </a></li>
+          <li><a href="#ai" class="nav-link" data-section="ai">
+            <span class="nav-icon">🤖</span>
+            Artificial Intelligence
+          </a></li>
+          <li><a href="#shortcuts" class="nav-link" data-section="shortcuts">
+            <span class="nav-icon">⌨️</span>
+            Shortcuts
+          </a></li>
+        </ul>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="settings-main">
+        
+        <!-- General Section -->
+        <section id="general" class="settings-section active">
+          <h2>General Settings</h2>
+          
+          <div class="setting-group">
+            <h3>Window</h3>
+            <div class="setting-item">
+              <label for="window-width">Window width:</label>
+              <input type="number" id="window-width" min="800" max="3840" step="10">
+            </div>
+            <div class="setting-item">
+              <label for="window-height">Window height:</label>
+              <input type="number" id="window-height" min="600" max="2160" step="10">
+            </div>
+            <div class="setting-item">
+              <label for="transparency">Transparency:</label>
+              <input type="checkbox" id="transparency">
+            </div>
+            <div class="setting-item">
+              <label for="vibrancy">Vibrancy effect (macOS):</label>
+              <select id="vibrancy">
+                <option value="none">None</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="ultra-dark">Ultra Dark</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Appearance Section -->
+        <section id="appearance" class="settings-section">
+          <h2>Appearance</h2>
+          
+          <div class="setting-group">
+            <h3>Theme</h3>
+            <div class="setting-item">
+              <label for="theme-name">Theme:</label>
+              <select id="theme-name">
+                <option value="warp-dark">Warp Dark</option>
+                <option value="warp-light">Warp Light</option>
+                <option value="terminal-classic">Terminal Classic</option>
+                <option value="cyberpunk">Cyberpunk</option>
+              </select>
+            </div>
+            
+            <!-- Theme Preview -->
+            <div class="setting-item">
+              <label>Preview:</label>
+              <div id="theme-preview" style="
+                width: 200px; 
+                height: 60px; 
+                border-radius: 6px; 
+                border: 1px solid #ccc; 
+                padding: 8px; 
+                font-family: monospace; 
+                font-size: 12px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+              ">
+                <div style="display: flex; align-items: center;">
+                  <span class="preview-prompt">$ </span>
+                  <span class="preview-text">echo 'Hello World'</span>
+                  <span class="preview-cursor">|</span>
+                </div>
+                <div class="preview-output">Hello World</div>
+              </div>
+            </div>
+            
+            <div class="color-grid">
+              <div class="color-item">
+                <label for="color-background">Background:</label>
+                <input type="color" id="color-background">
+              </div>
+              <div class="color-item">
+                <label for="color-foreground">Text:</label>
+                <input type="color" id="color-foreground">
+              </div>
+              <div class="color-item">
+                <label for="color-cursor">Cursor:</label>
+                <input type="color" id="color-cursor">
+              </div>
+              <div class="color-item">
+                <label for="color-accent">Accent:</label>
+                <input type="color" id="color-accent">
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <label for="background-blur">Background blur:</label>
+              <input type="checkbox" id="background-blur">
+            </div>
+          </div>
+        </section>
+
+        <!-- Terminal Section -->
+        <section id="terminal" class="settings-section">
+          <h2>Terminal</h2>
+          
+          <div class="setting-group">
+            <h3>Font</h3>
+            <div class="setting-item">
+              <label for="font-family">Font family:</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="font-family" style="flex: 1;">
+                  <option value="JetBrains Mono">JetBrains Mono</option>
+                  <option value="Fira Code">Fira Code</option>
+                  <option value="SF Mono">SF Mono</option>
+                  <option value="Consolas">Consolas</option>
+                  <option value="Monaco">Monaco</option>
+                  <option value="Menlo">Menlo</option>
+                </select>
+                <button id="refresh-fonts-btn" title="Refresh font list" style="padding: 4px 8px; font-size: 12px;">🔄</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="font-size">Font size:</label>
+              <input type="range" id="font-size" min="10" max="24" step="1">
+              <span class="range-value"></span>
+            </div>
+            <div class="setting-item">
+              <label for="line-height">Line height:</label>
+              <input type="range" id="line-height" min="1.0" max="2.0" step="0.1">
+              <span class="range-value"></span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <h3>Cursor</h3>
+            <div class="setting-item">
+              <label for="cursor-style">Cursor style:</label>
+              <select id="cursor-style">
+                <option value="bar">Bar</option>
+                <option value="block">Block</option>
+                <option value="underline">Underline</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="cursor-blink">Blinking cursor:</label>
+              <input type="checkbox" id="cursor-blink">
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <h3>Behavior</h3>
+            <div class="setting-item">
+              <label for="scrollback">History lines:</label>
+              <input type="number" id="scrollback" min="1000" max="50000" step="1000">
+            </div>
+            <div class="setting-item">
+              <label for="bell-sound">Bell sound:</label>
+              <input type="checkbox" id="bell-sound">
+            </div>
+          </div>
+        </section>
+
+        <!-- AI Section -->
+        <section id="ai" class="settings-section">
+          <h2>Artificial Intelligence</h2>
+          
+          <div class="setting-group">
+            <h3>Provider</h3>
+            <div class="setting-item">
+              <label for="ai-provider">AI Provider:</label>
+              <select id="ai-provider">
+                <option value="gemini">Google Gemini</option>
+                <option value="lm-studio">LM Studio (Local)</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            
+            <div class="setting-item">
+              <label for="ai-auto-execute">Auto-execute commands:</label>
+              <input type="checkbox" id="ai-auto-execute">
+            </div>
+            
+            <div class="setting-item">
+              <label for="ai-context-lines">Context lines:</label>
+              <input type="number" id="ai-context-lines" min="0" max="50" step="5">
+            </div>
+          </div>
+          
+          <!-- Gemini Configuration -->
+          <div id="gemini-config" class="setting-group provider-config">
+            <h3>Gemini Configuration</h3>
+            <div class="setting-item">
+              <label for="gemini-api-key">API Key:</label>
+              <input type="password" id="gemini-api-key" placeholder="Enter your Gemini API key">
+            </div>
+            <div class="setting-item">
+              <label for="gemini-model">Model:</label>
+              <select id="gemini-model">
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-pro">Gemini Pro</option>
+              </select>
+            </div>
+            <button class="test-connection-btn" onclick="settingsManager.testAIConnection('gemini')">
+              Test Connection
+            </button>
+            <div id="gemini-status" class="ai-status" style="display: none;">
+              <div class="status-indicator status-unknown"></div>
+              <span>Testing connection...</span>
+            </div>
+          </div>
+          
+          <!-- LM Studio Configuration -->
+          <div id="lm-studio-config" class="setting-group provider-config" style="display: none;">
+            <h3>LM Studio Configuration</h3>
+            <div class="setting-item">
+              <label for="lm-studio-endpoint">Endpoint:</label>
+              <input type="url" id="lm-studio-endpoint" placeholder="http://localhost:1234/v1">
+            </div>
+            <div class="setting-item">
+              <label for="lm-studio-model">Model name:</label>
+              <input type="text" id="lm-studio-model" placeholder="local-model">
+            </div>
+            <div class="setting-item">
+              <label for="lm-studio-api-key">API Key (optional):</label>
+              <input type="password" id="lm-studio-api-key" placeholder="lm-studio">
+            </div>
+            <button class="test-connection-btn" onclick="settingsManager.testAIConnection('lm-studio')">
+              Test Connection
+            </button>
+            <div id="lm-studio-status" class="ai-status" style="display: none;">
+              <div class="status-indicator status-unknown"></div>
+              <span>Testing connection...</span>
+            </div>
+          </div>
+          
+          <!-- OpenAI Configuration -->
+          <div id="openai-config" class="setting-group provider-config" style="display: none;">
+            <h3>OpenAI Configuration</h3>
+            <div class="setting-item">
+              <label for="openai-api-key">API Key:</label>
+              <input type="password" id="openai-api-key" placeholder="sk-...">
+            </div>
+            <div class="setting-item">
+              <label for="openai-model">Model:</label>
+              <select id="openai-model">
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="gpt-4o">GPT-4o</option>
+              </select>
+            </div>
+            <button class="test-connection-btn" onclick="settingsManager.testAIConnection('openai')">
+              Test Connection
+            </button>
+            <div id="openai-status" class="ai-status" style="display: none;">
+              <div class="status-indicator status-unknown"></div>
+              <span>Testing connection...</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Shortcuts Section -->
+        <section id="shortcuts" class="settings-section">
+          <h2>Keyboard Shortcuts</h2>
+          
+          <div class="setting-group">
+            <div class="shortcut-item">
+              <label>Toggle AI Panel:</label>
+              <input type="text" id="shortcut-toggle-ai" readonly>
+            </div>
+            <div class="shortcut-item">
+              <label>New Tab:</label>
+              <input type="text" id="shortcut-new-tab" readonly>
+            </div>
+            <div class="shortcut-item">
+              <label>Close Tab:</label>
+              <input type="text" id="shortcut-close-tab" readonly>
+            </div>
+            <div class="shortcut-item">
+              <label>Settings:</label>
+              <input type="text" id="shortcut-settings" readonly>
+            </div>
+            <div class="shortcut-item">
+              <label>Clear terminal:</label>
+              <input type="text" id="shortcut-clear" readonly>
+            </div>
+          </div>
+        </section>
+        
+      </main>
+    </div>
+  </div>
+
+  <script>
+    console.log('Inline script loaded!');
+    
+    let currentConfig = {};
+    
+    // Test to see if window.api exists
+    if (window.api) {
+      console.log('window.api available:', Object.keys(window.api));
+    } else {
+      console.error('window.api NOT available!');
+    }
+    
+    // Function to load settings
+    async function loadSettings() {
+      console.log('Loading settings...');
+      try {
+        if (window.api && window.api.getConfig) {
+          currentConfig = await window.api.getConfig();
+          console.log('Config loaded:', currentConfig);
+          populateSettings(currentConfig);
+        } else {
+          console.error('getConfig API not available');
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    }
+    
+    // Function to populate forms with values
+    function populateSettings(config) {
+      console.log('Populating form with:', config);
+      
+      try {
+        // Window settings
+        setElementValue('window-width', config.window?.width || 1200);
+        setElementValue('window-height', config.window?.height || 800);
+        setElementValue('transparency', config.window?.transparency || false);
+        setElementValue('vibrancy', config.window?.vibrancy || 'dark');
+        
+        // Theme settings
+        setElementValue('theme-name', config.theme?.name || 'warp-dark');
+        setElementValue('color-background', config.theme?.background || '#1e2124');
+        setElementValue('color-foreground', config.theme?.foreground || '#ffffff');
+        setElementValue('color-cursor', config.theme?.cursor || '#00ff00');
+        setElementValue('color-accent', config.theme?.accent || '#00d4aa');
+        setElementValue('background-blur', config.theme?.backgroundBlur || false);
+        
+        // Terminal settings
+        setElementValue('font-family', config.terminal?.fontFamily?.split(',')[0] || 'Monaco');
+        setElementValue('font-size', config.terminal?.fontSize || 14);
+        setElementValue('line-height', config.terminal?.lineHeight || 1.4);
+        setElementValue('cursor-style', config.terminal?.cursorStyle || 'block');
+        setElementValue('cursor-blink', config.terminal?.cursorBlink || true);
+        setElementValue('scrollback', config.terminal?.scrollback || 1000);
+        setElementValue('bell-sound', config.terminal?.bellSound || false);
+        
+        // AI settings
+        setElementValue('ai-provider', config.ai?.provider || 'gemini');
+        setElementValue('ai-auto-execute', config.ai?.autoExecute || false);
+        setElementValue('ai-context-lines', config.ai?.contextLines || 10);
+        setElementValue('gemini-api-key', config.ai?.gemini?.apiKey || '');
+        setElementValue('gemini-model', config.ai?.gemini?.model || 'gemini-2.5-flash');
+        
+        console.log('Form populated successfully');
+      } catch (error) {
+        console.error('Error populating form:', error);
+      }
+    }
+    
+    // Helper function to set values
+    function setElementValue(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        if (element.type === 'checkbox') {
+          element.checked = Boolean(value);
+        } else {
+          element.value = value;
+        }
+      } else {
+        console.warn(`Element '${id}' not found`);
+      }
+    }
+    
+    // Function to save all settings
+    async function saveAllSettings() {
+      console.log('Saving settings...');
+      
+      const saveBtn = document.getElementById('save-btn');
+      const originalText = saveBtn.innerHTML;
+      saveBtn.innerHTML = '💾 Salvando...';
+      saveBtn.disabled = true;
+      
+      try {
+        // Raccogli tutti i valori
+        const newConfig = {
+          window: {
+            width: parseInt(getElementValue('window-width')) || 1200,
+            height: parseInt(getElementValue('window-height')) || 800,
+            transparency: getElementValue('transparency', 'checkbox'),
+            vibrancy: getElementValue('vibrancy') || 'dark'
+          },
+          theme: {
+            name: getElementValue('theme-name') || 'warp-dark',
+            background: getElementValue('color-background') || '#1e2124',
+            foreground: getElementValue('color-foreground') || '#ffffff',
+            cursor: getElementValue('color-cursor') || '#00ff00',
+            accent: getElementValue('color-accent') || '#00d4aa',
+            backgroundBlur: getElementValue('background-blur', 'checkbox')
+          },
+          terminal: {
+            fontSize: parseInt(getElementValue('font-size')) || 14,
+            fontFamily: getElementValue('font-family') || 'Monaco',
+            lineHeight: parseFloat(getElementValue('line-height')) || 1.4,
+            cursorStyle: getElementValue('cursor-style') || 'block',
+            cursorBlink: getElementValue('cursor-blink', 'checkbox'),
+            scrollback: parseInt(getElementValue('scrollback')) || 1000,
+            bellSound: getElementValue('bell-sound', 'checkbox')
+          },
+          ai: {
+            provider: getElementValue('ai-provider') || 'gemini',
+            autoExecute: getElementValue('ai-auto-execute', 'checkbox'),
+            contextLines: parseInt(getElementValue('ai-context-lines')) || 10,
+            gemini: {
+              apiKey: getElementValue('gemini-api-key') || '',
+              model: getElementValue('gemini-model') || 'gemini-2.5-flash'
+            }
+          }
+        };
+        
+        console.log('Config da salvare:', newConfig);
+        
+        // Salva tramite API
+        if (window.api && window.api.saveConfig) {
+          await window.api.saveConfig(newConfig);
+          console.log('Impostazioni salvate con successo!');
+          
+          // Feedback di successo
+          saveBtn.innerHTML = '✅ Salvato!';
+          saveBtn.style.background = '#4CAF50';
+          
+          setTimeout(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+            saveBtn.style.background = '';
+          }, 2000);
+          
+        } else {
+          throw new Error('saveConfig API not available');
+        }
+        
+      } catch (error) {
+        console.error('Error saving:', error);
+        
+        // Error feedback
+        saveBtn.innerHTML = '❌ Error';
+        saveBtn.style.background = '#f44336';
+        
+        setTimeout(() => {
+          saveBtn.innerHTML = originalText;
+          saveBtn.disabled = false;
+          saveBtn.style.background = '';
+        }, 2000);
+      }
+    }
+    
+    // Helper function to get values
+    function getElementValue(id, type = 'value') {
+      const element = document.getElementById(id);
+      if (element) {
+        if (type === 'checkbox') {
+          return element.checked;
+        } else {
+          return element.value;
+        }
+      }
+      return null;
+    }
+    
+    // Configurazione quando il DOM è pronto
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM ready - inizializzazione pannello impostazioni');
+      
+      // Carica le impostazioni all'avvio
+      loadSettings();
+      
+      // Setup pulsante chiudi
+      const closeBtn = document.getElementById('close-btn');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+          console.log('Pulsante chiudi cliccato');
+          if (window.api && window.api.closeSettings) {
+            window.api.closeSettings();
+          }
+        });
+        console.log('Listener close button aggiunto');
+      }
+      
+      // Setup pulsante salva
+      const saveBtn = document.getElementById('save-btn');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+          console.log('Pulsante salva cliccato');
+          saveAllSettings();
+        });
+        console.log('Listener save button aggiunto');
+      }
+      
+      // Setup pulsante reset
+      const resetBtn = document.getElementById('reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', async function() {
+          console.log('Pulsante reset cliccato');
+          if (confirm('Sei sicuro di voler ripristinare tutte le impostazioni ai valori predefiniti?')) {
+            try {
+              if (window.api && window.api.resetConfig) {
+                await window.api.resetConfig();
+                await loadSettings();
+                console.log('Impostazioni ripristinate');
+              }
+            } catch (error) {
+              console.error('Error in reset:', error);
+            }
+          }
+        });
+        console.log('Listener reset button aggiunto');
+      }
+      
+      // Setup navigazione laterale
+      const navLinks = document.querySelectorAll('.nav-link');
+      console.log('Trovati', navLinks.length, 'link di navigazione');
+      
+      navLinks.forEach(function(link, index) {
+        console.log('Setup link', index, 'for section:', link.getAttribute('data-section'));
+        
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          
+          const section = this.getAttribute('data-section');
+          console.log('Click on navigation for section:', section);
+          
+          // Rimuovi active da tutti i link
+          navLinks.forEach(function(navLink) {
+            navLink.classList.remove('active');
+          });
+          
+          // Aggiungi active al link cliccato
+          this.classList.add('active');
+          
+          // Nascondi tutte le sezioni
+          const sections = document.querySelectorAll('.settings-section');
+          sections.forEach(function(sec) {
+            sec.classList.remove('active');
+            sec.style.display = 'none';
+          });
+          
+          // Mostra la sezione selezionata
+          const targetSection = document.getElementById(section);
+          if (targetSection) {
+            targetSection.classList.add('active');
+            targetSection.style.display = 'block';
+            console.log('Sezione', section, 'ora visibile');
+          } else {
+            console.error('Sezione', section, 'non trovata');
+          }
+        });
+      });
+      
+      // Show general section by default
+      const generalSection = document.getElementById('general');
+      if (generalSection) {
+        generalSection.style.display = 'block';
+        console.log('General section shown by default');
+      }
+      
+      console.log('Initialization completed!');
+    });
+  </script>
+  
+  <!-- Include the settings manager -->
+  <script src="settings.js"></script>
+</body>
+</html>

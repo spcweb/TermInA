@@ -1,0 +1,190 @@
+:root {
+    --terminal-bg: #1e2124;
+    --terminal-fg: #ffffff;
+    --terminal-cursor: #00d4aa;
+    --terminal-accent: #00d4aa;
+    --terminal-font-family: 'SF Mono', Monaco, Consolas, monospace;
+    --terminal-font-size: 14px;
+    --terminal-line-height: 1.4;
+}
+
+.simple-terminal-content {
+    font-family: var(--terminal-font-family);
+    font-size: var(--terminal-font-size);
+    line-height: var(--terminal-line-height);
+    color: var(--terminal-fg);
+    background-color: var(--terminal-bg);
+    padding: 20px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.terminal-output {
+    margin-bottom: 10px;
+}
+
+.output-line {
+    margin: 2px 0;
+    white-space: pre-wrap;
+}
+
+.terminal-input-line {
+    display: flex;
+    align-items: center;
+}
+
+.prompt {
+    color: var(--terminal-accent);
+    margin-right: 5px;
+    font-weight: bold;
+}
+
+.input-text {
+    color: var(--terminal-fg);
+    min-width: 1px;
+}
+
+.terminal-cursor {
+    color: var(--terminal-cursor);
+    background-color: var(--terminal-cursor);
+    font-weight: bold;
+    font-size: var(--terminal-font-size);
+    margin-left: 1px;
+    min-width: 8px;
+    height: var(--terminal-line-height);
+    display: inline-block;
+    position: relative;
+    animation: cursor-blink 1s infinite;
+    
+    /* Default style: bar */
+    width: 2px;
+    border-left: 2px solid var(--terminal-cursor);
+    background-color: transparent;
+}
+
+/* Cursor styles */
+.terminal-cursor.cursor-bar {
+    width: 2px;
+    background-color: transparent;
+    border-left: 2px solid var(--terminal-cursor);
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+.terminal-cursor.cursor-block {
+    width: 1ch;
+    min-width: 8px;
+    background-color: var(--terminal-cursor);
+    color: var(--terminal-bg);
+    border: none;
+}
+
+.cursor-underline {
+    border-bottom: 2px solid var(--terminal-cursor);
+    background-color: transparent;
+}
+
+@keyframes cursor-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+}
+
+/* Password Prompt Styles */
+.password-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.8) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 10000 !important;
+}
+
+.password-dialog {
+    background: var(--terminal-bg) !important;
+    border: 1px solid #333 !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    min-width: 400px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+    font-family: var(--terminal-font-family) !important;
+}
+
+.password-header h3 {
+    color: var(--terminal-accent) !important;
+    margin: 0 0 10px 0 !important;
+    font-size: 16px !important;
+}
+
+.password-header p {
+    color: var(--terminal-fg) !important;
+    margin: 0 0 15px 0 !important;
+    opacity: 0.8;
+}
+
+.password-input {
+    width: 100% !important;
+    padding: 12px !important;
+    margin: 10px 0 !important;
+    background: #2d2d2d !important;
+    border: 2px solid #444 !important;
+    border-radius: 6px !important;
+    color: #ffffff !important;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace !important;
+    font-size: 14px !important;
+    box-sizing: border-box !important;
+    outline: none !important;
+    z-index: 10001 !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+}
+
+.password-input:focus {
+    border-color: #00d4aa !important;
+    box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.3) !important;
+    background: #333 !important;
+}
+
+.password-input:hover {
+    border-color: #555 !important;
+}
+
+.password-buttons {
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    margin-top: 15px !important;
+}
+
+.password-btn {
+    padding: 8px 16px !important;
+    border: 1px solid #444 !important;
+    border-radius: 4px !important;
+    background: #2d2d2d !important;
+    color: var(--terminal-fg) !important;
+    cursor: pointer !important;
+    font-family: var(--terminal-font-family) !important;
+    font-size: 13px !important;
+    transition: all 0.2s ease !important;
+}
+
+.password-btn:hover {
+    background: #3d3d3d !important;
+    border-color: #555 !important;
+}
+
+.password-btn.ok-btn {
+    background: var(--terminal-accent) !important;
+    border-color: var(--terminal-accent) !important;
+    color: #000 !important;
+}
+
+.password-btn.ok-btn:hover {
+    background: #00b896 !important;
+    border-color: #00b896 !important;
+}
