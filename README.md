@@ -48,6 +48,7 @@ Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 - Node.js 16+ 
 - npm or yarn
 - macOS 10.15+ or Linux
+- windows 10 +
 
 ### Installation
 
