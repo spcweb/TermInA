@@ -353,30 +353,28 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@termina.app
-- 💬 Discord: [Join our community](https://discord.gg/termina)
 - 🐛 Issues: [GitHub Issues](https://github.com/yourusername/termina/issues)
 
 ---
 
-**Made with ❤️ by the Termina Team**
+**Made with ❤️ by Simone Pappalardo Caltabiano**
 
-## Avvio rapido
+## Quick Start
 
-1. Installa le dipendenze:
-   ```bash
-   npm install
-   ```
-2. Avvia l'applicazione:
-   ```bash
-   npm start
-   ```
+1. Install dependencies:
+  ```bash
+  npm install
+  ```
+2. Start the application:
+  ```bash
+  npm start
+  ```
 
-## Struttura del progetto
-- `main.js`: Processo principale Electron
-- `renderer/`: Interfaccia utente e terminale (xterm.js)
-- `ai/`: Moduli per integrazione AI
+## Project Structure
+- `main.js`: Main Electron process
+- `renderer/`: User interface and terminal (xterm.js)
+- `ai/`: Modules for AI integration
 
-## Note
-- Per integrare AI locale, consulta la documentazione di LM Studio o altre API compatibili.
-- L'app è pensata per essere estendibile e personalizzabile.
+## Notes
+- For local AI integration, refer to the LM Studio documentation or other compatible APIs.
+- The app is designed to be extensible and customizable.
