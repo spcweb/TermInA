@@ -42,6 +42,32 @@ class SettingsManager {
                 cursor: '#00ffff',
                 accent: '#ff2d92',
                 backgroundBlur: true
+            },
+            'oh-my-zsh': {
+                name: 'oh-my-zsh',
+                background: '#1a1a1a',
+                foreground: '#ffffff',
+                cursor: '#ff6b6b',
+                accent: '#ff6b6b',
+                backgroundBlur: true,
+                colors: {
+                    black: '#1a1a1a',
+                    red: '#ff6b6b',
+                    green: '#51cf66',
+                    yellow: '#ffd43b',
+                    blue: '#339af0',
+                    magenta: '#f06292',
+                    cyan: '#22d3ee',
+                    white: '#ffffff',
+                    brightBlack: '#6c757d',
+                    brightRed: '#ff8a80',
+                    brightGreen: '#69db7c',
+                    brightYellow: '#ffe066',
+                    brightBlue: '#4dabf7',
+                    brightMagenta: '#f48fb1',
+                    brightCyan: '#67e8f9',
+                    brightWhite: '#ffffff'
+                }
             }
         };
     }
@@ -165,6 +191,14 @@ class SettingsManager {
         
         if (text) text.style.color = theme.foreground;
         if (output) output.style.color = theme.foreground;
+        
+        // Special handling for Oh My ZSH! theme
+        if (theme.name === 'oh-my-zsh') {
+            if (text) text.textContent = 'ls -la';
+            if (output) {
+                output.innerHTML = '<span style="color: var(--terminal-blue)">drwxr-xr-x</span> <span style="color: var(--terminal-green)">user</span> <span style="color: var(--terminal-yellow)">Documents</span>';
+            }
+        }
     }
 
     setupNavigation() {
@@ -338,6 +372,15 @@ class SettingsManager {
                 
                 // Aggiorna l'anteprima del tema
                 this.updateThemePreview(this.config.theme);
+                
+                // Se il tema ha colori ANSI personalizzati, applica il tema predefinito completo
+                if (this.config.theme.colors && this.config.theme.name === 'oh-my-zsh') {
+                    const predefinedThemes = this.getPredefinedThemes();
+                    const ohMyZshTheme = predefinedThemes['oh-my-zsh'];
+                    if (ohMyZshTheme) {
+                        this.updateThemePreview(ohMyZshTheme);
+                    }
+                }
             }
 
             // Terminal
@@ -460,14 +503,20 @@ class SettingsManager {
     }
 
     gatherFormData() {
+        const themeName = this.getValueSafely('theme-name', 'warp-dark');
+        const predefinedThemes = this.getPredefinedThemes();
+        const selectedTheme = predefinedThemes[themeName];
+        
         const formData = {
             theme: {
-                name: this.getValueSafely('theme-name', 'warp-dark'),
+                name: themeName,
                 background: this.getValueSafely('color-background', '#1e2124'),
                 foreground: this.getValueSafely('color-foreground', '#ffffff'),
                 cursor: this.getValueSafely('color-cursor', '#00d4aa'),
                 accent: this.getValueSafely('color-accent', '#00d4aa'),
-                backgroundBlur: this.getCheckedSafely('background-blur', true)
+                backgroundBlur: this.getCheckedSafely('background-blur', true),
+                // Include ANSI colors for Oh My ZSH! theme
+                ...(selectedTheme && selectedTheme.colors ? { colors: selectedTheme.colors } : {})
             },
             terminal: {
                 fontFamily: this.getValueSafely('font-family', 'JetBrains Mono'),

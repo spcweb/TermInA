@@ -196,6 +196,13 @@ class SimpleTerminal {
             root.style.setProperty('--terminal-fg', theme.foreground || '#ffffff');
             root.style.setProperty('--terminal-cursor', theme.cursor || '#00d4aa');
             root.style.setProperty('--terminal-accent', theme.accent || '#00d4aa');
+            
+            // Applica colori ANSI personalizzati se presenti
+            if (theme.colors) {
+                Object.keys(theme.colors).forEach(colorName => {
+                    root.style.setProperty(`--terminal-${colorName}`, theme.colors[colorName]);
+                });
+            }
         }
 
         // Applica anche direttamente agli elementi per compatibilità

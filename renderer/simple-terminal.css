@@ -6,6 +6,24 @@
     --terminal-font-family: 'SF Mono', Monaco, Consolas, monospace;
     --terminal-font-size: 14px;
     --terminal-line-height: 1.4;
+    
+    /* ANSI Color Variables - Default values */
+    --terminal-black: #000000;
+    --terminal-red: #ff0000;
+    --terminal-green: #00ff00;
+    --terminal-yellow: #ffff00;
+    --terminal-blue: #0000ff;
+    --terminal-magenta: #ff00ff;
+    --terminal-cyan: #00ffff;
+    --terminal-white: #ffffff;
+    --terminal-brightBlack: #666666;
+    --terminal-brightRed: #ff6666;
+    --terminal-brightGreen: #66ff66;
+    --terminal-brightYellow: #ffff66;
+    --terminal-brightBlue: #6666ff;
+    --terminal-brightMagenta: #ff66ff;
+    --terminal-brightCyan: #66ffff;
+    --terminal-brightWhite: #ffffff;
 }
 
 .simple-terminal-content {
@@ -187,4 +205,70 @@
 .password-btn.ok-btn:hover {
     background: #00b896 !important;
     border-color: #00b896 !important;
+}
+
+/* ANSI Color Styles for Oh My ZSH! Theme */
+.ansi-black { color: var(--terminal-black) !important; }
+.ansi-red { color: var(--terminal-red) !important; }
+.ansi-green { color: var(--terminal-green) !important; }
+.ansi-yellow { color: var(--terminal-yellow) !important; }
+.ansi-blue { color: var(--terminal-blue) !important; }
+.ansi-magenta { color: var(--terminal-magenta) !important; }
+.ansi-cyan { color: var(--terminal-cyan) !important; }
+.ansi-white { color: var(--terminal-white) !important; }
+.ansi-bright-black { color: var(--terminal-brightBlack) !important; }
+.ansi-bright-red { color: var(--terminal-brightRed) !important; }
+.ansi-bright-green { color: var(--terminal-brightGreen) !important; }
+.ansi-bright-yellow { color: var(--terminal-brightYellow) !important; }
+.ansi-bright-blue { color: var(--terminal-brightBlue) !important; }
+.ansi-bright-magenta { color: var(--terminal-brightMagenta) !important; }
+.ansi-bright-cyan { color: var(--terminal-brightCyan) !important; }
+.ansi-bright-white { color: var(--terminal-brightWhite) !important; }
+
+/* Background colors */
+.ansi-bg-black { background-color: var(--terminal-black) !important; }
+.ansi-bg-red { background-color: var(--terminal-red) !important; }
+.ansi-bg-green { background-color: var(--terminal-green) !important; }
+.ansi-bg-yellow { background-color: var(--terminal-yellow) !important; }
+.ansi-bg-blue { background-color: var(--terminal-blue) !important; }
+.ansi-bg-magenta { background-color: var(--terminal-magenta) !important; }
+.ansi-bg-cyan { background-color: var(--terminal-cyan) !important; }
+.ansi-bg-white { background-color: var(--terminal-white) !important; }
+.ansi-bg-bright-black { background-color: var(--terminal-brightBlack) !important; }
+.ansi-bg-bright-red { background-color: var(--terminal-brightRed) !important; }
+.ansi-bg-bright-green { background-color: var(--terminal-brightGreen) !important; }
+.ansi-bg-bright-yellow { background-color: var(--terminal-brightYellow) !important; }
+.ansi-bg-bright-blue { background-color: var(--terminal-brightBlue) !important; }
+.ansi-bg-bright-magenta { background-color: var(--terminal-brightMagenta) !important; }
+.ansi-bg-bright-cyan { background-color: var(--terminal-brightCyan) !important; }
+.ansi-bg-bright-white { background-color: var(--terminal-brightWhite) !important; }
+
+/* Oh My ZSH! specific styles */
+.oh-my-zsh-prompt {
+    color: var(--terminal-accent) !important;
+    font-weight: bold !important;
+}
+
+.oh-my-zsh-git-branch {
+    color: var(--terminal-green) !important;
+    font-weight: bold !important;
+}
+
+.oh-my-zsh-git-status {
+    color: var(--terminal-red) !important;
+}
+
+.oh-my-zsh-directory {
+    color: var(--terminal-blue) !important;
+    font-weight: bold !important;
+}
+
+.oh-my-zsh-user {
+    color: var(--terminal-yellow) !important;
+    font-weight: bold !important;
+}
+
+.oh-my-zsh-host {
+    color: var(--terminal-cyan) !important;
+    font-weight: bold !important;
 }
