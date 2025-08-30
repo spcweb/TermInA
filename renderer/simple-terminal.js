@@ -136,8 +136,18 @@ class SimpleTerminal {
         // Gestione del pulsante stato AI
         const aiStatusBtn = document.getElementById('ai-status');
         if (aiStatusBtn) {
-            aiStatusBtn.addEventListener('click', () => {
-                this.showAIStatusInfo();
+            aiStatusBtn.addEventListener('click', async () => {
+                // Aggiungi feedback visivo di loading
+                aiStatusBtn.style.opacity = '0.7';
+                aiStatusBtn.style.pointerEvents = 'none';
+                
+                try {
+                    await this.refreshAIStatus(false); // Non mostrare output nel terminale
+                } finally {
+                    // Ripristina il bottone
+                    aiStatusBtn.style.opacity = '1';
+                    aiStatusBtn.style.pointerEvents = 'auto';
+                }
             });
         }
 
@@ -270,19 +280,31 @@ class SimpleTerminal {
         }
     }
 
-    async refreshAIStatus() {
-        this.addOutput('🔄 Refreshing AI status...');
+    async refreshAIStatus(showOutput = true) {
+        if (showOutput) {
+            this.addOutput('🔄 Refreshing AI status...');
+        }
         
         try {
             if (window.electronAPI && window.electronAPI.updateAIStatus) {
                 const aiStatus = await window.electronAPI.updateAIStatus();
-                this.addOutput(`✅ AI status updated: ${aiStatus.displayName} - ${aiStatus.isConnected ? 'Connected' : aiStatus.isConfigured ? 'Configured but not connected' : 'Not configured'}`);
+                
+                if (showOutput) {
+                    this.addOutput(`✅ AI status updated: ${aiStatus.displayName} - ${aiStatus.isConnected ? 'Connected' : aiStatus.isConfigured ? 'Configured but not connected' : 'Not configured'}`);
+                }
+                
+                // Aggiorna immediatamente il display del bottone
+                this.updateAIStatusDisplay(aiStatus);
             } else {
-                this.addOutput('❌ AI status update API not available');
+                if (showOutput) {
+                    this.addOutput('❌ AI status update API not available');
+                }
             }
         } catch (error) {
             console.error('Error refreshing AI status:', error);
-            this.addOutput('❌ Error refreshing AI status');
+            if (showOutput) {
+                this.addOutput('❌ Error refreshing AI status');
+            }
         }
     }
 
@@ -1216,6 +1238,8 @@ AI Commands:
         // Crea un elemento di suggerimento comando stile Warp
         const suggestionDiv = document.createElement('div');
         suggestionDiv.className = 'ai-command-suggestion';
+        
+        // Usa event listeners invece di onclick per maggiore sicurezza
         suggestionDiv.innerHTML = `
             <div class="suggestion-header">
                 <span class="suggestion-icon">💡</span>
@@ -1225,20 +1249,74 @@ AI Commands:
                 <code>${command}</code>
             </div>
             <div class="suggestion-actions">
-                <button class="btn-execute" onclick="terminal.executeAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-execute" data-command="${command.replace(/"/g, '&quot;')}">
                     ✅ Esegui
                 </button>
-                <button class="btn-copy" onclick="terminal.copyAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-copy" data-command="${command.replace(/"/g, '&quot;')}">
                     📋 Copia
                 </button>
-                <button class="btn-edit" onclick="terminal.editAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-edit" data-command="${command.replace(/"/g, '&quot;')}">
                     ✏️ Modifica
                 </button>
-                <button class="btn-dismiss" onclick="terminal.dismissAISuggestion(this.closest('.ai-command-suggestion'))">
+                <button class="btn-dismiss">
                     ❌ Ignora
                 </button>
             </div>
         `;
+        
+        // Aggiungi event listeners
+        const executeBtn = suggestionDiv.querySelector('.btn-execute');
+        const copyBtn = suggestionDiv.querySelector('.btn-copy');
+        const editBtn = suggestionDiv.querySelector('.btn-edit');
+        const dismissBtn = suggestionDiv.querySelector('.btn-dismiss');
+        
+        executeBtn.addEventListener('click', () => {
+            console.log('Execute button clicked');
+            if (this && typeof this.executeAISuggestion === 'function') {
+                this.executeAISuggestion(command);
+            } else {
+                console.error('this.executeAISuggestion is not available');
+                if (window.terminal && typeof window.terminal.executeAISuggestion === 'function') {
+                    window.terminal.executeAISuggestion(command);
+                }
+            }
+        });
+        
+        copyBtn.addEventListener('click', () => {
+            console.log('Copy button clicked');
+            if (this && typeof this.copyAISuggestion === 'function') {
+                this.copyAISuggestion(command);
+            } else {
+                console.error('this.copyAISuggestion is not available');
+                if (window.terminal && typeof window.terminal.copyAISuggestion === 'function') {
+                    window.terminal.copyAISuggestion(command);
+                }
+            }
+        });
+        
+        editBtn.addEventListener('click', () => {
+            console.log('Edit button clicked');
+            if (this && typeof this.editAISuggestion === 'function') {
+                this.editAISuggestion(command);
+            } else {
+                console.error('this.editAISuggestion is not available');
+                if (window.terminal && typeof window.terminal.editAISuggestion === 'function') {
+                    window.terminal.editAISuggestion(command);
+                }
+            }
+        });
+        
+        dismissBtn.addEventListener('click', () => {
+            console.log('Dismiss button clicked');
+            if (this && typeof this.dismissAISuggestion === 'function') {
+                this.dismissAISuggestion(suggestionDiv);
+            } else {
+                console.error('this.dismissAISuggestion is not available');
+                if (window.terminal && typeof window.terminal.dismissAISuggestion === 'function') {
+                    window.terminal.dismissAISuggestion(suggestionDiv);
+                }
+            }
+        });
         
         this.outputElement.appendChild(suggestionDiv);
         this.scrollToBottom();
@@ -1248,27 +1326,57 @@ AI Commands:
     }
 
     executeAISuggestion(command) {
-        this.addOutput('$ ' + command);
-        this.executeCommand(command);
-        // Rimuovi tutti i suggerimenti dopo l'esecuzione
-        this.clearAISuggestions();
+        console.log('=== EXECUTE AI SUGGESTION ===', command);
+        try {
+            this.addOutput('$ ' + command);
+            this.executeCommand(command);
+            // Rimuovi tutti i suggerimenti dopo l'esecuzione
+            this.clearAISuggestions();
+        } catch (error) {
+            console.error('Error executing AI suggestion:', error);
+            this.addOutput(`❌ Error executing command: ${error.message}`);
+        }
     }
 
     copyAISuggestion(command) {
-        navigator.clipboard.writeText(command).then(() => {
-            this.addOutput('📋 Command copied to clipboard');
-        });
+        console.log('=== COPY AI SUGGESTION ===', command);
+        try {
+            navigator.clipboard.writeText(command).then(() => {
+                this.addOutput('📋 Command copied to clipboard');
+            }).catch(error => {
+                console.error('Error copying to clipboard:', error);
+                this.addOutput(`❌ Error copying command: ${error.message}`);
+            });
+        } catch (error) {
+            console.error('Error in copyAISuggestion:', error);
+            this.addOutput(`❌ Error copying command: ${error.message}`);
+        }
     }
 
     editAISuggestion(command) {
-        // Inserisce il comando nell'input per permettere modifiche
-        this.currentLine = command;
-        this.showPrompt();
-        this.clearAISuggestions();
+        console.log('=== EDIT AI SUGGESTION ===', command);
+        try {
+            // Inserisce il comando nell'input per permettere modifiche
+            this.currentLine = command;
+            this.showPrompt();
+            this.clearAISuggestions();
+        } catch (error) {
+            console.error('Error editing AI suggestion:', error);
+            this.addOutput(`❌ Error editing command: ${error.message}`);
+        }
     }
 
     dismissAISuggestion(suggestionElement) {
-        suggestionElement.remove();
+        console.log('=== DISMISS AI SUGGESTION ===', suggestionElement);
+        try {
+            if (suggestionElement && suggestionElement.remove) {
+                suggestionElement.remove();
+            } else {
+                console.warn('Invalid suggestion element:', suggestionElement);
+            }
+        } catch (error) {
+            console.error('Error dismissing AI suggestion:', error);
+        }
     }
 
     clearAISuggestions() {
@@ -1588,5 +1696,10 @@ let terminal;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('=== DOM CONTENT LOADED - INITIALIZING SIMPLE TERMINAL ===');
     terminal = new SimpleTerminal();
+    
+    // Rendi la variabile terminal accessibile globalmente
+    window.terminal = terminal;
+    
     console.log('=== SIMPLE TERMINAL INITIALIZED ===', terminal);
+    console.log('=== GLOBAL TERMINAL ACCESS ===', window.terminal);
 });

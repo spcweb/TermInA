@@ -2,6 +2,7 @@
 const https = require('https');
 const http = require('http');
 const config = require('./config');
+const languageDetector = require('./language-detector');
 
 class AIManager {
   constructor() {
@@ -20,8 +21,12 @@ class AIManager {
       throw new Error(`Provider AI non supportato: ${provider}`);
     }
     
+    // Rileva la lingua del prompt e aggiungi l'istruzione appropriata
+    const languageInfo = languageDetector.detectLanguage(prompt);
+    const enhancedPrompt = languageDetector.addLanguageInstruction(prompt, languageInfo);
+    
     try {
-      return await this.providers[provider](prompt, context);
+      return await this.providers[provider](enhancedPrompt, context);
     } catch (error) {
       console.error(`Errore con provider ${provider}:`, error);
       throw error;

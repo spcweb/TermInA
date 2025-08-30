@@ -30,6 +30,7 @@ Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 - **Error recovery** - 🆕 AI learns from failures and tries alternative approaches
 - **Context awareness** - AI remembers recent commands and outputs
 - **Execution history** - 🆕 Complete log of AI actions and reasoning
+- **Automatic language detection** - 🌍 AI responds in the same language as your question
 
 ### 🔧 Advanced Terminal Features
 - **Modern xterm.js** - Full-featured terminal emulation
