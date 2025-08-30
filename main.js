@@ -595,6 +595,101 @@ ipcMain.handle('test-ai-connection', async (event, provider, testConfig) => {
   }
 });
 
+// Handler per ottenere lo stato AI corrente
+ipcMain.handle('get-ai-status', async () => {
+  try {
+    const aiConfig = config.getAIConfig();
+    const provider = aiConfig.provider;
+    const isConfigured = aiManager.isProviderConfigured(provider);
+    
+    // Test rapido della connessione se configurato
+    let isConnected = false;
+    if (isConfigured) {
+      try {
+        const testPrompt = "Test connection - respond with 'OK' if you can read this.";
+        await aiManager.request(testPrompt, []);
+        isConnected = true;
+      } catch (error) {
+        isConnected = false;
+      }
+    }
+    
+    return {
+      provider: provider,
+      isConfigured: isConfigured,
+      isConnected: isConnected,
+      displayName: getProviderDisplayName(provider)
+    };
+  } catch (error) {
+    return {
+      provider: 'none',
+      isConfigured: false,
+      isConnected: false,
+      displayName: 'None'
+    };
+  }
+});
+
+// Handler per aggiornare lo stato AI
+ipcMain.handle('update-ai-status', async () => {
+  try {
+    const status = await getAIStatus();
+    // Invia l'aggiornamento alla finestra principale
+    if (mainWindow) {
+      mainWindow.webContents.send('ai-status-updated', status);
+    }
+    return status;
+  } catch (error) {
+    console.error('Error updating AI status:', error);
+    return null;
+  }
+});
+
+// Funzione helper per ottenere il nome visualizzato del provider
+function getProviderDisplayName(provider) {
+  const displayNames = {
+    'gemini': 'Google Gemini',
+    'openai': 'OpenAI',
+    'lm-studio': 'LM Studio'
+  };
+  return displayNames[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+// Funzione helper per ottenere lo stato AI
+async function getAIStatus() {
+  try {
+    const aiConfig = config.getAIConfig();
+    const provider = aiConfig.provider;
+    const isConfigured = aiManager.isProviderConfigured(provider);
+    
+    // Test rapido della connessione se configurato
+    let isConnected = false;
+    if (isConfigured) {
+      try {
+        const testPrompt = "Test connection - respond with 'OK' if you can read this.";
+        await aiManager.request(testPrompt, []);
+        isConnected = true;
+      } catch (error) {
+        isConnected = false;
+      }
+    }
+    
+    return {
+      provider: provider,
+      isConfigured: isConfigured,
+      isConnected: isConnected,
+      displayName: getProviderDisplayName(provider)
+    };
+  } catch (error) {
+    return {
+      provider: 'none',
+      isConfigured: false,
+      isConnected: false,
+      displayName: 'None'
+    };
+  }
+}
+
 ipcMain.handle('reset-config', async () => {
   return config.resetToDefaults();
 });
@@ -621,10 +716,20 @@ ipcMain.on('preview-settings', (event, previewConfig) => {
   }
 });
 
-ipcMain.on('settings-saved', (event, newConfig) => {
+ipcMain.on('settings-saved', async (event, newConfig) => {
   // Invia le nuove impostazioni alla finestra principale per applicarle
   if (mainWindow) {
     mainWindow.webContents.send('settings-changed', newConfig);
+  }
+  
+  // Aggiorna lo stato AI dopo il salvataggio delle impostazioni
+  try {
+    const status = await getAIStatus();
+    if (mainWindow) {
+      mainWindow.webContents.send('ai-status-updated', status);
+    }
+  } catch (error) {
+    console.error('Error updating AI status after settings save:', error);
   }
 });
 

@@ -71,6 +71,7 @@ class SimpleTerminal {
   save-ai-chat       - Save AI conversation to Downloads
   show-ai-chat       - Show current AI conversation history
   clear-ai-chat      - Clear AI conversation memory
+  ai-status          - Show and refresh AI connection status
 
 �📱 Terminal Commands:
   help               - Show help
@@ -132,6 +133,14 @@ class SimpleTerminal {
             });
         }
 
+        // Gestione del pulsante stato AI
+        const aiStatusBtn = document.getElementById('ai-status');
+        if (aiStatusBtn) {
+            aiStatusBtn.addEventListener('click', () => {
+                this.showAIStatusInfo();
+            });
+        }
+
         // Scorciatoia da tastiera per le impostazioni
         document.addEventListener('keydown', (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === ',') {
@@ -156,13 +165,124 @@ class SimpleTerminal {
                     this.addOutput(message);
                 });
             }
+            
+            // Listener per aggiornamenti stato AI
+            if (window.electronAPI.onAIStatusUpdated) {
+                window.electronAPI.onAIStatusUpdated((event, aiStatus) => {
+                    console.log('AI Status updated:', aiStatus);
+                    this.updateAIStatusDisplay(aiStatus);
+                });
+            }
         }
+        
+        // Carica lo stato AI iniziale
+        this.loadAIStatus();
     }
 
     setupSandboxWarningListener() {
         // Metodo separato se servono azioni future
         if (window.electronAPI && window.electronAPI.onSandboxWarning) {
             // già registrato in setupConfigListeners
+        }
+    }
+
+    async loadAIStatus() {
+        try {
+            if (window.electronAPI && window.electronAPI.getAIStatus) {
+                const aiStatus = await window.electronAPI.getAIStatus();
+                console.log('Initial AI status loaded:', aiStatus);
+                this.updateAIStatusDisplay(aiStatus);
+            }
+        } catch (error) {
+            console.error('Error loading AI status:', error);
+            // Fallback: mostra stato offline
+            this.updateAIStatusDisplay({
+                provider: 'none',
+                isConfigured: false,
+                isConnected: false,
+                displayName: 'None'
+            });
+        }
+    }
+
+    updateAIStatusDisplay(aiStatus) {
+        const aiStatusElement = document.getElementById('ai-status');
+        const aiProviderNameElement = document.getElementById('ai-provider-name');
+        
+        if (!aiStatusElement || !aiProviderNameElement) {
+            console.warn('AI status elements not found');
+            return;
+        }
+
+        // Aggiorna il nome del provider
+        aiProviderNameElement.textContent = aiStatus.displayName;
+
+        // Aggiorna lo stato visivo
+        if (aiStatus.isConnected) {
+            // AI connessa e funzionante
+            aiStatusElement.classList.remove('offline');
+            aiStatusElement.classList.add('online');
+            aiStatusElement.title = `${aiStatus.displayName} - Connected`;
+        } else if (aiStatus.isConfigured) {
+            // AI configurata ma non connessa
+            aiStatusElement.classList.remove('online');
+            aiStatusElement.classList.add('offline');
+            aiStatusElement.title = `${aiStatus.displayName} - Configured but not connected`;
+        } else {
+            // AI non configurata
+            aiStatusElement.classList.remove('online');
+            aiStatusElement.classList.add('offline');
+            aiStatusElement.title = `${aiStatus.displayName} - Not configured`;
+        }
+
+        console.log('AI status display updated:', aiStatus);
+    }
+
+    showAIStatusInfo() {
+        // Mostra informazioni dettagliate sullo stato AI
+        this.addOutput('🤖 AI Status Information:');
+        this.addOutput('─'.repeat(40));
+        
+        // Ottieni lo stato corrente
+        if (window.electronAPI && window.electronAPI.getAIStatus) {
+            window.electronAPI.getAIStatus().then(aiStatus => {
+                this.addOutput(`Provider: ${aiStatus.displayName}`);
+                this.addOutput(`Status: ${aiStatus.isConnected ? '✅ Connected' : aiStatus.isConfigured ? '⚠️ Configured but not connected' : '❌ Not configured'}`);
+                
+                if (aiStatus.isConnected) {
+                    this.addOutput('💡 AI is ready to use! Try: ai "Hello, how are you?"');
+                } else if (aiStatus.isConfigured) {
+                    this.addOutput('🔧 AI is configured but connection test failed.');
+                    this.addOutput('💡 Check your internet connection or API settings.');
+                } else {
+                    this.addOutput('⚙️ AI is not configured.');
+                    this.addOutput('💡 Open settings (⌘+,) to configure an AI provider.');
+                }
+                
+                this.addOutput('─'.repeat(40));
+            }).catch(error => {
+                this.addOutput('❌ Error getting AI status');
+                this.addOutput('─'.repeat(40));
+            });
+        } else {
+            this.addOutput('❌ AI status API not available');
+            this.addOutput('─'.repeat(40));
+        }
+    }
+
+    async refreshAIStatus() {
+        this.addOutput('🔄 Refreshing AI status...');
+        
+        try {
+            if (window.electronAPI && window.electronAPI.updateAIStatus) {
+                const aiStatus = await window.electronAPI.updateAIStatus();
+                this.addOutput(`✅ AI status updated: ${aiStatus.displayName} - ${aiStatus.isConnected ? 'Connected' : aiStatus.isConfigured ? 'Configured but not connected' : 'Not configured'}`);
+            } else {
+                this.addOutput('❌ AI status update API not available');
+            }
+        } catch (error) {
+            console.error('Error refreshing AI status:', error);
+            this.addOutput('❌ Error refreshing AI status');
         }
     }
 
@@ -554,6 +674,8 @@ class SimpleTerminal {
             this.testCursorStyle(command.replace('cursor-', ''));
         } else if (command === 'install-homebrew') {
             await this.installHomebrew();
+        } else if (command === 'ai-status') {
+            await this.refreshAIStatus();
         } else if (command.startsWith('ai ') || command.startsWith('ask ') ||
                    command.startsWith('execute ') || command.startsWith('run ')) {
             await this.processAICommand(command);
@@ -788,6 +910,7 @@ Available commands:
   save-ai-chat       - Save AI conversation to file
   show-ai-chat       - Display AI conversation history  
   clear-ai-chat      - Clear AI conversation history
+  ai-status          - Show and refresh AI connection status
   
   env-check          - Check environment for sudo compatibility
   run-external       - Show how to run commands in external terminal

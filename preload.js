@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   aiAgentRequest: (prompt, context, autoExecute) => ipcRenderer.invoke('ai-agent-request', prompt, context, autoExecute),
   getAIProviders: () => ipcRenderer.invoke('get-ai-providers'),
   testAIConnection: (provider, config) => ipcRenderer.invoke('test-ai-connection', provider, config),
+  getAIStatus: () => ipcRenderer.invoke('get-ai-status'),
+  updateAIStatus: () => ipcRenderer.invoke('update-ai-status'),
   
   // Terminal operations
   runCommand: (command) => ipcRenderer.invoke('run-command', command),
@@ -38,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCloseTab: (callback) => ipcRenderer.on('close-tab', callback),
   onSettingsChanged: (callback) => ipcRenderer.on('settings-changed', callback),
   onSandboxWarning: (callback) => ipcRenderer.on('sandbox-warning', callback),
+  onAIStatusUpdated: (callback) => ipcRenderer.on('ai-status-updated', callback),
   sendMessage: (channel, data) => ipcRenderer.send(channel, data),
   
   // Remove listeners

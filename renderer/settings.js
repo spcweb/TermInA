@@ -573,6 +573,13 @@ class SettingsManager {
                 this.showNotification('Settings saved successfully!', 'success');
                 // Invia un messaggio alla finestra principale per applicare le modifiche
                 window.electronAPI.sendMessage('settings-saved', formData);
+                
+                // Aggiorna lo stato AI dopo il salvataggio
+                try {
+                    await window.electronAPI.updateAIStatus();
+                } catch (error) {
+                    console.error('Error updating AI status after save:', error);
+                }
             } else {
                 this.showNotification('Error saving settings', 'error');
             }
