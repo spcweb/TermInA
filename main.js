@@ -7,6 +7,20 @@ const config = require('./src/config');
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
 
+// Configurazioni specifiche per Linux per ridurre errori GL e X11
+if (process.platform === 'linux') {
+  // Disabilita accelerazione hardware se ci sono problemi grafici
+  app.commandLine.appendSwitch('--disable-dev-shm-usage');
+  app.commandLine.appendSwitch('--disable-software-rasterizer');
+  app.commandLine.appendSwitch('--enable-logging');
+  app.commandLine.appendSwitch('--disable-background-timer-throttling');
+  app.commandLine.appendSwitch('--disable-renderer-backgrounding');
+  
+  // Imposta variabili d'ambiente per migliorare compatibilità X11
+  process.env.XDG_SESSION_TYPE = process.env.XDG_SESSION_TYPE || 'x11';
+  process.env.GDK_BACKEND = 'x11';
+}
+
 let mainWindow;
 let settingsWindow;
 
