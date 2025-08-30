@@ -629,7 +629,7 @@ class SettingsManager {
 
         document.body.appendChild(notification);
 
-        // Rimuovi dopo 3 secondi
+        // Rimuovi dopo 1 secondo
         setTimeout(() => {
             notification.style.opacity = '0';
             notification.style.transform = 'translateX(100%)';
@@ -638,7 +638,7 @@ class SettingsManager {
                     notification.parentNode.removeChild(notification);
                 }
             }, 300);
-        }, 3000);
+        }, 1000);
     }
 
     async testAIConnection(provider) {
