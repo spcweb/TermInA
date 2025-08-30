@@ -733,25 +733,25 @@ function detectAndNotifySandbox() {
   if (indicators.length === 0 && !noNewPrivs) return; // Nessun avviso necessario
   
   const messageLines = [];
-  messageLines.push('⚠️ Ambiente rilevato: ' + (indicators.length ? indicators.join(', ') : 'Nessun indicatore specifico'));
+  messageLines.push('⚠️ Environment detected: ' + (indicators.length ? indicators.join(', ') : 'No specific indicators'));
   if (noNewPrivs) {
-    messageLines.push('🔐 Flag kernel no_new_privs attivo (sudo potrebbe fallire con "nessun nuovo privilegio").');
+    messageLines.push('🔐 Kernel no_new_privs flag active (sudo might fail with "no new privileges").');
   }
   messageLines.push('');
-  messageLines.push('💡 Se i comandi sudo falliscono:');
-  messageLines.push('• Avvia TermInA fuori dal sandbox (npm install && npm start)');
+  messageLines.push('💡 If sudo commands fail:');
+  messageLines.push('• Launch TermInA outside the sandbox (npm install && npm start)');
   if (indicators.includes('Firejail')) {
-    messageLines.push('• Disabilita Firejail: FIREJAIL_DISABLE=1 ./TermInA*.AppImage');
+    messageLines.push('• Disable Firejail: FIREJAIL_DISABLE=1 ./TermInA*.AppImage');
   }
   if (indicators.includes('AppImage')) {
-    messageLines.push('• Lancia senza integrazione Firejail: FIREJAIL_DISABLE=1 ./TermInA*.AppImage');
+    messageLines.push('• Launch without Firejail integration: FIREJAIL_DISABLE=1 ./TermInA*.AppImage');
   }
   if (indicators.includes('Flatpak') || indicators.includes('Snap')) {
-    messageLines.push('• Esegui i comandi privilegiati in un terminale di sistema esterno');
+    messageLines.push('• Run privileged commands in an external system terminal');
   }
-  messageLines.push('• Per analisi spazio disco senza root: du -ah ~ 2>/dev/null | sort -rh | head -n 20');
+  messageLines.push('• For disk space analysis without root: du -ah ~ 2>/dev/null | sort -rh | head -n 20');
   messageLines.push('');
-  messageLines.push('🛠️ Per integrazione privilegiata sicura: implementa un helper root via polkit invece di sudo nel sandbox.');
+  messageLines.push('🛠️ For secure privileged integration: implement a root helper via polkit instead of sudo in the sandbox.');
   
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow.webContents.send('sandbox-warning', messageLines.join('\n'));
