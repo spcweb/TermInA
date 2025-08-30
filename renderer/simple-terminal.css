@@ -60,11 +60,12 @@
 .input-text {
     color: var(--terminal-fg);
     min-width: 1px;
+    white-space: pre;
 }
 
 .terminal-cursor {
     color: var(--terminal-cursor);
-    background-color: var(--terminal-cursor);
+    background-color: transparent;
     font-weight: bold;
     font-size: var(--terminal-font-size);
     margin-left: 1px;
@@ -76,18 +77,28 @@
     
     /* Default style: bar */
     width: 2px;
-    border-left: 2px solid var(--terminal-cursor);
-    background-color: transparent;
+    border: none;
 }
 
 /* Cursor styles */
 .terminal-cursor.cursor-bar {
-    width: 2px;
-    background-color: transparent;
-    border-left: 2px solid var(--terminal-cursor);
-    border-right: none;
-    border-top: none;
-    border-bottom: none;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    background-color: transparent !important;
+    border-left: 1px solid var(--terminal-cursor) !important;
+    border-right: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    box-shadow: 0 0 2px var(--terminal-cursor) !important;
+    min-height: 1.2em !important;
+    height: 1.2em !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-block !important;
+    animation: cursor-blink 1s infinite !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
 }
 
 .terminal-cursor.cursor-block {
@@ -98,9 +109,13 @@
     border: none;
 }
 
-.cursor-underline {
-    border-bottom: 2px solid var(--terminal-cursor);
+.terminal-cursor.cursor-underline {
+    width: 1ch;
+    min-width: 8px;
     background-color: transparent;
+    color: var(--terminal-fg);
+    border: none;
+    border-bottom: 2px solid var(--terminal-cursor);
 }
 
 @keyframes cursor-blink {

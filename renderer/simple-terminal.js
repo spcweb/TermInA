@@ -44,16 +44,27 @@ class SimpleTerminal {
     }
 
     createCursor() {
-        // Il cursore è già creato nell'HTML
-        console.log('Cursor created:', this.cursor);
+            // Il cursore è già creato nell'HTML
+            if (this.cursor) {
+                this.cursor.classList.add('cursor-bar');
+                this.cursor.style.animation = 'cursor-blink 1s infinite';
+                this.cursor.offsetHeight; // Forza reflow
+            }
+            console.log('Cursor created:', this.cursor);
     }
 
     startCursorBlink() {
-        setInterval(() => {
-            if (this.cursor) {
-                this.cursor.style.opacity = this.cursor.style.opacity === '0' ? '1' : '0';
-            }
-        }, 500);
+        // Usa l'animazione CSS invece di JavaScript per il cursore bar
+        if (this.cursor && this.cursor.classList.contains('cursor-bar')) {
+            this.cursor.style.animation = 'cursor-blink 1s infinite';
+        } else {
+            // Fallback per altri tipi di cursore
+            setInterval(() => {
+                if (this.cursor && !this.cursor.classList.contains('cursor-bar')) {
+                    this.cursor.style.opacity = this.cursor.style.opacity === '0' ? '1' : '0';
+                }
+            }, 500);
+        }
     }
 
     showWelcome() {
@@ -101,6 +112,9 @@ class SimpleTerminal {
         
         if (cursor) {
             cursor.style.opacity = '1';
+            // Assicurati che il cursore sia visibile e nella posizione corretta
+            cursor.style.display = 'inline-block';
+            cursor.style.visibility = 'visible';
         }
     }
 
@@ -405,7 +419,12 @@ class SimpleTerminal {
                 this.cursor.style.opacity = '1';
                 this.cursor.style.animation = 'none';
             } else if (this.cursor) {
-                this.cursor.style.animation = 'cursor-blink 1s infinite';
+                // Per il cursore bar, usa sempre l'animazione CSS
+                if (this.cursor.classList.contains('cursor-bar')) {
+                    this.cursor.style.animation = 'cursor-blink 1s infinite';
+                } else {
+                    this.cursor.style.animation = 'cursor-blink 1s infinite';
+                }
             }
         }
     }
@@ -449,10 +468,19 @@ class SimpleTerminal {
                 break;
         }
 
+        // Forza il reflow per assicurarsi che gli stili vengano applicati
+        this.cursor.offsetHeight;
+
+        // Riapplica l'animazione se abilitata
+        if (this.cursorBlinkEnabled !== false) {
+            this.cursor.style.animation = 'cursor-blink 1s infinite';
+        }
+
         console.log('Stile cursore applicato:', {
             style: style,
             classList: Array.from(this.cursor.classList),
-            textContent: this.cursor.textContent
+            textContent: this.cursor.textContent,
+            computedStyle: window.getComputedStyle(this.cursor)
         });
     }
 
@@ -527,6 +555,8 @@ class SimpleTerminal {
     addCharacter(char) {
         this.currentLine += char;
         this.showPrompt();
+        // Forza il reflow per aggiornare la posizione del cursore
+        this.inputTextElement.offsetHeight;
     }
 
     handleBackspace() {
@@ -1655,6 +1685,48 @@ AI Commands:
             
         } catch (error) {
             this.addOutput(`❌ Environment check failed: ${error.message}`);
+        }
+    }
+
+    showCursorStyles() {
+        this.addOutput('🎯 Cursor Style Debug');
+        this.addOutput('═'.repeat(50));
+        this.addOutput('');
+        this.addOutput('Available cursor styles:');
+        this.addOutput('• cursor-bar    - Vertical bar cursor');
+        this.addOutput('• cursor-block  - Block cursor');
+        this.addOutput('• cursor-underline - Underline cursor');
+        this.addOutput('');
+        this.addOutput('Test commands:');
+        this.addOutput('• cursor-bar       - Test bar style');
+        this.addOutput('• cursor-block     - Test block style');
+        this.addOutput('• cursor-underline - Test underline style');
+        this.addOutput('');
+        this.addOutput('Current cursor state:');
+        this.addOutput(`• Element: ${this.cursor ? 'Found' : 'Not found'}`);
+        this.addOutput(`• Classes: ${this.cursor ? Array.from(this.cursor.classList).join(', ') : 'N/A'}`);
+        this.addOutput(`• Text content: "${this.cursor ? this.cursor.textContent : 'N/A'}"`);
+        this.addOutput(`• Style: ${this.cursor ? this.cursor.style.cssText : 'N/A'}`);
+    }
+
+    testCursorStyle(style) {
+        this.addOutput(`🎯 Testing cursor style: ${style}`);
+        this.applyCursorStyle(style);
+        this.addOutput(`✅ Applied style: ${style}`);
+        this.addOutput(`📋 Classes: ${Array.from(this.cursor.classList).join(', ')}`);
+        this.addOutput(`📝 Text: "${this.cursor.textContent}"`);
+        
+        // Debug aggiuntivo per il cursore bar
+        if (style === 'bar') {
+            const computedStyle = window.getComputedStyle(this.cursor);
+            this.addOutput(`🔍 Cursor bar debug:`);
+            this.addOutput(`   Width: ${computedStyle.width}`);
+            this.addOutput(`   Height: ${computedStyle.height}`);
+            this.addOutput(`   Background: ${computedStyle.backgroundColor}`);
+            this.addOutput(`   Display: ${computedStyle.display}`);
+            this.addOutput(`   Visibility: ${computedStyle.visibility}`);
+            this.addOutput(`   Opacity: ${computedStyle.opacity}`);
+            this.addOutput(`   Box-shadow: ${computedStyle.boxShadow}`);
         }
     }
 

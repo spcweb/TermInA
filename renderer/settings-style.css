@@ -189,6 +189,81 @@ select:focus {
   box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
 }
 
+/* Dropdown Styling - Dark Theme Coherent */
+select {
+  background: rgba(40, 44, 52, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+select:hover {
+  background-color: rgba(50, 54, 62, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+select:focus {
+  background-color: rgba(40, 44, 52, 0.95);
+  border-color: #00d4aa;
+  box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
+}
+
+/* Dropdown Options Styling */
+select option {
+  background: rgba(40, 44, 52, 0.95);
+  color: #ffffff;
+  padding: 8px 12px;
+}
+
+select option:hover {
+  background: rgba(0, 212, 170, 0.2);
+}
+
+select option:checked {
+  background: rgba(0, 212, 170, 0.3);
+  color: #ffffff;
+}
+
+/* Firefox specific dropdown styling */
+@-moz-document url-prefix() {
+  select {
+    background-color: rgba(40, 44, 52, 0.9);
+    color: #ffffff;
+  }
+  
+  select option {
+    background-color: rgba(40, 44, 52, 0.95);
+    color: #ffffff;
+  }
+  
+  select option:checked {
+    background-color: rgba(0, 212, 170, 0.3);
+    color: #ffffff;
+  }
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) specific styling */
+select::-webkit-select-placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Ensure dropdown arrow is visible on all browsers */
+select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
 input[type="color"] {
   width: 60px;
   height: 40px;
@@ -369,14 +444,9 @@ input[type="range"] {
   background: #ffa502;
 }
 
-/* Provider selector styling */
+/* Provider selector styling - Specific styling for AI provider */
 #ai-provider {
-  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(0, 212, 170, 0.3);
-  color: #ffffff;
-  border-radius: 8px;
-  padding: 10px 15px;
-  font-size: 14px;
   transition: all 0.3s ease;
 }
 
