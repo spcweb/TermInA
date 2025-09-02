@@ -38,7 +38,7 @@ class AIAgent {
       );
 
       // Chiedi all'AI cosa fare
-      const aiResponse = await this.getAIDecision(contextualPrompt);
+      const aiResponse = await this.getAIDecision(contextualPrompt, originalPrompt);
       
       if (!aiResponse.requiresCommand) {
         // Risposta informativa, non serve iterazione
@@ -79,7 +79,8 @@ class AIAgent {
       const analysisResult = await this.analyzeResult(
         originalPrompt, 
         aiResponse.command, 
-        executionResult
+        executionResult,
+        originalPrompt
       );
 
       if (analysisResult.isSuccessful) {
@@ -130,7 +131,7 @@ class AIAgent {
     return prompt;
   }
 
-  async getAIDecision(contextualPrompt) {
+  async getAIDecision(contextualPrompt, originalUserPrompt = null) {
     const decisionPrompt = `${contextualPrompt}
 
 Analizza la richiesta e determina se è necessario eseguire un comando o se è una richiesta informativa.
@@ -153,7 +154,7 @@ Considera la cronologia dei tentativi precedenti per evitare di ripetere comandi
 Sistema operativo: macOS (comandi Unix/bash compatibili).
 Fornisci SOLO il JSON, senza testo aggiuntivo.`;
 
-    const response = await aiManager.request(decisionPrompt);
+    const response = await aiManager.request(decisionPrompt, [], originalUserPrompt);
     
     try {
       // Estrai JSON dalla risposta
@@ -182,7 +183,7 @@ Fornisci SOLO il JSON, senza testo aggiuntivo.`;
     };
   }
 
-  async analyzeResult(originalPrompt, command, executionResult) {
+  async analyzeResult(originalPrompt, command, executionResult, originalUserPrompt = null) {
     const analysisPrompt = `Analizza se il risultato di questo comando soddisfa la richiesta originale dell'utente.
 
 Richiesta originale: "${originalPrompt}"
@@ -207,7 +208,7 @@ Rispondi in formato JSON:
 
 Fornisci SOLO il JSON.`;
 
-    const response = await aiManager.request(analysisPrompt);
+    const response = await aiManager.request(analysisPrompt, [], originalUserPrompt);
     
     try {
       let jsonText = response.trim();

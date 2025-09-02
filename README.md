@@ -21,6 +21,8 @@ Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 - **Iterative AI Agent** - 🆕 AI that executes commands and iterates until success
 - **Auto-execution with verification** - 🆕 Automatic command execution with result verification
 - **Error recovery** - 🆕 AI learns from failures and tries alternative approaches
+- **Automatic language detection** - 🆕 AI responds in the same language as your question
+- **Multi-language support** - 🆕 Italian, English, Spanish, French, German support
 - **Context awareness** - AI remembers recent commands and outputs
 - **Execution history** - 🆕 Complete log of AI actions and reasoning
 
@@ -87,6 +89,29 @@ npm run dist
 | `settings` | Open settings panel |
 | `clear` | Clear terminal |
 | `help` | Show help information |
+
+### Multi-language AI Commands
+
+The AI automatically detects your language and responds accordingly:
+
+```bash
+# Italian
+ai Come installo Node.js?
+
+# English  
+ai How do I install Node.js?
+
+# Spanish
+ai ¿Cómo instalo Node.js?
+
+# French
+ai Comment installer Node.js?
+
+# German
+ai Wie installiere ich Node.js?
+```
+
+Supported languages: **Italian**, **English**, **Spanish**, **French**, **German**
 
 ### Keyboard Shortcuts
 

@@ -2,6 +2,7 @@
 const https = require('https');
 const http = require('http');
 const config = require('./config');
+const LanguageDetector = require('./language-detector');
 
 class AIManager {
   constructor() {
@@ -10,9 +11,10 @@ class AIManager {
       'lm-studio': this.lmStudioRequest.bind(this),
       openai: this.openaiRequest.bind(this)
     };
+    this.languageDetector = new LanguageDetector();
   }
 
-  async request(prompt, context = []) {
+  async request(prompt, context = [], originalUserPrompt = null) {
     const aiConfig = config.getAIConfig();
     const provider = aiConfig.provider;
     
@@ -21,7 +23,19 @@ class AIManager {
     }
     
     try {
-      return await this.providers[provider](prompt, context);
+      // Rileva la lingua dalla domanda originale dell'utente, non dal prompt completo
+      const textToAnalyze = originalUserPrompt || prompt;
+      const detectedLanguage = this.languageDetector.detectLanguage(textToAnalyze);
+      const languageInstruction = this.languageDetector.getLanguageInstruction(detectedLanguage);
+      
+      console.log(`Text analyzed for language: "${textToAnalyze}"`);
+      console.log(`Detected language: ${detectedLanguage}`);
+      console.log(`Language instruction: ${languageInstruction}`);
+      
+      // Aggiunge l'istruzione di lingua al prompt
+      const enhancedPrompt = `${languageInstruction}\n\n${prompt}`;
+      
+      return await this.providers[provider](enhancedPrompt, context);
     } catch (error) {
       console.error(`Errore con provider ${provider}:`, error);
       throw error;
