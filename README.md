@@ -1,8 +1,10 @@
 # Electron Terminal Emulator
 
-# Termina 2.0 🚀
+# Termina 0.2 Beta 🚀
 
 Modern terminal emulator with AI integration - Inspired by Warp's sleek design
+
+> ⚠️ **Attenzione**: Questo software è ancora in versione Beta 0.2. Alcune funzionalità potrebbero essere instabili.
 
 ![Termina Banner](assets/banner.png)
 
@@ -378,13 +380,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@termina.app
-- 💬 Discord: [Join our community](https://discord.gg/termina)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/termina/issues)
+-  Issues: [GitHub Issues](https://github.com/yourusername/termina/issues)
 
 ---
 
-**Made with ❤️ by the Termina Team**
+**Made with ❤️ by Simone Pappalardo Caltabiano**
 
 ## Avvio rapido
 
