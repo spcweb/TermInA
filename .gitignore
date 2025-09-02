@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Distribution builds (questi si possono ricreare)
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Electron app binaries (troppo grandi per Git)
+*.app/
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.snap
+*.AppImage
+
+# Electron build artifacts
+out/
+release/
+app/dist/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+/test.js
+/test_gemini.js
+test-*.js
+test-*.sh
+
+# Sensitive credentials
+.credentials-backup.txt
+*.key
+*.secret
+.env
+.env.local
+*api-key*
+*credentials*
+
+# Local configuration
+config.local.json
+
+# Backup files
+*.backup
+*-backup.*
+*-old.*
+*-new.*
+*-fixed.*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log

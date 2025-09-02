@@ -1,0 +1,65 @@
+{
+  "name": "termina",
+  "version": "2.0.0",
+  "description": "Modern terminal emulator with AI integration - Warp-like design for macOS and Linux",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux",
+    "dist": "electron-builder --publish=never",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "terminal",
+    "emulator",
+    "ai",
+    "warp",
+    "modern",
+    "electron"
+  ],
+  "author": "Termina Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "electron": "^37.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.termina.app",
+    "productName": "Termina",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "linux": {
+      "icon": "build/ICONS.png",
+      "target": "AppImage"
+    },
+    "win": {
+      "icon": "build/ICONS.png",
+      "target": "nsis"
+    }
+  }
+}
