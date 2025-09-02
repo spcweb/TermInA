@@ -446,7 +446,7 @@ body {
   position: relative;
   padding: 4px 0;
   line-height: 1.4;
-  color: #d8e4ff;
+  color: var(--ai-output-fg, #d8e4ff);
   font-weight: 400;
   white-space: pre-wrap;
 }

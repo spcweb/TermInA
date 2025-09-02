@@ -69,35 +69,55 @@ class SimpleTerminal {
     }
 
     showWelcome() {
-        const welcome = `
-🚀 Welcome to Termina
-   Modern Terminal with AI
-
-🤖 AI Commands:
-  ai <question>      - Ask AI anything
-  ask <question>     - Alternative syntax
-  execute <task>     - AI executes & iterates until success
-  run <task>         - Same as execute
-
-� AI Chat Management:
-  save-ai-chat       - Save AI conversation to Downloads
-  show-ai-chat       - Show current AI conversation history
-  clear-ai-chat      - Clear AI conversation memory
-
-�📱 Terminal Commands:
-  help               - Show help
-  clear              - Clear screen (⌘+L)
-  exit               - Exit terminal
-
-⚡ Smart Features:
-  Tab                - Autocomplete commands
-  ↑↓                 - Navigate command history
-  ⌘+C/⌘+V           - Copy/Paste (⌘+A to select all)
-  Auto-scroll        - Follows new output automatically
-
-⚙️  Settings: Click the gear icon or press ⌘+,
-`;
-        this.addOutput(welcome);
+                // Messaggio di benvenuto moderno (rich output)
+                const welcomeHtml = `
+<div class="welcome-box">
+    <div class="welcome-header">
+        <div class="logo-col">
+            <div class="logo-glow">λ</div>
+        </div>
+        <div class="title-col">
+            <h1>TermInA <span class="version-pill">Beta 0.2</span></h1>
+            <p class="subtitle">AI‑Augmented Terminal • Fast • Modern</p>
+        </div>
+    </div>
+    <div class="welcome-grid">
+        <div class="wg-section">
+            <h2>⚡ Quick Start</h2>
+            <ul>
+                <li><kbd>ai</kbd> <em>domanda</em> – chiedi qualcosa all'AI</li>
+                <li><kbd>execute</kbd>/<kbd>run</kbd> <em>task</em> – esecuzione iterativa</li>
+                <li><kbd>help</kbd> – comandi disponibili</li>
+            </ul>
+        </div>
+        <div class="wg-section">
+            <h2>🤖 AI Ops</h2>
+            <ul>
+                <li><kbd>save-ai-chat</kbd> salva chat</li>
+                <li><kbd>show-ai-chat</kbd> mostra memoria</li>
+                <li><kbd>clear-ai-chat</kbd> reset conversazione</li>
+            </ul>
+        </div>
+        <div class="wg-section">
+            <h2>⌨️ Shortcuts</h2>
+            <ul>
+                <li><kbd>⌘</kbd><kbd>K</kbd> pulisci • <kbd>Tab</kbd> autocomplete</li>
+                <li><kbd>↑</kbd><kbd>↓</kbd> history • <kbd>⌘</kbd><kbd>,</kbd> settings</li>
+                <li><kbd>⌘</kbd><kbd>C</kbd>/<kbd>⌘</kbd><kbd>V</kbd> copia/incolla</li>
+            </ul>
+        </div>
+        <div class="wg-section">
+            <h2>🧠 Features</h2>
+            <ul>
+                <li>Language auto‑detect</li>
+                <li>Iterative agent</li>
+                <li>Context aware suggestions</li>
+            </ul>
+        </div>
+    </div>
+    <div class="status-hint">Tip: premi <kbd>⌘</kbd><kbd>,</kbd> per personalizzare temi e AI provider.</div>
+</div>`;
+                this.addRichOutput(welcomeHtml, 'welcome-wrapper');
     }
 
     showPrompt() {
@@ -201,6 +221,18 @@ class SimpleTerminal {
         this.outputElement.appendChild(line);
         // Il MutationObserver si occuperà dello scroll automatico
     }
+
+        addRichOutput(html, extraClass = '') {
+                if (this.currentAIGroup) this.currentAIGroup = null;
+                const wrapper = document.createElement('div');
+                wrapper.className = `output-line rich-output ${extraClass}`.trim();
+                // Sanitizzazione basilare: rimuove script/style
+                const safeHtml = html
+                    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
+                wrapper.innerHTML = safeHtml;
+                this.outputElement.appendChild(wrapper);
+        }
 
     // Funzione speciale per output AI
     addAIOutput(text) {
@@ -506,6 +538,20 @@ class SimpleTerminal {
             root.style.setProperty('--terminal-fg', theme.foreground || '#ffffff');
             root.style.setProperty('--terminal-cursor', theme.cursor || '#00d4aa');
             root.style.setProperty('--terminal-accent', theme.accent || '#00d4aa');
+            // Derivazioni per componenti ricchi
+            const accent = theme.accent || '#00d4aa';
+            const fg = theme.foreground || '#ffffff';
+            const bg = theme.background || '#1e2124';
+            // Colori AI
+            root.style.setProperty('--ai-output-fg', theme.aiOutputFg || fg);
+            root.style.setProperty('--ai-output-accent', theme.aiOutputAccent || accent);
+            root.style.setProperty('--ai-output-border', theme.aiOutputBorder || 'rgba(138,180,250,0.25)');
+            // Welcome box
+            root.style.setProperty('--welcome-border', theme.welcomeBorder || 'rgba(95,179,255,0.25)');
+            root.style.setProperty('--welcome-bg-overlay1', theme.welcomeOverlay1 || 'rgba(95,179,255,0.18)');
+            root.style.setProperty('--welcome-bg-overlay2', theme.welcomeOverlay2 || 'rgba(0,212,170,0.16)');
+            root.style.setProperty('--welcome-section-bg', theme.welcomeSectionBg || 'rgba(255,255,255,0.04)');
+            root.style.setProperty('--welcome-section-border', theme.welcomeSectionBorder || 'rgba(255,255,255,0.06)');
         }
 
         // Applica anche direttamente agli elementi per compatibilità
@@ -523,10 +569,29 @@ class SimpleTerminal {
             prompt.style.color = theme.accent || '#00d4aa';
         }
 
+        // Aggiorna AI chat group colori dinamici
+        this.updateDynamicStyledComponents();
         // Applica al testo di input
         const inputText = terminal.querySelector('.input-text');
         if (inputText) {
             inputText.style.color = theme.foreground || '#ffffff';
+        }
+    }
+
+    updateDynamicStyledComponents() {
+        // Aggiorna eventuali elementi già renderizzati (welcome box, ai output)
+        try {
+            const rootStyles = getComputedStyle(document.documentElement);
+            const aiOutputs = this.container.querySelectorAll('.ai-chat-group .ai-output');
+            aiOutputs.forEach(el => {
+                el.style.color = rootStyles.getPropertyValue('--ai-output-fg').trim() || '';
+            });
+            const welcomeBox = this.container.querySelector('.welcome-box');
+            if (welcomeBox) {
+                welcomeBox.style.borderColor = rootStyles.getPropertyValue('--welcome-border').trim();
+            }
+        } catch (e) {
+            console.warn('updateDynamicStyledComponents failed:', e);
         }
     }
 

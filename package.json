@@ -11,7 +11,8 @@
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
     "build:all": "electron-builder --mac --win --linux",
-    "dist": "electron-builder --publish=never",
+  "dist": "electron-builder --publish=never",
+  "icons": "node build/generate-icons.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -32,7 +33,9 @@
   },
   "devDependencies": {
     "electron": "^37.3.1",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "sharp": "^0.33.4",
+    "png-to-ico": "^2.1.8"
   },
   "build": {
     "appId": "com.termina.app",
