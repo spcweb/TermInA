@@ -38,9 +38,11 @@ class SimpleTerminal {
         this.container.innerHTML = `
             <div class="simple-terminal-content">
                 <div class="terminal-output"></div>
-                <div class="terminal-input-line">
-                    <span class="prompt">$ </span>
-                    <span class="input-text"></span>
+                <div class="terminal-prompt-block">
+                    <div class="prompt-header"><span class="prompt-path">~</span></div>
+                    <div class="terminal-input-line">
+                        <span class="prompt">$</span>&nbsp;<span class="input-text"></span>
+                    </div>
                 </div>
             </div>
         `;
@@ -114,12 +116,24 @@ class SimpleTerminal {
 
     renderPrompt() {
         const promptSpan = this.container.querySelector('.prompt');
+        const headerPath = this.container.querySelector('.prompt-header .prompt-path');
         const cwdDisplay = this.cwd ? this.formatCwd(this.cwd) : '~';
+        // Aggiorna header sopra il prompt (stile Warp-like)
+        if (headerPath) {
+            headerPath.innerHTML = this.buildPromptHeaderContent(cwdDisplay);
+        }
+        // Prompt minimale solo simbolo
         if (promptSpan) {
-            promptSpan.innerHTML = `<span class="prompt-path">${this.escapeHtml(cwdDisplay)}</span> $`;
+            promptSpan.textContent = '$';
         }
         this.inputTextElement.textContent = this.currentLine;
         this.updateCursorPosition();
+    }
+
+    buildPromptHeaderContent(cwdDisplay) {
+        // Possibile espansione futura: aggiungere ora, git branch, status code ultimo comando
+        // Per ora solo path formattato
+        return this.escapeHtml(cwdDisplay);
     }
 
     formatCwd(cwd) {
@@ -636,14 +650,9 @@ class SimpleTerminal {
                     this.handlePaste(e);
                     return;
                 case 'a':
-                    // Ctrl+A o Cmd+A - Se non c'è selezione, vai all'inizio della riga
-                    if (window.getSelection().toString().length === 0) {
-                        e.preventDefault();
-                        this.cursorPosition = 0;
-                        this.showPrompt();
-                        return;
-                    }
-                    this.handleSelectAll(e);
+                    // Cmd/Ctrl + A: seleziona SOLO la linea corrente di input
+                    e.preventDefault();
+                    this.handleSelectInputLine();
                     return;
                 case 'e':
                     // Ctrl+E - Vai alla fine della riga
@@ -699,6 +708,12 @@ class SimpleTerminal {
             this.forceScrollToBottom();
             return;
         } else if (e.key === 'Delete') {
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed) {
+                e.preventDefault();
+                const removed = this.handleDeleteSelectedLines();
+                if (removed) return;
+            }
             e.preventDefault();
             this.handleDelete();
             return;
@@ -719,6 +734,11 @@ class SimpleTerminal {
     }
 
     addCharacter(char) {
+        // Se c'è selezione sulla linea di input, rimpiazza
+        if (this.isInputSelectionActive()) {
+            this.currentLine = '';
+            this.cursorPosition = 0;
+        }
         // Inserisce il carattere nella posizione del cursore
         this.currentLine = 
             this.currentLine.substring(0, this.cursorPosition) + 
@@ -729,6 +749,14 @@ class SimpleTerminal {
     }
 
     handleBackspace() {
+        if (this.isInputSelectionActive()) {
+            // Cancella intera selezione
+            this.currentLine = '';
+            this.cursorPosition = 0;
+            this.clearInputSelection();
+            this.showPrompt();
+            return;
+        }
         if (this.cursorPosition > 0) {
             // Rimuove il carattere prima del cursore
             this.currentLine = 
@@ -740,6 +768,13 @@ class SimpleTerminal {
     }
 
     handleDelete() {
+        if (this.isInputSelectionActive()) {
+            this.currentLine = '';
+            this.cursorPosition = 0;
+            this.clearInputSelection();
+            this.showPrompt();
+            return;
+        }
         if (this.cursorPosition < this.currentLine.length) {
             // Rimuove il carattere dopo il cursore
             this.currentLine = 
@@ -747,6 +782,29 @@ class SimpleTerminal {
                 this.currentLine.substring(this.cursorPosition + 1);
             this.showPrompt();
         }
+    }
+
+    handleDeleteSelectedLines() {
+        if (!this.outputElement) return false;
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) return false;
+        const lines = Array.from(this.outputElement.querySelectorAll('.output-line'));
+        let removed = 0;
+        lines.forEach(line => {
+            try {
+                if (sel.containsNode(line, true)) {
+                    line.remove();
+                    removed++;
+                }
+            } catch (_) { /* containsNode fallback non necessario */ }
+        });
+        if (removed > 0) {
+            sel.removeAllRanges();
+            // Non aggiungiamo output per evitare di "sporcare" il terminale dopo la rimozione
+            console.log(`Deleted ${removed} line(s) from terminal output.`);
+            return true;
+        }
+        return false;
     }
 
     handleArrowKey(key) {
@@ -813,16 +871,49 @@ class SimpleTerminal {
         }
     }
 
-    handleSelectAll(e) {
-        e.preventDefault();
-        // Seleziona tutto il contenuto del terminale
-        const outputElement = this.outputElement;
-        const range = document.createRange();
-        range.selectNodeContents(outputElement);
+    handleSelectAll() {
+        // Seleziona output + linea di input corrente
         const selection = window.getSelection();
+        if (!selection) return;
         selection.removeAllRanges();
+        const range = document.createRange();
+        const contentRoot = this.container.querySelector('.simple-terminal-content');
+        if (contentRoot) {
+            range.selectNodeContents(contentRoot);
+            selection.addRange(range);
+        }
+    }
+
+    handleSelectInputLine() {
+        const selection = window.getSelection();
+        if (!selection) return;
+        selection.removeAllRanges();
+        const inputLine = this.container.querySelector('.terminal-input-line');
+        if (!inputLine) return;
+        const range = document.createRange();
+        range.selectNodeContents(inputLine.querySelector('.input-text'));
         selection.addRange(range);
-        this.addOutput('📋 All terminal content selected');
+    }
+
+    isInputSelectionActive() {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) return false;
+        const inputText = this.container.querySelector('.input-text');
+        if (!inputText) return false;
+        // Verifica che la selezione ricada tutta dentro input-text
+        for (let i = 0; i < sel.rangeCount; i++) {
+            const range = sel.getRangeAt(i);
+            if (!inputText.contains(range.startContainer) || !inputText.contains(range.endContainer)) {
+                return false;
+            }
+        }
+        // Selezione completa? (facoltativo) - la usiamo solo come stato
+        return true;
+    }
+
+    clearInputSelection() {
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
     }
 
     // Navigazione cronologia comandi

@@ -4,9 +4,8 @@
 
 Modern terminal emulator with AI integration - Inspired by Warp's sleek design
 
-> ⚠️ **Attenzione**: Questo software è ancora in versione Beta 0.2. Alcune funzionalità potrebbero essere instabili.
+⚠️ Warning: This software is still in Beta version 0.2. Some features may be unstable.
 
-![Termina Banner](assets/banner.png)
 
 ## 🌟 Features
 
