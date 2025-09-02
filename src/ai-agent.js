@@ -1,5 +1,7 @@
 // Agente AI avanzato con capacità di iterazione e esecuzione automatica
 const aiManager = require('./ai-manager');
+const systemInfo = require('./system-info');
+const pathAlias = require('./path-alias');
 
 class AIAgent {
   constructor() {
@@ -111,7 +113,25 @@ class AIAgent {
   }
 
   buildContextualPrompt(originalPrompt, terminalContext, executionHistory) {
-    let prompt = `Richiesta originale dell'utente: "${originalPrompt}"\n\n`;
+    const aliasEnrichment = pathAlias.enrichPromptWithAliasInfo(originalPrompt);
+    let prompt = `Richiesta originale dell'utente: "${aliasEnrichment.prompt}"\n`;
+    if (aliasEnrichment.note) {
+      prompt += `${aliasEnrichment.note}\n`;
+    }
+    prompt += `\n`;
+    // Aggiungi informazioni di sistema e percorsi utili
+    try {
+      prompt += `Informazioni di sistema:\n` +
+        `- Piattaforma: ${systemInfo.platform}\n` +
+        `- Tipo OS: ${systemInfo.type}\n` +
+        `- Versione: ${systemInfo.release}\n` +
+        `- Architettura: ${systemInfo.arch}\n` +
+        `- Home directory: ${systemInfo.homeDir}\n` +
+        `- Directory Desktop reale (filesystem): ${systemInfo.desktopDir}\n` +
+        `- Directory Documenti reale: ${systemInfo.documentsDir}\n` +
+        `Nota: su macOS in lingua italiana il Finder mostra "Scrivania" ma il path reale è "Desktop". Usa sempre il path reale del filesystem.\n\n`;
+  prompt += `Mappa alias directory disponibile (solo riferimento):\n${pathAlias.buildAliasMappingList()}\n\n`;
+    } catch (_) {}
     
     if (terminalContext.length > 0) {
       prompt += `Contesto del terminale corrente:\n${terminalContext.join('\n')}\n\n`;
@@ -152,6 +172,8 @@ Se è una richiesta informativa, fornisci:
 
 Considera la cronologia dei tentativi precedenti per evitare di ripetere comandi che non hanno funzionato.
 Sistema operativo: macOS (comandi Unix/bash compatibili).
+Ricorda: se l'utente chiede percorsi come "Scrivania" (mac italiano) usa il path reale ${systemInfo.desktopDir}. Evita di ricreare cartelle se esistono già: in caso esista fornisci messaggio che esiste e NON considerare l'errore critico.
+Se l'utente menziona alias di directory (es. scrivania, documenti, immagini, downloads, musica, film, fotos, immagini) mappa l'alias al path reale prima di proporre il comando. Non proporre mai un comando con alias linguistici non reali nel filesystem.
 Fornisci SOLO il JSON, senza testo aggiuntivo.`;
 
     const response = await aiManager.request(decisionPrompt, [], originalUserPrompt);
@@ -197,6 +219,8 @@ Determina se:
 1. Il comando è stato eseguito correttamente
 2. Il risultato soddisfa la richiesta originale
 3. Se non soddisfa la richiesta, quale potrebbe essere il prossimo passo
+
+Regola speciale: se l'output contiene messaggi come "File exists" per mkdir o cartelle già presenti, considera comunque l'obiettivo raggiunto se lo scopo era creare la cartella (perché esiste già). Indica che la cartella era già presente e non è un errore critico.
 
 Rispondi in formato JSON:
 {

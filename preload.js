@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runCommand: (command) => ipcRenderer.invoke('run-command', command),
   runInteractiveCommand: (command) => ipcRenderer.invoke('run-interactive-command', command),
   runSudoCommand: (command, password) => ipcRenderer.invoke('run-sudo-command', command, password),
+  getCwd: () => ipcRenderer.invoke('get-cwd'),
+  onCwdChanged: (callback) => ipcRenderer.on('cwd-changed', (event, cwd) => callback(cwd)),
   
   // Configuration
   getConfig: (key) => ipcRenderer.invoke('get-config', key),

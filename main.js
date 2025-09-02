@@ -9,6 +9,43 @@ const aiAgent = require('./src/ai-agent');
 
 let mainWindow;
 let settingsWindow;
+let currentWorkingDirectory = process.cwd();
+let previousWorkingDirectory = currentWorkingDirectory;
+
+function resolvePath(inputPath) {
+  const os = require('os');
+  if (!inputPath || inputPath.trim() === '') return os.homedir();
+  let p = inputPath.trim();
+  if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+    p = p.slice(1, -1);
+  }
+  if (p.startsWith('~')) {
+    p = p.replace(/^~(\/)?/, os.homedir() + '/');
+  }
+  const path = require('path');
+  if (path.isAbsolute(p)) return p;
+  return path.resolve(currentWorkingDirectory, p);
+}
+
+function changeDirectory(targetRaw) {
+  const fs = require('fs');
+  const path = require('path');
+  const target = resolvePath(targetRaw);
+  try {
+    const stat = fs.statSync(target);
+    if (!stat.isDirectory()) {
+      return { success: false, message: `[cd] Non è una directory: ${target}` };
+    }
+    previousWorkingDirectory = currentWorkingDirectory;
+    currentWorkingDirectory = path.resolve(target);
+    if (mainWindow) {
+      mainWindow.webContents.send('cwd-changed', currentWorkingDirectory);
+    }
+    return { success: true, message: '' };
+  } catch (e) {
+    return { success: false, message: `[cd] Directory non trovata: ${target}` };
+  }
+}
 
 // HANDLER IPC
 ipcMain.handle('read-file', async (event, filePath) => {
@@ -49,7 +86,7 @@ ipcMain.handle('ai-agent-request', async (event, prompt, context = [], autoExecu
     // Configura l'esecutore di comandi per l'AI Agent
     aiAgent.setCommandExecutor(async (command) => {
       return new Promise((resolve) => {
-        exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+  exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
           resolve({
             success: !error,
             output: error ? error.message : (stderr || stdout || ''),
@@ -75,6 +112,42 @@ ipcMain.handle('ai-agent-request', async (event, prompt, context = [], autoExecu
 
 ipcMain.handle('run-command', async (event, command) => {
   return new Promise((resolve, reject) => {
+    const trimmed = command.trim();
+    // Gestione comando cd (supporta: cd, cd <path>, cd .., cd -, cd "dir con spazi", cd dir && ls)
+    const cdMatch = trimmed.match(/^cd(\s+([^&;]+))?(?:\s*&&\s*(.*))?$/);
+    if (cdMatch) {
+      const target = cdMatch[2];
+      if (!target) {
+        const res = changeDirectory('');
+        if (!res.success) { resolve(res.message); return; }
+      } else if (target === '-') {
+        const old = currentWorkingDirectory;
+        currentWorkingDirectory = previousWorkingDirectory;
+        previousWorkingDirectory = old;
+        if (mainWindow) mainWindow.webContents.send('cwd-changed', currentWorkingDirectory);
+      } else if (target === '.') {
+        // no-op
+      } else if (target === '..') {
+        const res = changeDirectory('..');
+      } else {
+        const res = changeDirectory(target);
+        if (!res.success) { resolve(res.message); return; }
+      }
+      const chained = cdMatch[3];
+      if (chained) {
+        exec(chained, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
+          if (error) resolve(`[Error] ${error.message}`);
+          else if (stderr) resolve(`[Stderr] ${stderr}`);
+          else resolve(stdout);
+        });
+      } else {
+        resolve('');
+      }
+      return;
+    }
+
+    if (trimmed === 'pwd') { resolve(currentWorkingDirectory + '\n'); return; }
+
     // Controlla se il comando richiede sudo
     if (command.trim().startsWith('sudo ')) {
       // Per comandi sudo, suggerisci l'uso del dialog password
@@ -128,7 +201,7 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       return runCommandWithPty(command, resolve);
     }
 
-    exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+  exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
       if (error) {
         resolve(`[Error] ${error.message}`);
       } else if (stderr) {
@@ -140,6 +213,9 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
   });
 });
 
+// IPC per ottenere cwd corrente
+ipcMain.handle('get-cwd', async () => currentWorkingDirectory);
+
 // Handler speciale per comandi che richiedono input interattivo (come password)
 ipcMain.handle('run-interactive-command', async (event, command) => {
   return new Promise((resolve, reject) => {
@@ -149,7 +225,7 @@ ipcMain.handle('run-interactive-command', async (event, command) => {
       // Per Homebrew, non usiamo script ma creiamo un ambiente che simula interattività
       // Homebrew rileva l'interattività principalmente attraverso variabili d'ambiente
       
-      const childProcess = spawn('bash', ['-c', command], {
+  const childProcess = spawn('bash', ['-c', command], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -175,7 +251,8 @@ ipcMain.handle('run-interactive-command', async (event, command) => {
           
           // Per macOS specificamente
           SHELL: process.env.SHELL || '/bin/zsh'
-        }
+  },
+  cwd: currentWorkingDirectory
       });
 
       let output = '';
@@ -423,7 +500,7 @@ function runCommandWithPty(command, resolve) {
 // Funzione per comandi interattivi usando spawn ottimizzato
 function runCommandWithEnhancedSpawn(command, resolve) {
   try {
-    const childProcess = spawn('bash', ['-c', command], {
+  const childProcess = spawn('bash', ['-c', command], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -438,7 +515,8 @@ function runCommandWithEnhancedSpawn(command, resolve) {
         HOMEBREW_NO_INSTALL_CLEANUP: '1',
         // Simula ambiente interattivo
         INTERACTIVE: '1'
-      }
+      },
+      cwd: currentWorkingDirectory
     });
 
     let output = '';

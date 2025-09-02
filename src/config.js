@@ -27,7 +27,9 @@ class Config {
         cursorBlink: true,
         cursorStyle: 'bar',
         scrollback: 10000,
-        bellSound: false
+  bellSound: false,
+  autoScroll: true,
+  smoothScroll: true
       },
       ai: {
         provider: 'gemini', // 'gemini', 'lm-studio', 'openai'

@@ -349,6 +349,8 @@ class SettingsManager {
                 this.setValueSafely('cursor-blink', this.config.terminal.cursorBlink);
                 this.setValueSafely('scrollback', this.config.terminal.scrollback);
                 this.setValueSafely('bell-sound', this.config.terminal.bellSound);
+                this.setValueSafely('auto-scroll', this.config.terminal.autoScroll);
+                this.setValueSafely('smooth-scroll', this.config.terminal.smoothScroll);
             }
 
             // AI
@@ -476,7 +478,9 @@ class SettingsManager {
                 cursorStyle: this.getValueSafely('cursor-style', 'bar'),
                 cursorBlink: this.getCheckedSafely('cursor-blink', true),
                 scrollback: parseInt(this.getValueSafely('scrollback', '10000')),
-                bellSound: this.getCheckedSafely('bell-sound', false)
+                bellSound: this.getCheckedSafely('bell-sound', false),
+                autoScroll: this.getCheckedSafely('auto-scroll', true),
+                smoothScroll: this.getCheckedSafely('smooth-scroll', true)
             },
             ai: {
                 provider: this.getValueSafely('ai-provider', 'gemini'),

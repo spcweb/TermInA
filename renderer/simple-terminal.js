@@ -17,6 +17,7 @@ class SimpleTerminal {
         this.smoothScrollEnabled = true; // Scroll fluido o istantaneo
         this.isUserScrolling = false; // Traccia se l'utente sta scrollando manualmente
         this.contentObserver = null; // Observer per monitorare i cambiamenti di contenuto
+    this.currentAIGroup = null; // Contenitore corrente della sessione chat AI
         this.init();
     }
 
@@ -86,11 +87,6 @@ class SimpleTerminal {
   clear              - Clear screen (⌘+L)
   exit               - Exit terminal
 
-📜 Scroll Controls:
-  toggle-autoscroll  - Enable/disable auto-scroll
-  toggle-smooth-scroll - Enable/disable smooth scroll
-  scroll-bottom      - Jump to bottom immediately
-
 ⚡ Smart Features:
   Tab                - Autocomplete commands
   ↑↓                 - Navigate command history
@@ -103,8 +99,44 @@ class SimpleTerminal {
     }
 
     showPrompt() {
+        // Prompt arricchito con cwd
+        if (!this.cwd) {
+            if (window.electronAPI && window.electronAPI.getCwd) {
+                window.electronAPI.getCwd().then(cwd => {
+                    this.cwd = cwd;
+                    this.renderPrompt();
+                });
+                return;
+            }
+        }
+        this.renderPrompt();
+    }
+
+    renderPrompt() {
+        const promptSpan = this.container.querySelector('.prompt');
+        const cwdDisplay = this.cwd ? this.formatCwd(this.cwd) : '~';
+        if (promptSpan) {
+            promptSpan.innerHTML = `<span class="prompt-path">${this.escapeHtml(cwdDisplay)}</span> $`;
+        }
         this.inputTextElement.textContent = this.currentLine;
         this.updateCursorPosition();
+    }
+
+    formatCwd(cwd) {
+        try {
+            const home = (typeof require === 'function') ? require('os').homedir() : null;
+            if (home && cwd.startsWith(home)) {
+                return '~' + cwd.slice(home.length);
+            }
+            // Accorcia path lunghi mantenendo ultime 2 directory
+            const parts = cwd.split('/').filter(Boolean);
+            if (parts.length > 3) {
+                return '/' + parts.slice(-3).join('/');
+            }
+            return cwd || '/';
+        } catch (_) {
+            return cwd;
+        }
     }
 
     updateCursorPosition() {
@@ -144,6 +176,11 @@ class SimpleTerminal {
     }
 
     addOutput(text) {
+        // Se arriva output normale dopo una sessione AI, chiudi la sessione corrente
+        if (this.currentAIGroup) {
+            // Aggiungi un marcatore di fine (opzionale, per ora solo reset)
+            this.currentAIGroup = null;
+        }
         const line = document.createElement('div');
         line.className = 'output-line';
         line.textContent = text;
@@ -153,10 +190,23 @@ class SimpleTerminal {
 
     // Funzione speciale per output AI
     addAIOutput(text) {
+        // Crea un nuovo contenitore di gruppo se non esiste
+        if (!this.currentAIGroup) {
+            const group = document.createElement('div');
+            group.className = 'ai-chat-group';
+            // Etichetta visiva opzionale (può essere stilizzata via ::before in CSS)
+            this.outputElement.appendChild(group);
+            this.currentAIGroup = group;
+        }
+
         const line = document.createElement('div');
         line.className = 'output-line ai-output';
         line.textContent = text;
-        this.outputElement.appendChild(line);
+    // Aggiungi classe per animazione di evidenziazione
+    line.classList.add('new-line');
+    this.currentAIGroup.appendChild(line);
+    // Rimuovi la classe dopo l'animazione per evitare ri-trigger
+    setTimeout(() => line.classList.remove('new-line'), 1600);
         // Il MutationObserver si occuperà dello scroll automatico
     }
 
@@ -277,6 +327,14 @@ class SimpleTerminal {
 
         // Setup IPC listeners per aggiornamenti configurazione
         this.setupConfigListeners();
+
+        // Listener aggiornamento cwd
+        if (window.electronAPI && window.electronAPI.onCwdChanged) {
+            window.electronAPI.onCwdChanged((cwd) => {
+                this.cwd = cwd;
+                this.renderPrompt();
+            });
+        }
     }
 
     setupConfigListeners() {
@@ -496,6 +554,13 @@ class SimpleTerminal {
             } else if (this.cursor) {
                 this.cursor.style.animation = 'cursor-blink 1s infinite';
             }
+        }
+
+        if (typeof terminalConfig.autoScroll !== 'undefined') {
+            this.autoScrollEnabled = terminalConfig.autoScroll;
+        }
+        if (typeof terminalConfig.smoothScroll !== 'undefined') {
+            this.smoothScrollEnabled = terminalConfig.smoothScroll;
         }
     }
 
