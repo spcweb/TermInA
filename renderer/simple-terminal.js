@@ -18,6 +18,10 @@ class SimpleTerminal {
         this.isUserScrolling = false; // Traccia se l'utente sta scrollando manualmente
         this.contentObserver = null; // Observer per monitorare i cambiamenti di contenuto
     this.currentAIGroup = null; // Contenitore corrente della sessione chat AI
+        
+        console.log('=== VALORI DEFAULT INIZIALIZZATI ===');
+        console.log('Auto-scroll enabled:', this.autoScrollEnabled);
+        console.log('Smooth-scroll enabled:', this.smoothScrollEnabled);
         this.init();
     }
 
@@ -69,8 +73,34 @@ class SimpleTerminal {
     }
 
     showWelcome() {
-                // Messaggio di benvenuto moderno (rich output)
-                const welcomeHtml = `
+        const welcomeContainer = document.getElementById('welcome-container');
+        if (!welcomeContainer) {
+            // Fallback se il contenitore non esiste
+            this.addRichOutput(this.getWelcomeHtml(), 'welcome-wrapper');
+            return;
+        }
+
+        welcomeContainer.innerHTML = `
+            <div class="welcome-header-controls">
+                <button id="toggle-columns-btn" title="Mostra/Nascondi Colonne">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-layout"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                </button>
+            </div>
+            ${this.getWelcomeHtml()}
+        `;
+
+        const welcomeBox = welcomeContainer.querySelector('.welcome-box');
+        const toggleBtn = document.getElementById('toggle-columns-btn');
+
+        if (toggleBtn && welcomeBox) {
+            toggleBtn.addEventListener('click', () => {
+                welcomeBox.classList.toggle('collapsed');
+            });
+        }
+    }
+
+    getWelcomeHtml() {
+        return `
 <div class="welcome-box">
     <div class="welcome-header">
         <div class="logo-col">
@@ -103,8 +133,10 @@ class SimpleTerminal {
         <div class="wg-section">
             <h2>⌨️ Shortcuts</h2>
             <ul>
-                <li><kbd>⌘</kbd><kbd>K</kbd> pulisci • <kbd>Tab</kbd> autocomplete</li>
-                <li><kbd>↑</kbd><kbd>↓</kbd> history • <kbd>⌘</kbd><kbd>,</kbd> settings</li>
+                <li><kbd>⌘</kbd><kbd>K</kbd> pulisci</li>
+                <li><kbd>Tab</kbd> autocomplete</li>
+                <li><kbd>↑</kbd><kbd>↓</kbd> history</li>
+                <li><kbd>⌘</kbd><kbd>,</kbd> settings</li>
                 <li><kbd>⌘</kbd><kbd>C</kbd>/<kbd>⌘</kbd><kbd>V</kbd> copia/incolla</li>
             </ul>
         </div>
@@ -119,7 +151,6 @@ class SimpleTerminal {
     </div>
     <div class="status-hint">Tip: premi <kbd>⌘</kbd><kbd>,</kbd> per personalizzare temi e AI provider.</div>
 </div>`;
-                this.addRichOutput(welcomeHtml, 'welcome-wrapper');
     }
 
     showPrompt() {
@@ -222,6 +253,7 @@ class SimpleTerminal {
         line.textContent = text;
         this.outputElement.appendChild(line);
         // Il MutationObserver si occuperà dello scroll automatico
+        return line;
     }
 
         addRichOutput(html, extraClass = '') {
@@ -639,9 +671,19 @@ class SimpleTerminal {
 
         if (typeof terminalConfig.autoScroll !== 'undefined') {
             this.autoScrollEnabled = terminalConfig.autoScroll;
+            console.log('Auto-scroll impostato da config:', terminalConfig.autoScroll);
+        } else {
+            // Assicurati che sia true di default
+            this.autoScrollEnabled = true;
+            console.log('Auto-scroll impostato di default:', true);
         }
         if (typeof terminalConfig.smoothScroll !== 'undefined') {
             this.smoothScrollEnabled = terminalConfig.smoothScroll;
+            console.log('Smooth-scroll impostato da config:', terminalConfig.smoothScroll);
+        } else {
+            // Assicurati che sia true di default
+            this.smoothScrollEnabled = true;
+            console.log('Smooth-scroll impostato di default:', true);
         }
     }
 
@@ -1418,16 +1460,21 @@ AI Commands:
         // Registra la domanda dell'utente
         this.addToAIConversation('user', question);
         
+        let thinkingMessageElement;
         if (isAutoExecute) {
-            this.addOutput('🚀 AI Agent executing...');
+            thinkingMessageElement = this.addOutput('🚀 AI Agent executing...');
         } else {
-            this.addOutput('🤖 Thinking...');
+            thinkingMessageElement = this.addOutput('🤖 Thinking...');
         }
         
         try {
             // Usa il nuovo AI Agent per gestire la richiesta
             const result = await window.electronAPI.aiAgentRequest(question, this.getTerminalContext(), isAutoExecute);
             
+            if (thinkingMessageElement) {
+                thinkingMessageElement.remove();
+            }
+
             console.log('AI Agent result:', result);
             
             // L'observer si occuperà automaticamente dello scroll per tutto l'output AI
@@ -1471,6 +1518,9 @@ AI Commands:
             }
             
         } catch (error) {
+            if (thinkingMessageElement) {
+                thinkingMessageElement.remove();
+            }
             console.error('AI Agent error:', error);
             const errorMsg = 'AI Agent Error: ' + error.message;
             this.addAIOutput('❌ ' + errorMsg);
