@@ -74,7 +74,9 @@ class SimpleTerminal {
 <div class="welcome-box">
     <div class="welcome-header">
         <div class="logo-col">
-            <div class="logo-glow">λ</div>
+            <div class="logo-glow logo-has-image">
+                <img src="./assets/logo.svg" alt="TermInA Logo" class="logo-image" />
+            </div>
         </div>
         <div class="title-col">
             <h1>TermInA <span class="version-pill">Beta 0.2</span></h1>

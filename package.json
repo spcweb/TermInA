@@ -6,13 +6,13 @@
   "scripts": {
     "start": "electron .",
     "dev": "NODE_ENV=development electron .",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --mac --win --linux",
-  "dist": "electron-builder --publish=never",
-  "icons": "node build/generate-icons.js",
+    "icons": "node build/generate-icons.js",
+    "build": "npm run icons && electron-builder",
+    "build:mac": "npm run icons && electron-builder --mac",
+    "build:win": "npm run icons && electron-builder --win",
+    "build:linux": "npm run icons && electron-builder --linux",
+    "build:all": "npm run icons && electron-builder --mac --win --linux",
+    "dist": "npm run icons && electron-builder --publish=never",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -34,8 +34,9 @@
   "devDependencies": {
     "electron": "^37.3.1",
     "electron-builder": "^24.13.3",
-    "sharp": "^0.33.4",
-    "png-to-ico": "^2.1.8"
+    "icon-gen": "^4.0.0",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5"
   },
   "build": {
     "appId": "com.termina.app",
@@ -57,11 +58,11 @@
       "target": "dmg"
     },
     "linux": {
-      "icon": "build/ICONS.png",
+      "icon": "build/icon.png",
       "target": "AppImage"
     },
     "win": {
-      "icon": "build/ICONS.png",
+      "icon": "build/icon.ico",
       "target": "nsis"
     }
   }

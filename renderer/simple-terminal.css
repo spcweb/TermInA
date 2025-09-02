@@ -92,6 +92,8 @@
     box-shadow:0 4px 18px -2px rgba(0,212,170,0.55), 0 0 0 1px rgba(255,255,255,0.15);
     text-shadow:0 2px 6px rgba(0,0,0,0.35);
 }
+.logo-glow.logo-has-image { font-size:0; padding:6px; }
+.logo-glow .logo-image { width:100%; height:100%; object-fit:contain; display:block; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
 .title-col h1 { margin:0; font-size:20px; font-weight:600; letter-spacing:.5px; }
 .title-col .version-pill { background:rgba(0,212,170,0.15); color:#00d4aa; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600; margin-left:8px; border:1px solid rgba(0,212,170,0.35); }
 .subtitle { margin:4px 0 0 0; font-size:12px; opacity:.8; letter-spacing:.4px; }

@@ -11,6 +11,17 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Copia il logo nella cartella assets se non esiste
+if [ ! -f "assets/logo.svg" ]; then
+    echo "📋 Copying logo to assets folder..."
+    cp logo.svg assets/logo.svg
+fi
+
+# Copia il logo nella cartella renderer/assets per il welcome message
+echo "📋 Ensuring logo is available in renderer/assets..."
+mkdir -p renderer/assets
+cp logo.svg renderer/assets/logo.svg
+
 # Build per macOS
 echo "🍎 Building for macOS..."
 npm run build:mac

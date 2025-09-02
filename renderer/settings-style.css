@@ -179,6 +179,30 @@ select {
   transition: all 0.2s ease;
 }
 
+/* Forza i dropdown ad avere lo stesso sfondo dei pannelli, indipendente dal tema */
+select {
+  /* Sfondo opaco coerente con il pannello (evita l'effetto bianco del popup nativo) */
+  background: #2a2e34 !important; /* colore scelto tra #282c34 e layer pannello */
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+}
+
+select:focus {
+  background: #32373e !important;
+}
+
+/* Stile delle option (Chrome/Electron supporta parzialmente) */
+select option {
+  background: #2a2e34;
+  color: #ffffff;
+}
+select option:checked, select option:hover {
+  background: #00d4aa !important;
+  color: #0d1114 !important;
+}
+
 input[type="text"]:focus,
 input[type="number"]:focus,
 input[type="password"]:focus,
