@@ -42,6 +42,12 @@
 .input-text {
     color: var(--terminal-fg);
     min-width: 1px;
+    display: inline;
+}
+
+.before-cursor,
+.after-cursor {
+    display: inline;
 }
 
 .terminal-cursor {
@@ -49,15 +55,13 @@
     background-color: var(--terminal-cursor);
     font-weight: bold;
     font-size: var(--terminal-font-size);
-    margin-left: 1px;
-    min-width: 8px;
-    height: var(--terminal-line-height);
-    display: inline-block;
+    display: inline;
     position: relative;
     animation: cursor-blink 1s infinite;
     
     /* Default style: bar */
     width: 2px;
+    min-width: 2px;
     border-left: 2px solid var(--terminal-cursor);
     background-color: transparent;
 }
@@ -65,6 +69,7 @@
 /* Cursor styles */
 .terminal-cursor.cursor-bar {
     width: 2px;
+    min-width: 2px;
     background-color: transparent;
     border-left: 2px solid var(--terminal-cursor);
     border-right: none;
@@ -74,15 +79,22 @@
 
 .terminal-cursor.cursor-block {
     width: 1ch;
-    min-width: 8px;
+    min-width: 1ch;
     background-color: var(--terminal-cursor);
     color: var(--terminal-bg);
     border: none;
+    text-align: center;
 }
 
-.cursor-underline {
+.terminal-cursor.cursor-underline {
+    width: 1ch;
+    min-width: 1ch;
     border-bottom: 2px solid var(--terminal-cursor);
     background-color: transparent;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    text-align: center;
 }
 
 @keyframes cursor-blink {

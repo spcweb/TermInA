@@ -5,12 +5,18 @@ class SimpleTerminal {
     constructor() {
         console.log('=== SIMPLE TERMINAL CONSTRUCTOR ===');
         this.currentLine = '';
+        this.cursorPosition = 0; // Posizione del cursore nella linea corrente
+        this.cursorStyle = 'bar'; // Stile del cursore (bar, block, underline)
         this.history = [];
         this.historyIndex = -1; // Indice per navigazione cronologia
         this.output = [];
         this.cursor = null;
         this.aiConversation = []; // Cronologia conversazioni AI
         this.ptyModeEnabled = true; // Abilita PTY per default per comandi interattivi
+        this.autoScrollEnabled = true; // Abilita scroll automatico
+        this.smoothScrollEnabled = true; // Scroll fluido o istantaneo
+        this.isUserScrolling = false; // Traccia se l'utente sta scrollando manualmente
+        this.contentObserver = null; // Observer per monitorare i cambiamenti di contenuto
         this.init();
     }
 
@@ -23,6 +29,7 @@ class SimpleTerminal {
         this.setupEventListeners();
         this.startCursorBlink();
         this.loadInitialSettings();
+        this.setupContentObserver(); // Nuovo observer per auto-scroll
     }
 
     createTerminalDisplay() {
@@ -32,14 +39,16 @@ class SimpleTerminal {
                 <div class="terminal-input-line">
                     <span class="prompt">$ </span>
                     <span class="input-text"></span>
-                    <span class="terminal-cursor cursor-bar"></span>
                 </div>
             </div>
         `;
         
         this.outputElement = this.container.querySelector('.terminal-output');
         this.inputTextElement = this.container.querySelector('.input-text');
-        this.cursor = this.container.querySelector('.terminal-cursor');
+        this.cursor = null; // Verrà creato dinamicamente in updateCursorPosition
+        
+        // Identifichiamo l'elemento che ha realmente lo scroll
+        this.scrollableElement = this.container.querySelector('.simple-terminal-content');
     }
 
     createCursor() {
@@ -76,10 +85,16 @@ class SimpleTerminal {
   clear              - Clear screen (⌘+L)
   exit               - Exit terminal
 
+📜 Scroll Controls:
+  toggle-autoscroll  - Enable/disable auto-scroll
+  toggle-smooth-scroll - Enable/disable smooth scroll
+  scroll-bottom      - Jump to bottom immediately
+
 ⚡ Smart Features:
   Tab                - Autocomplete commands
   ↑↓                 - Navigate command history
   ⌘+C/⌘+V           - Copy/Paste (⌘+A to select all)
+  Auto-scroll        - Follows new output automatically
 
 ⚙️  Settings: Click the gear icon or press ⌘+,
 `;
@@ -92,14 +107,39 @@ class SimpleTerminal {
     }
 
     updateCursorPosition() {
-        // Il cursore è sempre dopo il testo
-        const prompt = this.container.querySelector('.prompt');
-        const inputText = this.container.querySelector('.input-text');
-        const cursor = this.container.querySelector('.terminal-cursor');
+        // Visualizza il testo con il cursore nella posizione corretta
+        const beforeCursor = this.currentLine.substring(0, this.cursorPosition);
+        const afterCursor = this.currentLine.substring(this.cursorPosition);
         
-        if (cursor) {
-            cursor.style.opacity = '1';
+        // Usa lo stile del cursore attualmente configurato
+        const cursorClass = `cursor-${this.cursorStyle}`;
+        
+        this.inputTextElement.innerHTML = 
+            `<span class="before-cursor">${this.escapeHtml(beforeCursor)}</span>` +
+            `<span class="terminal-cursor ${cursorClass}"></span>` +
+            `<span class="after-cursor">${this.escapeHtml(afterCursor)}</span>`;
+        
+        // Aggiorna il riferimento al cursore
+        this.cursor = this.inputTextElement.querySelector('.terminal-cursor');
+        
+        if (this.cursor) {
+            this.cursor.style.opacity = '1';
+            
+            // Per i cursori block e underline, aggiungi contenuto per visualizzare gli spazi
+            if (this.cursorStyle === 'block' || this.cursorStyle === 'underline') {
+                const charAtCursor = this.currentLine.charAt(this.cursorPosition);
+                this.cursor.textContent = charAtCursor || '\u00A0'; // Spazio non-breaking se vuoto
+            } else {
+                this.cursor.textContent = '';
+            }
         }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        // Sostituisce gli spazi con spazi non-breaking per preservare la formattazione
+        return div.innerHTML.replace(/ /g, '\u00A0');
     }
 
     addOutput(text) {
@@ -107,11 +147,82 @@ class SimpleTerminal {
         line.className = 'output-line';
         line.textContent = text;
         this.outputElement.appendChild(line);
-        this.scrollToBottom();
+        // Il MutationObserver si occuperà dello scroll automatico
+    }
+
+    // Funzione speciale per output AI
+    addAIOutput(text) {
+        const line = document.createElement('div');
+        line.className = 'output-line ai-output';
+        line.textContent = text;
+        this.outputElement.appendChild(line);
+        // Il MutationObserver si occuperà dello scroll automatico
     }
 
     scrollToBottom() {
-        this.container.scrollTop = this.container.scrollHeight;
+        // Implementazione del tuo metodo con supporto per smooth scroll
+        if (this.smoothScrollEnabled) {
+            this.scrollableElement.scrollTo({
+                top: this.scrollableElement.scrollHeight,
+                behavior: 'smooth'
+            });
+        } else {
+            this.scrollableElement.scrollTop = this.scrollableElement.scrollHeight;
+        }
+    }
+
+    // Funzione per forzare lo scroll in fondo (per comandi manuali)
+    forceScrollToBottom() {
+        this.isUserScrolling = false;
+        this.scrollToBottom();
+    }
+
+    updateScrollState() {
+        // Usa l'elemento scrollabile corretto per controllare la posizione
+        const scrollTop = this.scrollableElement.scrollTop;
+        const scrollHeight = this.scrollableElement.scrollHeight;
+        const clientHeight = this.scrollableElement.clientHeight;
+        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+        
+        // L'utente sta scrollando manualmente se è lontano dal fondo
+        this.isUserScrolling = distanceFromBottom > 100;
+    }
+
+    // Funzione per attivare/disattivare l'auto-scroll manualmente
+    toggleAutoScroll() {
+        this.autoScrollEnabled = !this.autoScrollEnabled;
+        if (this.autoScrollEnabled) {
+            this.isUserScrolling = false;
+            this.scrollToBottom();
+            this.addOutput('✅ Auto-scroll abilitato');
+        } else {
+            this.addOutput('❌ Auto-scroll disabilitato');
+        }
+    }
+
+    // Auto-Scroll con MutationObserver (metodo pulito)
+    setupContentObserver() {
+        // Configurazione per l'auto-scroll
+        this.smoothScrollEnabled = true; // Scroll fluido o istantaneo
+        
+        // MutationObserver per monitorare i cambiamenti
+        this.contentObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    if (this.autoScrollEnabled) {
+                        this.scrollToBottom();
+                    }
+                }
+            });
+        });
+
+        // Avvia l'osservazione del contenitore output
+        this.contentObserver.observe(this.outputElement, {
+            childList: true,
+            subtree: true
+        });
+        
+        console.log('Auto-scroll MutationObserver initialized');
     }
 
     setupEventListeners() {
@@ -137,6 +248,22 @@ class SimpleTerminal {
                 e.preventDefault();
                 this.openSettings();
             }
+        });
+
+        // Gestione scroll del terminale (usa l'elemento scrollabile corretto)
+        this.container.addEventListener('scroll', () => {
+            this.updateScrollState();
+        });
+        this.scrollableElement.addEventListener('scroll', () => {
+            this.updateScrollState();
+        });
+
+        // Gestione wheel per scroll manuale
+        this.container.addEventListener('wheel', (e) => {
+            this.updateScrollState();
+        });
+        this.scrollableElement.addEventListener('wheel', (e) => {
+            this.updateScrollState();
         });
 
         // Setup IPC listeners per aggiornamenti configurazione
@@ -249,9 +376,17 @@ class SimpleTerminal {
     }
 
     applyCursorStyle(style) {
-        if (!this.cursor) return;
-
         console.log('Applicazione stile cursore:', style);
+
+        // Salva lo stile del cursore per l'uso futuro
+        this.cursorStyle = style;
+
+        // Se non abbiamo ancora un cursore nel DOM, non fare niente
+        // Lo stile verrà applicato quando il cursore viene creato
+        if (!this.cursor) {
+            console.log('Cursore non ancora creato, stile salvato per dopo');
+            return;
+        }
 
         // Reset di tutte le classi di stile del cursore
         this.cursor.classList.remove('cursor-bar', 'cursor-block', 'cursor-underline');
@@ -271,20 +406,15 @@ class SimpleTerminal {
         this.cursor.style.outline = '';
 
         // Applica la classe CSS appropriata
-        switch (style) {
-            case 'block':
-                this.cursor.classList.add('cursor-block');
-                this.cursor.textContent = '\u00A0'; // Spazio non-breaking per riempire il blocco
-                break;
-            case 'underline':
-                this.cursor.classList.add('cursor-underline');
-                this.cursor.textContent = '\u00A0'; // Spazio non-breaking per mostrare la sottolineatura
-                break;
-            case 'bar':
-            default:
-                this.cursor.classList.add('cursor-bar');
-                this.cursor.textContent = ''; // Nessun contenuto, solo il bordo
-                break;
+        const cursorClass = `cursor-${style}`;
+        this.cursor.classList.add(cursorClass);
+
+        // Per i cursori block e underline, aggiungi contenuto per visualizzare gli spazi
+        if (style === 'block' || style === 'underline') {
+            const charAtCursor = this.currentLine.charAt(this.cursorPosition);
+            this.cursor.textContent = charAtCursor || '\u00A0'; // Spazio non-breaking se vuoto
+        } else {
+            this.cursor.textContent = ''; // Nessun contenuto per il cursore bar
         }
 
         console.log('Stile cursore applicato:', {
@@ -317,7 +447,20 @@ class SimpleTerminal {
                     this.handlePaste(e);
                     return;
                 case 'a':
+                    // Ctrl+A o Cmd+A - Se non c'è selezione, vai all'inizio della riga
+                    if (window.getSelection().toString().length === 0) {
+                        e.preventDefault();
+                        this.cursorPosition = 0;
+                        this.showPrompt();
+                        return;
+                    }
                     this.handleSelectAll(e);
+                    return;
+                case 'e':
+                    // Ctrl+E - Vai alla fine della riga
+                    e.preventDefault();
+                    this.cursorPosition = this.currentLine.length;
+                    this.showPrompt();
                     return;
                 case 'k':
                     e.preventDefault();
@@ -326,6 +469,12 @@ class SimpleTerminal {
                 case 'l':
                     e.preventDefault();
                     this.clearTerminal();
+                    return;
+                case 'end':
+                case 'j':
+                    // Ctrl+J o Cmd+End - Vai in fondo al terminale
+                    e.preventDefault();
+                    this.forceScrollToBottom();
                     return;
                 default:
                     // Lascia passare altre combinazioni (come Cmd+, per settings)
@@ -343,8 +492,26 @@ class SimpleTerminal {
             this.navigateHistory(1);
             return;
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-            // TODO: Implementare movimento cursore nella linea
             e.preventDefault();
+            this.handleArrowKey(e.key);
+            return;
+        } else if (e.key === 'Home') {
+            e.preventDefault();
+            this.cursorPosition = 0;
+            this.showPrompt();
+            return;
+        } else if (e.key === 'End') {
+            e.preventDefault();
+            this.cursorPosition = this.currentLine.length;
+            this.showPrompt();
+            return;
+        } else if (e.key === 'PageDown') {
+            e.preventDefault();
+            this.forceScrollToBottom();
+            return;
+        } else if (e.key === 'Delete') {
+            e.preventDefault();
+            this.handleDelete();
             return;
         }
 
@@ -363,13 +530,42 @@ class SimpleTerminal {
     }
 
     addCharacter(char) {
-        this.currentLine += char;
+        // Inserisce il carattere nella posizione del cursore
+        this.currentLine = 
+            this.currentLine.substring(0, this.cursorPosition) + 
+            char + 
+            this.currentLine.substring(this.cursorPosition);
+        this.cursorPosition++;
         this.showPrompt();
     }
 
     handleBackspace() {
-        if (this.currentLine.length > 0) {
-            this.currentLine = this.currentLine.slice(0, -1);
+        if (this.cursorPosition > 0) {
+            // Rimuove il carattere prima del cursore
+            this.currentLine = 
+                this.currentLine.substring(0, this.cursorPosition - 1) + 
+                this.currentLine.substring(this.cursorPosition);
+            this.cursorPosition--;
+            this.showPrompt();
+        }
+    }
+
+    handleDelete() {
+        if (this.cursorPosition < this.currentLine.length) {
+            // Rimuove il carattere dopo il cursore
+            this.currentLine = 
+                this.currentLine.substring(0, this.cursorPosition) + 
+                this.currentLine.substring(this.cursorPosition + 1);
+            this.showPrompt();
+        }
+    }
+
+    handleArrowKey(key) {
+        if (key === 'ArrowLeft' && this.cursorPosition > 0) {
+            this.cursorPosition--;
+            this.showPrompt();
+        } else if (key === 'ArrowRight' && this.cursorPosition < this.currentLine.length) {
+            this.cursorPosition++;
             this.showPrompt();
         }
     }
@@ -379,7 +575,12 @@ class SimpleTerminal {
         if (this.currentLine.trim()) {
             this.handleAutoComplete();
         } else {
-            this.currentLine += '    ';
+            // Aggiungi tab alla posizione del cursore
+            this.currentLine = 
+                this.currentLine.substring(0, this.cursorPosition) + 
+                '    ' + 
+                this.currentLine.substring(this.cursorPosition);
+            this.cursorPosition += 4;
             this.showPrompt();
         }
     }
@@ -408,7 +609,12 @@ class SimpleTerminal {
             if (text) {
                 // Pulisce il testo da caratteri di controllo e newlines
                 const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
-                this.currentLine += cleanText;
+                // Inserisce il testo nella posizione del cursore
+                this.currentLine = 
+                    this.currentLine.substring(0, this.cursorPosition) + 
+                    cleanText + 
+                    this.currentLine.substring(this.cursorPosition);
+                this.cursorPosition += cleanText.length;
                 this.showPrompt();
                 this.addOutput('📋 Text pasted from clipboard');
             }
@@ -447,6 +653,7 @@ class SimpleTerminal {
             } else {
                 this.historyIndex = -1;
                 this.currentLine = '';
+                this.cursorPosition = 0;
                 this.showPrompt();
                 return;
             }
@@ -454,6 +661,7 @@ class SimpleTerminal {
 
         if (this.historyIndex >= 0 && this.historyIndex < this.history.length) {
             this.currentLine = this.history[this.historyIndex];
+            this.cursorPosition = this.currentLine.length; // Cursore alla fine
             this.showPrompt();
         }
     }
@@ -475,14 +683,19 @@ class SimpleTerminal {
             const words = this.currentLine.split(' ');
             words[words.length - 1] = matches[0];
             this.currentLine = words.join(' ') + ' ';
+            this.cursorPosition = this.currentLine.length;
             this.showPrompt();
         } else if (matches.length > 1) {
             // Mostra opzioni disponibili
             this.addOutput(`💡 Available completions: ${matches.join(', ')}`);
             this.showPrompt();
         } else {
-            // Nessuna corrispondenza, aggiungi tab normale
-            this.currentLine += '    ';
+            // Nessuna corrispondenza, aggiungi tab normale alla posizione cursore
+            this.currentLine = 
+                this.currentLine.substring(0, this.cursorPosition) + 
+                '    ' + 
+                this.currentLine.substring(this.cursorPosition);
+            this.cursorPosition += 4;
             this.showPrompt();
         }
     }
@@ -522,6 +735,21 @@ class SimpleTerminal {
             this.clearAIConversation();
         } else if (command === 'show-ai-chat') {
             this.showAIConversation();
+        } else if (command === 'toggle-autoscroll') {
+            this.toggleAutoScroll();
+        } else if (command === 'scroll-bottom') {
+            this.forceScrollToBottom();
+            this.addOutput('📜 Scrollato in fondo');
+        } else if (command === 'autoscroll-status') {
+            this.addOutput(`📜 Auto-scroll: ${this.autoScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
+            this.addOutput(`📍 Scroll manuale: ${this.isUserScrolling ? 'ATTIVO' : 'INATTIVO'}`);
+            this.addOutput(`🌊 Smooth scroll: ${this.smoothScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
+            this.addOutput('💡 Usa "toggle-autoscroll" per attivare/disattivare auto-scroll');
+            this.addOutput('💡 Usa "toggle-smooth-scroll" per attivare/disattivare smooth scroll');
+            this.addOutput('💡 Usa "scroll-bottom" per andare in fondo immediatamente');
+        } else if (command === 'toggle-smooth-scroll') {
+            this.smoothScrollEnabled = !this.smoothScrollEnabled;
+            this.addOutput(`🌊 Smooth scroll: ${this.smoothScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
         } else if (command === 'debug-fonts') {
             this.showAvailableFonts();
         } else if (command === 'debug-cursor') {
@@ -540,6 +768,7 @@ class SimpleTerminal {
 
         // Reset per nuovo comando
         this.currentLine = '';
+        this.cursorPosition = 0;
         this.showPrompt();
     }
 
@@ -750,7 +979,13 @@ class SimpleTerminal {
 
     clearTerminal() {
         this.outputElement.innerHTML = '';
+        this.currentLine = '';
+        this.cursorPosition = 0;
+        // Reset dello stato di scrolling
+        this.isUserScrolling = false;
+        this.autoScrollEnabled = true;
         this.showWelcome();
+        // L'observer si occuperà automaticamente dello scroll dopo il welcome
     }
 
     showHelp() {
@@ -768,6 +1003,11 @@ Available commands:
   enable-pty         - Enable enhanced mode for interactive commands
   disable-pty        - Disable enhanced mode (use standard execution)
   pty-status         - Show current enhanced mode status
+  
+  toggle-autoscroll  - Enable/disable automatic scrolling
+  toggle-smooth-scroll - Enable/disable smooth scrolling animation
+  scroll-bottom      - Force scroll to bottom immediately
+  autoscroll-status  - Show current scrolling settings
   
   install-homebrew   - Homebrew installation helper with multiple methods
   
@@ -807,6 +1047,8 @@ Keyboard Shortcuts:
   Ctrl/Cmd+A         - Select all terminal content
   Ctrl/Cmd+K         - Clear terminal
   Ctrl/Cmd+L         - Clear terminal (alternative)
+  Ctrl/Cmd+J         - Scroll to bottom instantly
+  Page Down          - Scroll to bottom instantly
 
 AI Commands:
   ai "create a folder called test"     - AI suggests the command
@@ -841,40 +1083,42 @@ AI Commands:
             
             console.log('AI Agent result:', result);
             
+            // L'observer si occuperà automaticamente dello scroll per tutto l'output AI
+            
             switch (result.type) {
                 case 'informational':
-                    this.addOutput('🤖 ' + result.response);
+                    this.addAIOutput('🤖 ' + result.response);
                     this.addToAIConversation('ai', result.response);
                     if (result.iterations > 1) {
-                        this.addOutput(`ℹ️ Elaborato in ${result.iterations} iterazioni`);
+                        this.addAIOutput(`ℹ️ Elaborato in ${result.iterations} iterazioni`);
                     }
                     break;
                     
                 case 'suggestion':
-                    this.addOutput('🤖 ' + result.response);
+                    this.addAIOutput('🤖 ' + result.response);
                     this.addToAIConversation('ai', result.response, result.command);
                     this.suggestCommand(result.command);
                     break;
                     
                 case 'success':
-                    this.addOutput('✅ ' + result.response);
-                    this.addOutput('📋 Comando finale: ' + result.finalCommand);
-                    this.addOutput('📤 Risultato:\n' + result.finalResult.output);
-                    this.addOutput(`ℹ️ Completato in ${result.iterations} iterazioni`);
+                    this.addAIOutput('✅ ' + result.response);
+                    this.addAIOutput('📋 Comando finale: ' + result.finalCommand);
+                    this.addAIOutput('📤 Risultato:\n' + result.finalResult.output);
+                    this.addAIOutput(`ℹ️ Completato in ${result.iterations} iterazioni`);
                     this.addToAIConversation('ai', result.response, result.finalCommand, result.finalResult.output);
                     this.showExecutionHistory(result.history);
                     break;
                     
                 case 'max_iterations':
-                    this.addOutput('⚠️ ' + result.response);
-                    this.addOutput('📤 Ultimo risultato:\n' + result.finalResult.output);
-                    this.addOutput(`ℹ️ Raggiunto limite di ${result.iterations} iterazioni`);
+                    this.addAIOutput('⚠️ ' + result.response);
+                    this.addAIOutput('📤 Ultimo risultato:\n' + result.finalResult.output);
+                    this.addAIOutput(`ℹ️ Raggiunto limite di ${result.iterations} iterazioni`);
                     this.addToAIConversation('ai', result.response, null, result.finalResult.output);
                     this.showExecutionHistory(result.history);
                     break;
                     
                 default:
-                    this.addOutput('❓ Tipo di risposta AI non riconosciuto: ' + result.type);
+                    this.addAIOutput('❓ Tipo di risposta AI non riconosciuto: ' + result.type);
                     this.addToAIConversation('ai', 'Errore: tipo risposta non riconosciuto');
                     break;
             }
@@ -882,7 +1126,7 @@ AI Commands:
         } catch (error) {
             console.error('AI Agent error:', error);
             const errorMsg = 'AI Agent Error: ' + error.message;
-            this.addOutput('❌ ' + errorMsg);
+            this.addAIOutput('❌ ' + errorMsg);
             this.addToAIConversation('ai', errorMsg);
         }
     }
@@ -896,16 +1140,17 @@ AI Commands:
     showExecutionHistory(history) {
         if (!history || history.length === 0) return;
         
-        this.addOutput('\n📚 Cronologia esecuzione:');
+        this.addAIOutput('\n📚 Cronologia esecuzione:');
         history.forEach((entry, index) => {
-            this.addOutput(`  ${entry.iteration}. ${entry.command}`);
-            this.addOutput(`     💭 ${entry.reasoning}`);
+            this.addAIOutput(`  ${entry.iteration}. ${entry.command}`);
+            this.addAIOutput(`     💭 ${entry.reasoning}`);
             if (entry.result.success) {
-                this.addOutput(`     ✅ Successo`);
+                this.addAIOutput(`     ✅ Successo`);
             } else {
-                this.addOutput(`     ❌ Errore: ${entry.result.output.substring(0, 100)}...`);
+                this.addAIOutput(`     ❌ Errore: ${entry.result.output.substring(0, 100)}...`);
             }
         });
+        // L'observer si occuperà automaticamente dello scroll
     }
 
     // Gestione conversazioni AI
