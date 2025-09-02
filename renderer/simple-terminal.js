@@ -30,6 +30,7 @@ class SimpleTerminal {
         this.startCursorBlink();
         this.loadInitialSettings();
         this.setupContentObserver(); // Nuovo observer per auto-scroll
+        this.startPeriodicAIStatusCheck(); // Controllo periodico status AI
     }
 
     createTerminalDisplay() {
@@ -242,6 +243,14 @@ class SimpleTerminal {
             });
         }
 
+        // Gestione del pulsante status AI
+        const aiStatusBtn = document.getElementById('ai-status');
+        if (aiStatusBtn) {
+            aiStatusBtn.addEventListener('click', () => {
+                this.refreshAIStatus();
+            });
+        }
+
         // Scorciatoia da tastiera per le impostazioni
         document.addEventListener('keydown', (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === ',') {
@@ -294,9 +303,124 @@ class SimpleTerminal {
                 this.applyTerminalSettings(config.terminal);
             }
 
+            // Aggiorna status AI
+            if (config.ai) {
+                this.updateAIStatus(config.ai);
+            }
+
         } catch (error) {
             console.error('Error applying settings:', error);
         }
+    }
+
+    updateAIStatus(aiConfig) {
+        try {
+            console.log('Aggiornamento status AI:', aiConfig);
+            
+            const aiStatusElement = document.getElementById('ai-status');
+            const aiProviderNameElement = document.getElementById('ai-provider-name');
+            const aiStatusDot = document.querySelector('.ai-status-dot');
+            
+            if (!aiStatusElement || !aiProviderNameElement || !aiStatusDot) {
+                console.warn('Elementi AI status non trovati nella top bar');
+                return;
+            }
+
+            // Aggiorna il nome del provider
+            const providerNames = {
+                'gemini': 'Gemini',
+                'openai': 'OpenAI',
+                'lm-studio': 'LM Studio'
+            };
+            
+            const providerName = providerNames[aiConfig.provider] || aiConfig.provider;
+            aiProviderNameElement.textContent = providerName;
+            
+            // Test della connessione AI per aggiornare lo status
+            this.testAIConnectionStatus(aiConfig, aiStatusElement, aiStatusDot);
+            
+        } catch (error) {
+            console.error('Error updating AI status:', error);
+        }
+    }
+
+    async testAIConnectionStatus(aiConfig, statusElement, statusDot) {
+        try {
+            // Imposta status di test (giallo/pulsante)
+            statusElement.classList.remove('offline');
+            statusDot.style.background = 'linear-gradient(135deg, #ffa502 0%, #ff6348 100%)';
+            statusDot.style.boxShadow = '0 0 12px rgba(255, 165, 2, 0.6), 0 0 4px rgba(255, 165, 2, 0.8)';
+            
+            // Test della connessione
+            if (window.electronAPI && window.electronAPI.testAIConnection) {
+                const testResult = await window.electronAPI.testAIConnection(aiConfig.provider, aiConfig);
+                
+                if (testResult.success && testResult.response && 
+                    !testResult.response.includes('[AI] Errore') && 
+                    !testResult.response.includes('Error')) {
+                    
+                    // Connesso (verde)
+                    statusElement.classList.remove('offline');
+                    statusDot.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                    statusDot.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.9), 0 0 4px rgba(16, 185, 129, 1)';
+                    console.log('AI Status: Connesso');
+                    
+                } else {
+                    // Disconnesso (rosso)
+                    statusElement.classList.add('offline');
+                    statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                    statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
+                    console.log('AI Status: Disconnesso - ', testResult.error || 'Risposta non valida');
+                }
+            } else {
+                // API non disponibile (rosso)
+                statusElement.classList.add('offline');
+                statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
+                console.log('AI Status: API non disponibile');
+            }
+            
+        } catch (error) {
+            // Errore di connessione (rosso)
+            statusElement.classList.add('offline');
+            statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+            statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
+            console.error('AI Status: Errore nel test di connessione:', error);
+        }
+    }
+
+    async refreshAIStatus() {
+        try {
+            console.log('Refresh manuale dello status AI');
+            if (window.electronAPI && window.electronAPI.getConfig) {
+                const config = await window.electronAPI.getConfig();
+                if (config.ai) {
+                    this.updateAIStatus(config.ai);
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing AI status:', error);
+        }
+    }
+
+    startPeriodicAIStatusCheck() {
+        // Controlla lo status dell'AI ogni 30 secondi
+        setInterval(async () => {
+            try {
+                if (window.electronAPI && window.electronAPI.getConfig) {
+                    const config = await window.electronAPI.getConfig();
+                    if (config.ai) {
+                        const aiStatusElement = document.getElementById('ai-status');
+                        const aiStatusDot = document.querySelector('.ai-status-dot');
+                        if (aiStatusElement && aiStatusDot) {
+                            this.testAIConnectionStatus(config.ai, aiStatusElement, aiStatusDot);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error in periodic AI status check:', error);
+            }
+        }, 30000); // 30 secondi
     }
 
     applyTheme(theme) {
