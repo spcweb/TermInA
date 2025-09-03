@@ -94,9 +94,9 @@
 }
 .logo-glow.logo-has-image { font-size:0; padding:6px; }
 .logo-glow .logo-image { width:100%; height:100%; object-fit:contain; display:block; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
-.title-col h1 { margin:0; font-size:22px; font-weight:600; letter-spacing:.5px; line-height:1; }
+.title-col h1 { margin:0; font-size:22px; font-weight:600; letter-spacing:.5px; line-height:1; display:flex; align-items:center; }
 .title-col .version-pill { background:rgba(0,212,170,0.15); color:#00d4aa; padding:3px 9px; border-radius:8px; font-size:11px; font-weight:600; margin-left:10px; border:1px solid rgba(0,212,170,0.35); }
-.subtitle { margin:4px 0 0 0; font-size:13px; opacity:.8; letter-spacing:.4px; line-height:1; }
+.subtitle { margin:8px 0 0 0; font-size:13px; opacity:.8; letter-spacing:.4px; line-height:1; }
 .welcome-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px; margin-top:0px; }
 .wg-section { background:var(--welcome-section-bg, rgba(255,255,255,0.04)); border:1px solid var(--welcome-section-border, rgba(255,255,255,0.06)); border-radius:8px; padding:12px 16px; backdrop-filter: blur(3px); position:relative; }
 .wg-section h2 { margin:0 0 8px 0; font-size:14px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:#5fb3ff; line-height:1; }

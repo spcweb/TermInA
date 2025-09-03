@@ -117,27 +117,27 @@ class SimpleTerminal {
         <div class="wg-section">
             <h2>⚡ Quick Start</h2>
             <ul>
-                <li><kbd>ai</kbd> <em>domanda</em> – chiedi qualcosa all'AI</li>
-                <li><kbd>execute</kbd>/<kbd>run</kbd> <em>task</em> – esecuzione iterativa</li>
-                <li><kbd>help</kbd> – comandi disponibili</li>
+                <li><kbd>ai</kbd> <em>question</em> – ask something to the AI</li>
+                <li><kbd>execute</kbd>/<kbd>run</kbd> <em>task</em> – iterative execution</li>
+                <li><kbd>help</kbd> – available commands</li>
             </ul>
         </div>
         <div class="wg-section">
             <h2>🤖 AI Ops</h2>
             <ul>
-                <li><kbd>save-ai-chat</kbd> salva chat</li>
-                <li><kbd>show-ai-chat</kbd> mostra memoria</li>
-                <li><kbd>clear-ai-chat</kbd> reset conversazione</li>
+                <li><kbd>save-ai-chat</kbd> save chat</li>
+                <li><kbd>show-ai-chat</kbd> show memory</li>
+                <li><kbd>clear-ai-chat</kbd> reset conversation</li>
             </ul>
         </div>
         <div class="wg-section">
             <h2>⌨️ Shortcuts</h2>
             <ul>
-                <li><kbd>⌘</kbd><kbd>K</kbd> pulisci</li>
+                <li><kbd>⌘</kbd><kbd>K</kbd> clear</li>
                 <li><kbd>Tab</kbd> autocomplete</li>
                 <li><kbd>↑</kbd><kbd>↓</kbd> history</li>
                 <li><kbd>⌘</kbd><kbd>,</kbd> settings</li>
-                <li><kbd>⌘</kbd><kbd>C</kbd>/<kbd>⌘</kbd><kbd>V</kbd> copia/incolla</li>
+                <li><kbd>⌘</kbd><kbd>C</kbd>/<kbd>⌘</kbd><kbd>V</kbd> copy/paste</li>
             </ul>
         </div>
         <div class="wg-section">
@@ -149,7 +149,7 @@ class SimpleTerminal {
             </ul>
         </div>
     </div>
-    <div class="status-hint">Tip: premi <kbd>⌘</kbd><kbd>,</kbd> per personalizzare temi e AI provider.</div>
+    <div class="status-hint">Tip: press <kbd>⌘</kbd><kbd>,</kbd> to customize themes and AI provider.</div>
 </div>`;
     }
 
