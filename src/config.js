@@ -32,7 +32,7 @@ class Config {
   smoothScroll: true
       },
       ai: {
-        provider: 'gemini', // 'gemini', 'lm-studio', 'openai'
+        provider: 'gemini', // 'gemini', 'lm-studio', 'ollama', 'openai'
         gemini: {
           apiKey: '',
           model: 'gemini-2.5-flash'
@@ -41,6 +41,11 @@ class Config {
           endpoint: 'http://localhost:1234/v1',
           model: 'local-model',
           apiKey: 'lm-studio'
+        },
+        ollama: {
+          endpoint: 'http://localhost:11434',
+          model: 'gemma3:270m',
+          apiKey: ''
         },
         openai: {
           apiKey: '',

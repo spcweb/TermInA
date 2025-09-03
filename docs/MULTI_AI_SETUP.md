@@ -19,6 +19,12 @@ TermInA supporta tre provider AI differenti che puoi configurare e utilizzare a 
 - **Nessun costo dopo setup**
 - **Richiede hardware potente**
 
+### 4. Ollama (Locale)
+- **Completamente privato e open source**
+- **Facile da installare e configurare**
+- **Modelli ottimizzati per diverse task**
+- **Nessun costo dopo setup**
+
 ---
 
 ## 📝 Configurazione Step-by-Step
@@ -120,6 +126,54 @@ TermInA supporta tre provider AI differenti che puoi configurare e utilizzare a 
 
 ---
 
+### 🦙 Ollama (AI Locale)
+
+#### 1. Installa Ollama
+1. Scarica da [ollama.ai](https://ollama.ai/)
+2. Installa l'applicazione per il tuo sistema operativo
+3. Apri il terminale e verifica l'installazione:
+   ```bash
+   ollama --version
+   ```
+
+#### 2. Scarica un Modello
+1. Nel terminale, scarica un modello:
+   ```bash
+   # Modelli generali
+   ollama pull gemma3:270m    # Molto veloce, buona qualità
+   ollama pull llama3.2
+   ollama pull mistral
+   ollama pull codellama
+   
+   # Modelli specializzati
+   ollama pull llama3.2:3b    # Versione leggera
+   ollama pull llama3.2:8b    # Versione bilanciata
+   ollama pull llama3.2:70b   # Versione completa
+   ```
+
+#### 3. Avvia Ollama
+1. Ollama si avvia automaticamente come servizio
+2. Verifica che sia attivo:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
+3. Dovresti vedere la lista dei modelli disponibili
+
+#### 4. Configura in TermInA
+1. Impostazioni → AI → Seleziona "Ollama (Local)"
+2. Endpoint: `http://localhost:11434` (default)
+3. Model name: Nome del modello scaricato (es. "gemma3:270m")
+4. API Key: Lascia vuoto per installazioni locali
+5. Test della connessione
+6. Salva
+
+#### 5. Requisiti Hardware
+- **Minimum**: 4GB RAM, CPU moderno
+- **Raccomandato**: 8GB+ RAM, CPU multi-core
+- **Ottimale**: 16GB+ RAM, GPU dedicata (opzionale)
+
+---
+
 ## 🔄 Switching tra Provider
 
 ### Cambio Rapido
@@ -132,6 +186,7 @@ TermInA supporta tre provider AI differenti che puoi configurare e utilizzare a 
 - **Gemini**: Uso quotidiano, domande generali
 - **OpenAI**: Task complessi, analisi profonde
 - **LM Studio**: Privacy, uso offline, sperimentazione
+- **Ollama**: Privacy, facile setup, modelli ottimizzati
 
 ---
 
@@ -160,6 +215,12 @@ Ogni provider ha un pulsante "Test Connection" che:
 - **❌ 404 Not Found**: Endpoint URL errato
 - **❌ 500 Internal Error**: Modello non caricato correttamente
 
+#### Ollama
+- **❌ Connection failed**: Ollama non avviato
+- **❌ 404 Not Found**: Endpoint URL errato
+- **❌ 500 Internal Error**: Modello non scaricato o corrotto
+- **❌ Model not found**: Verifica che il modello sia stato scaricato con `ollama list`
+
 ---
 
 ## 💡 Suggerimenti Avanzati
@@ -176,6 +237,7 @@ Puoi facilmente passare da un provider all'altro per ottimizzare:
 - **Gemini**: Per comandi rapidi e frequenti
 - **OpenAI**: Per analisi complesse
 - **LM Studio**: Per privacy e controllo completo
+- **Ollama**: Per privacy, facilità d'uso e modelli specializzati
 
 ### Backup Configurazioni
 Le configurazioni sono salvate in `~/.termina/config.json`:
@@ -188,6 +250,7 @@ cp ~/.termina/config.json ~/.termina/config.backup.json
 - **Gemini**: Monitora su [Google Cloud Console](https://console.cloud.google.com/)
 - **OpenAI**: Dashboard usage su [platform.openai.com](https://platform.openai.com/usage)
 - **LM Studio**: Gratuito dopo setup iniziale
+- **Ollama**: Completamente gratuito dopo setup iniziale
 
 ---
 
@@ -196,8 +259,9 @@ cp ~/.termina/config.json ~/.termina/config.backup.json
 1. **Non condividere mai le API Keys**
 2. **Usa variabili d'ambiente per deployment**
 3. **Monitora l'uso per evitare costi imprevisti**
-4. **LM Studio è l'opzione più privata** (tutto locale)
+4. **LM Studio e Ollama sono le opzioni più private** (tutto locale)
 5. **Revoca le chiavi se compromesse**
+6. **Ollama offre il massimo controllo sui dati** (open source, locale)
 
 ---
 

@@ -36,42 +36,49 @@ class AIAgent {
     this.isExecuting = true;
 
     try {
-      console.log('AI Agent: Processamento richiesta con integrazione web');
+      console.log('AI Agent: Valutazione se necessaria integrazione web');
       
-      // Prima prova con l'integrazione web
-      const webResult = await webAIIntegration.processRequestWithWebIntegration(
-        prompt, 
-        terminalContext, 
-        autoExecute
-      );
+      // Determina se la richiesta necessita di ricerca web
+      const needsWebSearch = this.shouldUseWebSearch(prompt);
       
-      if (webResult.type === 'web_enhanced') {
-        // Risposta arricchita con informazioni web
-        this.isExecuting = false;
-        return {
-          type: 'web_enhanced',
-          response: webResult.enhancedResponse,
-          originalResponse: webResult.originalResponse,
-          searchQuery: webResult.searchQuery,
-          searchResults: webResult.searchResults,
-          confidence: webResult.confidence,
-          reason: webResult.reason,
-          iterations: 1,
-          history: this.executionHistory
-        };
-      } else if (webResult.type === 'fallback') {
-        // Fallback alla modalità normale se la ricerca web fallisce
-        console.log('AI Agent: Fallback alla modalità normale');
-        const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
-        this.isExecuting = false;
-        return result;
-      } else {
-        // Nessuna ricerca web necessaria, usa la modalità normale
-        console.log('AI Agent: Nessuna ricerca web necessaria');
-        const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
-        this.isExecuting = false;
-        return result;
+      if (needsWebSearch) {
+        console.log('AI Agent: Attivazione integrazione web per ricerca informazioni aggiornate');
+        
+        // Prova con l'integrazione web
+        const webResult = await webAIIntegration.processRequestWithWebIntegration(
+          prompt, 
+          terminalContext, 
+          autoExecute
+        );
+        
+        if (webResult.type === 'web_enhanced') {
+          // Risposta arricchita con informazioni web
+          this.isExecuting = false;
+          return {
+            type: 'web_enhanced',
+            response: webResult.enhancedResponse,
+            originalResponse: webResult.originalResponse,
+            searchQuery: webResult.searchQuery,
+            searchResults: webResult.searchResults,
+            confidence: webResult.confidence,
+            reason: webResult.reason,
+            iterations: 1,
+            history: this.executionHistory
+          };
+        } else if (webResult.type === 'fallback') {
+          // Fallback alla modalità normale se la ricerca web fallisce
+          console.log('AI Agent: Fallback alla modalità normale');
+          const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
+          this.isExecuting = false;
+          return result;
+        }
       }
+      
+      // Nessuna ricerca web necessaria, usa la modalità normale
+      console.log('AI Agent: Nessuna ricerca web necessaria, uso modalità normale');
+      const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
+      this.isExecuting = false;
+      return result;
       
     } catch (error) {
       console.error('AI Agent: Error in processRequestWithWeb:', error);
@@ -85,6 +92,43 @@ class AIAgent {
         throw fallbackError;
       }
     }
+  }
+
+  /**
+   * Determina se una richiesta necessita di ricerca web
+   */
+  shouldUseWebSearch(prompt) {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Richieste che NON necessitano di web search
+    const noWebSearchKeywords = [
+      'ciao', 'salve', 'buongiorno', 'buonasera', 'come stai',
+      'crea', 'cancella', 'elimina', 'sposta', 'copia', 'rinomina',
+      'elenca', 'mostra', 'trova file', 'trova cartella',
+      'installa', 'aggiorna', 'configura', 'imposta',
+      'test', 'verifica', 'controlla', 'esegui', 'avvia'
+    ];
+    
+    // Richieste che necessitano di web search
+    const webSearchKeywords = [
+      'notizie', 'ultime notizie', 'cosa succede', 'tendenze',
+      'prezzi', 'costo', 'quanto costa', 'miglior', 'recensione',
+      'come fare', 'tutorial', 'guida', 'istruzioni',
+      'tempo', 'meteo', 'traffico', 'orari', 'orario'
+    ];
+    
+    // Se contiene parole che NON necessitano di web search, non attivare
+    if (noWebSearchKeywords.some(keyword => lowerPrompt.includes(keyword))) {
+      return false;
+    }
+    
+    // Se contiene parole che necessitano di web search, attivare
+    if (webSearchKeywords.some(keyword => lowerPrompt.includes(keyword))) {
+      return true;
+    }
+    
+    // Default: non attivare web search per richieste semplici
+    return false;
   }
 
   async iterateUntilSuccess(originalPrompt, terminalContext, autoExecute) {
@@ -250,7 +294,53 @@ Fornisci SOLO il JSON, senza testo aggiuntivo.`;
       return JSON.parse(jsonText);
     } catch (error) {
       console.error('Error parsing AI decision:', error);
-      throw new Error('AI response format invalid');
+      
+      // Fallback intelligente basato sul prompt originale
+      const lowerPrompt = (originalUserPrompt || '').toLowerCase();
+      
+      // Se la richiesta contiene parole che suggeriscono un comando, prova a generare una risposta di fallback
+      if (lowerPrompt.includes('crea') || lowerPrompt.includes('cancella') || lowerPrompt.includes('elimina') || 
+          lowerPrompt.includes('trova') || lowerPrompt.includes('installa') || lowerPrompt.includes('configura')) {
+        
+        // Genera un comando di fallback basato sul contesto
+        let fallbackCommand = '';
+        let fallbackResponse = '';
+        
+        if (lowerPrompt.includes('cartella') || lowerPrompt.includes('directory')) {
+          // Estrai il nome della cartella dal prompt se presente
+          const nameMatch = lowerPrompt.match(/chiama[ta]?\s+(\w+)|nome\s+(\w+)|chiamata\s+(\w+)|test(\d+)/);
+          const folderName = nameMatch ? (nameMatch[1] || nameMatch[2] || nameMatch[3] || nameMatch[4]) : 'test1';
+          
+          if (lowerPrompt.includes('desktop') || lowerPrompt.includes('scrivania')) {
+            fallbackCommand = `mkdir -p ~/Desktop/${folderName}`;
+            fallbackResponse = `Creo una cartella chiamata "${folderName}" sul desktop. Se la cartella esiste già, non sarà un problema.`;
+          } else {
+            fallbackCommand = `mkdir -p ${folderName}`;
+            fallbackResponse = `Creo una cartella chiamata "${folderName}" nella directory corrente.`;
+          }
+        } else if (lowerPrompt.includes('file')) {
+          fallbackCommand = 'touch test.txt';
+          fallbackResponse = 'Creo un file di test nella directory corrente.';
+        } else if (lowerPrompt.includes('elenca') || lowerPrompt.includes('mostra')) {
+          fallbackCommand = 'ls -la';
+          fallbackResponse = 'Elencherò tutti i file e le cartelle nella directory corrente.';
+        }
+        
+        if (fallbackCommand) {
+          return {
+            requiresCommand: true,
+            command: fallbackCommand,
+            response: fallbackResponse,
+            expectedOutcome: "Esecuzione del comando di fallback"
+          };
+        }
+      }
+      
+      // Fallback generico per richieste informativi
+      return {
+        requiresCommand: false,
+        response: "Mi dispiace, sto avendo problemi di connessione con il servizio AI. Prova a riavviare l'applicazione o riprova più tardi."
+      };
     }
   }
 

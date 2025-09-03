@@ -373,6 +373,11 @@ class SettingsManager {
                     this.setValueSafely('lm-studio-model', this.config.ai.lmStudio.model);
                     this.setValueSafely('lm-studio-api-key', this.config.ai.lmStudio.apiKey);
                 }
+                if (this.config.ai.ollama) {
+                    this.setValueSafely('ollama-endpoint', this.config.ai.ollama.endpoint);
+                    this.setValueSafely('ollama-model', this.config.ai.ollama.model);
+                    this.setValueSafely('ollama-api-key', this.config.ai.ollama.apiKey);
+                }
                 
                 // Mostra la configurazione del provider attuale
                 this.showAIProviderConfig(this.config.ai.provider);
@@ -499,6 +504,11 @@ class SettingsManager {
                     endpoint: this.getValueSafely('lm-studio-endpoint', 'http://localhost:1234/v1'),
                     model: this.getValueSafely('lm-studio-model', 'local-model'),
                     apiKey: this.getValueSafely('lm-studio-api-key', 'lm-studio')
+                },
+                ollama: {
+                    endpoint: this.getValueSafely('ollama-endpoint', 'http://localhost:11434'),
+                    model: this.getValueSafely('ollama-model', 'gemma3:270m'),
+                    apiKey: this.getValueSafely('ollama-api-key', '')
                 }
             }
         };

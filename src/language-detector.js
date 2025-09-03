@@ -5,24 +5,28 @@ class LanguageDetector {
     this.languagePatterns = {
       italian: {
         keywords: [
+          'ciao', 'salve', 'buongiorno', 'buonasera', 'buonanotte', 'arrivederci', 'addio',
           'come', 'cosa', 'dove', 'quando', 'perché', 'perche', 'chi', 'quale', 'quanto',
           'spiegami', 'dimmi', 'mostrami', 'aiutami', 'puoi', 'riesci', 'vorrei',
           'cancella', 'elimina', 'crea', 'installa', 'configura', 'imposta',
           'file', 'cartella', 'directory', 'comando', 'terminale', 'sistema',
           'grazie', 'prego', 'scusa', 'perfetto', 'bene', 'male', 'problema',
-          'errore', 'funziona', 'non', 'sì', 'si', 'no'
+          'errore', 'funziona', 'non', 'sì', 'si', 'no', 'fatto', 'ok', 'okay',
+          'rispondi', 'rispondimi', 'senza', 'cercare', 'cerca', 'web', 'internet',
+          'nel', 'nella', 'dello', 'della', 'degli', 'delle'
         ],
         articles: ['il', 'la', 'lo', 'gli', 'le', 'un', 'una', 'uno'],
         prepositions: ['di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'del', 'della', 'dello', 'degli', 'delle']
       },
       english: {
         keywords: [
+          'hello', 'hi', 'hey', 'goodbye', 'bye', 'good morning', 'good evening', 'good night',
           'how', 'what', 'where', 'when', 'why', 'who', 'which', 'how much', 'how many',
           'explain', 'tell', 'show', 'help', 'can', 'could', 'would', 'should',
           'delete', 'remove', 'create', 'install', 'configure', 'setup', 'set',
           'file', 'folder', 'directory', 'command', 'terminal', 'system',
           'thanks', 'thank you', 'please', 'sorry', 'perfect', 'good', 'bad', 'problem',
-          'error', 'works', 'not', 'yes', 'no'
+          'error', 'works', 'not', 'yes', 'no', 'done', 'ok', 'okay'
         ],
         articles: ['the', 'a', 'an'],
         prepositions: ['of', 'from', 'in', 'with', 'on', 'for', 'between', 'about', 'at', 'by', 'to']

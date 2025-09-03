@@ -1,95 +1,88 @@
-# 🎉 TermInA 2.0 - Build Summary
+# 🎉 Build Success!
 
-## ✅ All Platform Builds Successfully Generated!
+## ✅ Generated Executable Files
 
-### 📦 **Generated Files**
+### 📱 macOS
+- **File**: `dist/Termina-2.0.0-arm64.dmg` (109.6 MB)
+- **Installation**: 
+  1. Double-click the `.dmg` file
+  2. Drag Termina to Applications folder
+  3. Launch Termina from Launchpad or Applications
 
-| Platform | File | Size | Format |
-|----------|------|------|--------|
-| 🍎 **macOS** | `Termina-2.0.0-arm64.dmg` | 109.6 MB | DMG Installer |
-| 🐧 **Linux** | `Termina-2.0.0-arm64.AppImage` | 117.2 MB | Portable AppImage |
-| 🪟 **Windows** | `Termina Setup 2.0.0.exe` | 89.3 MB | NSIS Installer |
+### 🐧 Linux
+- **File**: `dist/Termina-2.0.0-arm64.AppImage` (117.2 MB)
+- **Installation**:
+  1. Make executable: `chmod +x Termina-2.0.0-arm64.AppImage`
+  2. Run directly: `./Termina-2.0.0-arm64.AppImage`
 
-### 🛠️ **Build Configuration**
+### 🪟 Windows
+- **File**: `dist/Termina Setup 2.0.0.exe` (89.3 MB)
+- **Installation**:
+  1. Double-click the installer `.exe`
+  2. Follow installation wizard
+  3. Launch from Start Menu or Desktop
 
-- ✅ **Architecture**: ARM64 (Apple Silicon & modern processors)
-- ✅ **Icons**: Custom icons for all platforms from `build/` folder
-- ✅ **Installers**: Native installers for each platform
-- ✅ **Code Quality**: Clean, production-ready builds
+## 🛠️ How to Generate Other Builds
 
-### 🎯 **Distribution Ready**
-
-All builds are ready for:
-- ✅ **End-user distribution**
-- ✅ **GitHub Releases**
-- ✅ **Website downloads**
-- ✅ **App stores** (with additional signing)
-
-### 🔧 **Technical Details**
-
-#### macOS (109.6 MB)
-- Format: DMG disk image
-- Installation: Drag & drop to Applications
-- Code signing: Prepared (requires Developer ID)
-- Icon: `build/icon.icns`
-
-#### Linux (117.2 MB)
-- Format: AppImage (portable)
-- Installation: Make executable and run
-- Dependencies: Self-contained
-- Icon: `build/ICONS.png`
-
-#### Windows (89.3 MB)
-- Format: NSIS installer
-- Installation: Standard Windows installer
-- Registry: Proper Windows integration
-- Icon: `build/ICONS.png`
-
-### 🚀 **Quick Install Commands**
-
-#### macOS
+### 🐧 Linux (AppImage)
 ```bash
-# Download and install
-open Termina-2.0.0-arm64.dmg
-# Drag to Applications folder
+npm run build:linux
+```
+Will generate: `dist/Termina-2.0.0-arm64.AppImage`
+
+### 🪟 Windows (Installer)
+```bash
+npm run build:win
+```
+Will generate: `dist/Termina Setup 2.0.0.exe`
+
+### 🌍 All Builds Together
+```bash
+npm run build:all
+# or
+./build-all.sh
 ```
 
-#### Linux
+## 📋 Cross-Platform Build Requirements
+
+### For Linux and Windows on macOS:
 ```bash
-# Make executable and run
-chmod +x Termina-2.0.0-arm64.AppImage
-./Termina-2.0.0-arm64.AppImage
+# Install wine for Windows builds (optional)
+brew install --cask wine-stable
+
+# Linux builds don't need extra dependencies
 ```
 
-#### Windows
-```bash
-# Run installer
-./Termina\ Setup\ 2.0.0.exe
-# Follow installation wizard
-```
+## 🎨 Customize Icons
 
-### 📋 **File Checksums**
+For custom icons, replace these files in the `build/` folder:
+- `icon.icns` - macOS (512x512 → ICNS)
+- `icon.ico` - Windows (256x256 → ICO)  
+- `icon.png` - Linux (512x512 PNG)
 
-For security verification, you can generate checksums:
+## 🚀 Distribution
 
-```bash
-# Generate checksums for all files
-cd dist/
-shasum -a 256 *.dmg *.AppImage *.exe > checksums.txt
-```
+### macOS
+- The `.dmg` file can be distributed directly
+- For App Store, Apple Developer certificate is required
 
-### 🎉 **Success Status**
+### Linux
+- The `.AppImage` works on all distributions
+- `.deb` and `.rpm` formats also available
 
-**TermInA 2.0 is now fully built and ready for worldwide distribution!**
+### Windows
+- The `.exe` file is an NSIS installer
+- Includes automatic uninstaller
 
-- ✅ All platforms supported
-- ✅ Custom branding with icons
-- ✅ Professional installers
-- ✅ Production-quality builds
-- ✅ Ready for GitHub releases
+## 🔧 Technical Notes
+
+- **Code Signing**: Currently disabled (requires developer certificate)
+- **Auto-updater**: Configurable by adding update server
+- **Icons**: Currently using placeholders, customize in `build/`
 
 ---
 
-*Built on: August 28, 2025*  
-*Version: 2.0.0*  
-*Status: Ready for Distribution 🚀*
+**🎯 Your app is ready for distribution!**
+
+**Last Updated**: September 2025  
+**Version**: 2.0.0

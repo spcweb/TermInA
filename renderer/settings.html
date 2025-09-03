@@ -223,6 +223,7 @@
               <select id="ai-provider">
                 <option value="gemini">Google Gemini</option>
                 <option value="lm-studio">LM Studio (Local)</option>
+                <option value="ollama">Ollama (Local)</option>
                 <option value="openai">OpenAI</option>
               </select>
             </div>
@@ -280,6 +281,30 @@
               Test Connection
             </button>
             <div id="lm-studio-status" class="ai-status" style="display: none;">
+              <div class="status-indicator status-unknown"></div>
+              <span>Testing connection...</span>
+            </div>
+          </div>
+          
+          <!-- Ollama Configuration -->
+          <div id="ollama-config" class="setting-group provider-config" style="display: none;">
+            <h3>Ollama Configuration</h3>
+            <div class="setting-item">
+              <label for="ollama-endpoint">Endpoint:</label>
+              <input type="url" id="ollama-endpoint" placeholder="http://localhost:11434">
+            </div>
+            <div class="setting-item">
+              <label for="ollama-model">Model name:</label>
+              <input type="text" id="ollama-model" placeholder="gemma3:270m">
+            </div>
+            <div class="setting-item">
+              <label for="ollama-api-key">API Key (optional):</label>
+              <input type="password" id="ollama-api-key" placeholder="Leave empty for local Ollama">
+            </div>
+            <button class="test-connection-btn" onclick="settingsManager.testAIConnection('ollama')">
+              Test Connection
+            </button>
+            <div id="ollama-status" class="ai-status" style="display: none;">
               <div class="status-indicator status-unknown"></div>
               <span>Testing connection...</span>
             </div>
@@ -405,6 +430,14 @@
         setElementValue('ai-context-lines', config.ai?.contextLines || 10);
         setElementValue('gemini-api-key', config.ai?.gemini?.apiKey || '');
         setElementValue('gemini-model', config.ai?.gemini?.model || 'gemini-2.5-flash');
+        setElementValue('lm-studio-endpoint', config.ai?.lmStudio?.endpoint || 'http://localhost:1234/v1');
+        setElementValue('lm-studio-model', config.ai?.lmStudio?.model || 'local-model');
+        setElementValue('lm-studio-api-key', config.ai?.lmStudio?.apiKey || 'lm-studio');
+        setElementValue('ollama-endpoint', config.ai?.ollama?.endpoint || 'http://localhost:11434');
+        setElementValue('ollama-model', config.ai?.ollama?.model || 'llama3.2');
+        setElementValue('ollama-api-key', config.ai?.ollama?.apiKey || '');
+        setElementValue('openai-api-key', config.ai?.openai?.apiKey || '');
+        setElementValue('openai-model', config.ai?.openai?.model || 'gpt-3.5-turbo');
         
         console.log('Form populated successfully');
       } catch (error) {
@@ -468,6 +501,21 @@
             gemini: {
               apiKey: getElementValue('gemini-api-key') || '',
               model: getElementValue('gemini-model') || 'gemini-2.5-flash'
+            },
+            lmStudio: {
+              endpoint: getElementValue('lm-studio-endpoint') || 'http://localhost:1234/v1',
+              model: getElementValue('lm-studio-model') || 'local-model',
+              apiKey: getElementValue('lm-studio-api-key') || 'lm-studio'
+            },
+            ollama: {
+              endpoint: getElementValue('ollama-endpoint') || 'http://localhost:11434',
+              model: getElementValue('ollama-model') || 'llama3.2',
+              apiKey: getElementValue('ollama-api-key') || ''
+            },
+            openai: {
+              apiKey: getElementValue('openai-api-key') || '',
+              model: getElementValue('openai-model') || 'gpt-3.5-turbo',
+              endpoint: 'https://api.openai.com/v1'
             }
           }
         };
