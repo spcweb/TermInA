@@ -4,7 +4,7 @@
   <img src="assets/logo.svg" alt="Termina logo" width="140" />
   <h2>Termina — Modern terminal emulator with AI integration</h2>
   
-  <p><strong>0.2 Beta 🚀</strong></p>
+ 
 
   <details>
     <summary><strong>Versione</strong></summary>
