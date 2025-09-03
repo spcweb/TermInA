@@ -34,6 +34,7 @@
 - **Multi-language support** - 🆕 Italian, English, Spanish, French, German support
 - **Context awareness** - AI remembers recent commands and outputs
 - **Execution history** - 🆕 Complete log of AI actions and reasoning
+- **Web Integration** - 🌐 **NEW** AI can search the internet for up-to-date information when needed
 
 ### 🔧 Advanced Terminal Features
 - **Modern xterm.js** - Full-featured terminal emulation
@@ -53,12 +54,43 @@
 - **Keyboard shortcuts** - Configurable key bindings
 - **Window appearance** - Customize transparency, vibrancy, and more
 
+### 🌐 Web Integration Features
+- **Intelligent web searching** - AI automatically determines when to search online
+- **Multiple search engines** - Support for Google, Bing, and DuckDuckGo
+- **Content extraction** - Automatically extracts and summarizes web content
+- **Response enhancement** - Integrates web information with AI responses
+- **Search history** - Tracks and manages web search activities
+- **Configurable thresholds** - Adjust when AI should search online
+- **Fallback handling** - Graceful degradation when web search fails
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 16+ 
 - npm or yarn
 - macOS 10.15+ or Linux
+
+### Web Integration Configuration
+
+The web integration is enabled by default. You can configure it in `~/.termina/config.json`:
+
+```json
+{
+  "webscraper": {
+    "enabled": true,
+    "defaultSearchEngine": "google",
+    "confidenceThreshold": 0.7,
+    "maxResults": 5,
+    "timeout": 10000
+  }
+}
+```
+
+**Key settings:**
+- `enabled`: Enable/disable web integration
+- `confidenceThreshold`: When AI should search online (0.0-1.0)
+- `maxResults`: Maximum search results to process
+- `timeout`: HTTP request timeout in milliseconds
 
 ### Installation
 
@@ -85,15 +117,42 @@ npm run build
 
 # Create distributable
 npm run dist
+
+# Test web integration
+node test-webscraper.js
 ```
 
 ## 🎯 Usage
+
+### AI Commands with Web Integration
+
+The AI can now automatically search the internet when it needs up-to-date information:
+
+```bash
+# Ask AI with automatic web search when needed
+ai: What's the current Bitcoin price?
+
+# Force web-enhanced AI response
+ai-web: What are the latest Node.js features?
+
+# Regular AI command (no web search)
+ai: How do I create a directory?
+```
+
+**Examples of when AI automatically searches online:**
+- Current prices and market data
+- Latest software versions
+- Recent news and events
+- Time-sensitive information
+- Product specifications
+- Local business information
 
 ### Basic Commands
 
 | Command | Description |
 |---------|-------------|
 | `ai: <question>` | Ask the AI assistant |
+| `ai-web: <question>` | Ask AI with web search integration |
 | `run: <command>` | Execute command with confirmation |
 | `settings` | Open settings panel |
 | `clear` | Clear terminal |
@@ -317,6 +376,16 @@ The configuration file is stored at `~/.termina/config.json`. You can edit it di
 }
 ```
 
+## 📚 Documentation
+
+For detailed information about features and configuration, see the [docs/](docs/) folder.
+
+### Web Integration Documentation
+
+- **[WebScraper Integration Guide](docs/WEBSCRAPER_INTEGRATION.md)** - Complete guide to web integration features
+- **[AI Agent Guide](docs/AI_AGENT_GUIDE.md)** - How to use the AI agent with web capabilities
+- **[API Reference](docs/API.md)** - Technical API documentation
+
 ## 🏗️ Architecture
 
 ```
@@ -325,7 +394,13 @@ termina/
 ├── preload.js           # Preload script for security
 ├── src/
 │   ├── config.js        # Configuration management
-│   └── ai-manager.js    # AI provider abstraction
+│   ├── ai-manager.js    # AI provider abstraction
+│   ├── ai-agent.js      # AI agent with web integration
+│   ├── webscraper.js    # Web scraping capabilities
+│   ├── web-ai-integration.js # Web-AI integration layer
+│   ├── language-detector.js  # Multi-language support
+│   ├── system-info.js        # System information
+│   └── path-alias.js         # Path alias management
 ├── renderer/
 │   ├── index.html       # Main window
 │   ├── renderer.js      # Terminal logic
@@ -333,6 +408,9 @@ termina/
 │   ├── settings.html    # Settings window
 │   ├── settings.js      # Settings logic
 │   └── settings-style.css
+├── docs/                # Documentation
+│   └── WEBSCRAPER_INTEGRATION.md
+├── test-webscraper.js   # Web integration tests
 └── assets/              # Icons and images
 ```
 
@@ -370,10 +448,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Tab functionality is planned for v2.1
 - Windows support is experimental
 - Some AI providers may have rate limits
+- Web scraping may be limited by search engine rate limits
+- Some websites may block automated requests
 
 ## 🗺️ Roadmap
 
 ### v2.1 (Next Release)
+- [x] Web integration with AI agent
+- [x] Automatic web searching when needed
 - [ ] Multiple tabs support
 - [ ] Split panes
 - [ ] Theme marketplace

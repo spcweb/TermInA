@@ -50,6 +50,35 @@ class Config {
         autoExecute: false,
         contextLines: 10
       },
+      webscraper: {
+        enabled: true,
+        defaultSearchEngine: 'google',
+        maxResults: 5,
+        confidenceThreshold: 0.7,
+        timeout: 10000,
+        maxRedirects: 3,
+        userAgents: [
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15'
+        ],
+        searchEngines: {
+          google: {
+            enabled: true,
+            baseUrl: 'https://www.google.com/search',
+            params: { q: '' }
+          },
+          bing: {
+            enabled: true,
+            baseUrl: 'https://www.bing.com/search',
+            params: { q: '' }
+          },
+          duckduckgo: {
+            enabled: true,
+            baseUrl: 'https://duckduckgo.com/html/',
+            params: { q: '' }
+          }
+        }
+      },
       window: {
         width: 1200,
         height: 800,
@@ -141,6 +170,10 @@ class Config {
 
   getAIConfig() {
     return this.get('ai');
+  }
+
+  getWebScraperConfig() {
+    return this.get('webscraper');
   }
 
   getTerminalConfig() {

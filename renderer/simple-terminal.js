@@ -2015,25 +2015,105 @@ AI Commands:
         this.addToAIConversation('user', question);
         
         let thinkingMessageElement;
+        let webSearchMessageElement = null;
+        
         if (isAutoExecute) {
             thinkingMessageElement = this.addOutput('🚀 AI Agent executing...');
         } else {
-            thinkingMessageElement = this.addOutput('🤖 Thinking...');
+            // Mostra un messaggio più informativo che indica che potrebbe cercare online
+            thinkingMessageElement = this.addOutput('🤖 Analyzing request...');
+            thinkingMessageElement.className = 'ai-thinking';
         }
         
         try {
-            // Usa il nuovo AI Agent per gestire la richiesta
-            const result = await window.electronAPI.aiAgentRequest(question, this.getTerminalContext(), isAutoExecute);
+            // Implementa un sistema di timeout progressivo per mostrare l'avanzamento
+            const progressTimeouts = [];
             
+            // Dopo 1 secondo, suggerisci che potrebbe cercare online
+            progressTimeouts.push(setTimeout(() => {
+                if (thinkingMessageElement && thinkingMessageElement.parentNode) {
+                    thinkingMessageElement.textContent = '🤖 Analyzing (may search web)...';
+                }
+            }, 1000));
+            
+            // Dopo 3 secondi, mostra che probabilmente sta cercando online
+            progressTimeouts.push(setTimeout(() => {
+                if (thinkingMessageElement && thinkingMessageElement.parentNode) {
+                    thinkingMessageElement.textContent = '🌐 Likely searching internet...';
+                    thinkingMessageElement.className = 'web-search-loading';
+                    webSearchMessageElement = thinkingMessageElement;
+                }
+            }, 3000));
+            
+            // Usa il nuovo AI Agent con integrazione web per gestire la richiesta
+            const result = await window.electronAPI.aiAgentRequestWithWeb(question, this.getTerminalContext(), isAutoExecute);
+            
+            // Pulisci tutti i timeout
+            progressTimeouts.forEach(timeout => clearTimeout(timeout));
+            
+            // Rimuovi tutti i messaggi di loading
             if (thinkingMessageElement) {
                 thinkingMessageElement.remove();
             }
+            if (webSearchMessageElement) {
+                webSearchMessageElement.remove();
+            }
 
-            console.log('AI Agent result:', result);
+            console.log('AI Agent with Web result:', result);
             
             // L'observer si occuperà automaticamente dello scroll per tutto l'output AI
             
             switch (result.type) {
+                case 'web_enhanced':
+                    // Mostra che l'AI ha effettivamente cercato su internet
+                    const webLoadingMessage = this.addOutput('🌐 Looking on internet...');
+                    webLoadingMessage.className = 'web-search-loading';
+                    
+                    // Mostra il loader progressivo
+                    await this.showWebSearchLoader(webLoadingMessage, result.searchQuery);
+                    
+                    // Rimuovi il messaggio di caricamento web
+                    webLoadingMessage.remove();
+                    
+                    this.addAIOutput('🌐 ' + result.response);
+                    this.addAIOutput('🔍 Ricerca web eseguita per: ' + result.searchQuery);
+                    this.addAIOutput('📊 Confidenza: ' + (result.confidence * 100).toFixed(0) + '%');
+                    this.addAIOutput('💡 L\'AI ha cercato informazioni aggiornate su internet per fornirti una risposta più accurata');
+                    this.addToAIConversation('ai', result.response, null, null, 'web_enhanced');
+                    break;
+                    
+                case 'local_only':
+                    // Mostra brevemente che l'AI ha analizzato ma non ha cercato online
+                    if (thinkingMessageElement && thinkingMessageElement.parentNode) {
+                        thinkingMessageElement.textContent = '🧠 Using local knowledge...';
+                        thinkingMessageElement.className = 'ai-thinking';
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                    
+                    this.addAIOutput('🤖 ' + result.response);
+                    this.addAIOutput('ℹ️ Risposta basata su conoscenza locale (confidenza: ' + (result.confidence * 100).toFixed(0) + '%)');
+                    this.addAIOutput('💡 L\'AI ha fornito una risposta basata sulla sua conoscenza esistente');
+                    this.addToAIConversation('ai', result.response);
+                    break;
+                    
+                case 'fallback':
+                    // Mostra brevemente che l'AI ha tentato di cercare online
+                    const fallbackLoadingMessage = this.addOutput('🌐 Attempting to look on internet...');
+                    fallbackLoadingMessage.className = 'web-search-loading';
+                    
+                    // Simula un breve tentativo
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    fallbackLoadingMessage.textContent = '⚠️ Web search failed, using local knowledge...';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    fallbackLoadingMessage.remove();
+                    
+                    this.addAIOutput('🤖 ' + result.response);
+                    this.addAIOutput('⚠️ Ricerca web fallita, usando risposta locale');
+                    this.addAIOutput('💡 L\'AI ha tentato di cercare online ma ha dovuto usare la sua conoscenza locale');
+                    this.addToAIConversation('ai', result.response);
+                    break;
+                    
                 case 'informational':
                     this.addAIOutput('🤖 ' + result.response);
                     this.addToAIConversation('ai', result.response);
@@ -2072,9 +2152,18 @@ AI Commands:
             }
             
         } catch (error) {
+            // Pulisci tutti i timeout in caso di errore
+            if (typeof progressTimeouts !== 'undefined') {
+                progressTimeouts.forEach(timeout => clearTimeout(timeout));
+            }
+            
             if (thinkingMessageElement) {
                 thinkingMessageElement.remove();
             }
+            if (webSearchMessageElement && webSearchMessageElement !== thinkingMessageElement) {
+                webSearchMessageElement.remove();
+            }
+            
             console.error('AI Agent error:', error);
             const errorMsg = 'AI Agent Error: ' + error.message;
             this.addAIOutput('❌ ' + errorMsg);
@@ -2086,6 +2175,27 @@ AI Commands:
         // Raccoglie le ultime righe del terminale come contesto
         const outputLines = this.outputElement.textContent.split('\n');
         return outputLines.slice(-10).filter(line => line.trim() !== '');
+    }
+
+    /**
+     * Mostra un loader progressivo per la ricerca web
+     */
+    async showWebSearchLoader(loadingElement, searchQuery) {
+        if (!loadingElement) return;
+        
+        const loadingSteps = [
+            { text: '🌐 Looking on internet...', duration: 800 },
+            { text: `🔍 Searching for: ${searchQuery}`, duration: 600 },
+            { text: '📊 Integrating results...', duration: 400 }
+        ];
+        
+        for (const step of loadingSteps) {
+            if (loadingElement.parentNode) { // Verifica che l'elemento esista ancora
+                loadingElement.textContent = step.text;
+                loadingElement.className = 'web-search-loading';
+                await new Promise(resolve => setTimeout(resolve, step.duration));
+            }
+        }
     }
 
     showExecutionHistory(history) {
@@ -2395,13 +2505,14 @@ AI Commands:
     }
 
     // Aggiungi messaggio alla conversazione AI
-    addToAIConversation(type, content, command = null, result = null) {
+    addToAIConversation(type, content, command = null, result = null, responseType = null) {
         this.aiConversation.push({
             timestamp: new Date().toISOString(),
             type: type, // 'user' or 'ai'
             content: content,
             command: command,
-            result: result
+            result: result,
+            responseType: responseType // 'web_enhanced', 'local_only', 'fallback', etc.
         });
 
         // Mantieni solo gli ultimi 100 messaggi per gestione memoria

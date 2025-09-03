@@ -1,0 +1,76 @@
+{
+  "webscraper": {
+    "enabled": true,
+    "defaultSearchEngine": "google",
+    "maxResults": 5,
+    "confidenceThreshold": 0.7,
+    "timeout": 10000,
+    "maxRedirects": 3,
+    "userAgents": [
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ],
+    "searchEngines": {
+      "google": {
+        "enabled": true,
+        "baseUrl": "https://www.google.com/search",
+        "params": { "q": "" },
+        "priority": 1
+      },
+      "bing": {
+        "enabled": true,
+        "baseUrl": "https://www.bing.com/search",
+        "params": { "q": "" },
+        "priority": 2
+      },
+      "duckduckgo": {
+        "enabled": true,
+        "baseUrl": "https://duckduckgo.com/html/",
+        "params": { "q": "" },
+        "priority": 3
+      }
+    },
+    "contentExtraction": {
+      "maxContentLength": 1000,
+      "removeScripts": true,
+      "removeStyles": true,
+      "removeNavigation": true,
+      "removeFooters": true,
+      "removeHeaders": true,
+      "cleanHtml": true
+    },
+    "rateLimiting": {
+      "requestsPerMinute": 30,
+      "delayBetweenRequests": 1000,
+      "backoffMultiplier": 2,
+      "maxRetries": 3
+    },
+    "filtering": {
+      "blockedDomains": [
+        "malware.example.com",
+        "spam.example.com"
+      ],
+      "allowedDomains": [],
+      "contentFilters": [
+        "ads",
+        "tracking",
+        "analytics"
+      ]
+    },
+    "caching": {
+      "enabled": true,
+      "maxCacheSize": 100,
+      "cacheExpiry": 3600000,
+      "cacheDirectory": "~/.termina/cache"
+    },
+    "logging": {
+      "level": "info",
+      "logRequests": true,
+      "logResponses": false,
+      "logErrors": true,
+      "logFile": "~/.termina/logs/webscraper.log"
+    }
+  }
+}
+

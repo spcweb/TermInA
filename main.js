@@ -7,6 +7,8 @@ const config = require('./src/config');
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
 const ptyManager = require('./src/pty-manager');
+const webScraper = require('./src/webscraper-enhanced');
+const webAIIntegration = require('./src/web-ai-integration');
 
 let mainWindow;
 let settingsWindow;
@@ -105,6 +107,36 @@ ipcMain.handle('ai-agent-request', async (event, prompt, context = [], autoExecu
     return {
       type: 'error',
       response: `Errore AI Agent: ${error.message}`,
+      iterations: 0,
+      history: []
+    };
+  }
+});
+
+// Handler per AI Agent con integrazione web
+ipcMain.handle('ai-agent-request-with-web', async (event, prompt, context = [], autoExecute = false) => {
+  try {
+    // Configura l'esecutore di comandi per l'AI Agent
+    aiAgent.setCommandExecutor(async (command) => {
+      return new Promise((resolve) => {
+        exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
+          resolve({
+            success: !error,
+            output: error ? error.message : (stderr || stdout || ''),
+            exitCode: error ? error.code || 1 : 0,
+            stdout: stdout || '',
+            stderr: stderr || ''
+          });
+        });
+      });
+    });
+
+    return await aiAgent.processRequestWithWeb(prompt, context, autoExecute);
+  } catch (error) {
+    console.error('Errore AI Agent con Web:', error);
+    return {
+      type: 'error',
+      response: `Errore AI Agent con Web: ${error.message}`,
       iterations: 0,
       history: []
     };
@@ -847,6 +879,82 @@ ipcMain.handle('window-maximize', () => {
     } else {
       mainWindow.maximize();
     }
+  }
+});
+
+// Handler per WebScraper e integrazione web
+ipcMain.handle('web-search', async (event, query, searchEngine = 'google', maxResults = 5) => {
+  try {
+    return await webScraper.searchWeb(query, searchEngine, maxResults);
+  } catch (error) {
+    console.error('Errore ricerca web:', error);
+    return {
+      success: false,
+      error: error.message,
+      query: query,
+      searchEngine: searchEngine
+    };
+  }
+});
+
+ipcMain.handle('get-web-search-stats', async () => {
+  try {
+    return webAIIntegration.getSearchStats();
+  } catch (error) {
+    console.error('Errore statistiche web:', error);
+    return {
+      totalSearches: 0,
+      searchesPerformed: 0,
+      averageConfidence: 0,
+      mostCommonReasons: []
+    };
+  }
+});
+
+ipcMain.handle('get-web-search-history', async () => {
+  try {
+    return webAIIntegration.getSearchHistory();
+  } catch (error) {
+    console.error('Errore cronologia web:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('clear-web-search-history', async () => {
+  try {
+    webAIIntegration.clearSearchHistory();
+    return { success: true };
+  } catch (error) {
+    console.error('Errore pulizia cronologia web:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('set-web-search-confidence-threshold', async (event, threshold) => {
+  try {
+    const success = webAIIntegration.setConfidenceThreshold(threshold);
+    return { success: success };
+  } catch (error) {
+    console.error('Errore impostazione soglia web:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-web-search-confidence-threshold', async () => {
+  try {
+    return webAIIntegration.confidenceThreshold;
+  } catch (error) {
+    console.error('Errore lettura soglia web:', error);
+    return 0.7;
+  }
+});
+
+ipcMain.handle('is-web-service-available', async () => {
+  try {
+    return await webAIIntegration.isServiceAvailable();
+  } catch (error) {
+    console.error('Errore verifica disponibilità web:', error);
+    return false;
   }
 });
 

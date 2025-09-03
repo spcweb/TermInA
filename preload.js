@@ -10,8 +10,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // AI operations
   aiRequest: (prompt, context) => ipcRenderer.invoke('ai-request', prompt, context),
   aiAgentRequest: (prompt, context, autoExecute) => ipcRenderer.invoke('ai-agent-request', prompt, context, autoExecute),
+  aiAgentRequestWithWeb: (prompt, context, autoExecute) => ipcRenderer.invoke('ai-agent-request-with-web', prompt, context, autoExecute),
   getAIProviders: () => ipcRenderer.invoke('get-ai-providers'),
   testAIConnection: (provider, config) => ipcRenderer.invoke('test-ai-connection', provider, config),
+  
+  // Web integration operations
+  webSearch: (query, searchEngine, maxResults) => ipcRenderer.invoke('web-search', query, searchEngine, maxResults),
+  getWebSearchStats: () => ipcRenderer.invoke('get-web-search-stats'),
+  getWebSearchHistory: () => ipcRenderer.invoke('get-web-search-history'),
+  clearWebSearchHistory: () => ipcRenderer.invoke('clear-web-search-history'),
+  setWebSearchConfidenceThreshold: (threshold) => ipcRenderer.invoke('set-web-search-confidence-threshold', threshold),
+  getWebSearchConfidenceThreshold: () => ipcRenderer.invoke('get-web-search-confidence-threshold'),
+  isWebServiceAvailable: () => ipcRenderer.invoke('is-web-service-available'),
   
   // Terminal operations
   runCommand: (command) => ipcRenderer.invoke('run-command', command),

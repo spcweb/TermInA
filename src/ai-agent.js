@@ -2,6 +2,7 @@
 const aiManager = require('./ai-manager');
 const systemInfo = require('./system-info');
 const pathAlias = require('./path-alias');
+const webAIIntegration = require('./web-ai-integration');
 
 class AIAgent {
   constructor() {
@@ -23,6 +24,66 @@ class AIAgent {
     } catch (error) {
       this.isExecuting = false;
       throw error;
+    }
+  }
+
+  /**
+   * Processa una richiesta con integrazione web per informazioni aggiornate
+   */
+  async processRequestWithWeb(prompt, terminalContext = [], autoExecute = false) {
+    this.currentIteration = 0;
+    this.executionHistory = [];
+    this.isExecuting = true;
+
+    try {
+      console.log('AI Agent: Processamento richiesta con integrazione web');
+      
+      // Prima prova con l'integrazione web
+      const webResult = await webAIIntegration.processRequestWithWebIntegration(
+        prompt, 
+        terminalContext, 
+        autoExecute
+      );
+      
+      if (webResult.type === 'web_enhanced') {
+        // Risposta arricchita con informazioni web
+        this.isExecuting = false;
+        return {
+          type: 'web_enhanced',
+          response: webResult.enhancedResponse,
+          originalResponse: webResult.originalResponse,
+          searchQuery: webResult.searchQuery,
+          searchResults: webResult.searchResults,
+          confidence: webResult.confidence,
+          reason: webResult.reason,
+          iterations: 1,
+          history: this.executionHistory
+        };
+      } else if (webResult.type === 'fallback') {
+        // Fallback alla modalità normale se la ricerca web fallisce
+        console.log('AI Agent: Fallback alla modalità normale');
+        const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
+        this.isExecuting = false;
+        return result;
+      } else {
+        // Nessuna ricerca web necessaria, usa la modalità normale
+        console.log('AI Agent: Nessuna ricerca web necessaria');
+        const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
+        this.isExecuting = false;
+        return result;
+      }
+      
+    } catch (error) {
+      console.error('AI Agent: Error in processRequestWithWeb:', error);
+      this.isExecuting = false;
+      
+      // Fallback alla modalità normale in caso di errore
+      try {
+        const result = await this.iterateUntilSuccess(prompt, terminalContext, autoExecute);
+        return result;
+      } catch (fallbackError) {
+        throw fallbackError;
+      }
     }
   }
 
@@ -289,6 +350,31 @@ Fornisci SOLO il JSON.`;
 
   stopExecution() {
     this.isExecuting = false;
+  }
+
+  // Metodi per la gestione del webscraper
+  async isWebServiceAvailable() {
+    return await webAIIntegration.isServiceAvailable();
+  }
+
+  getWebSearchStats() {
+    return webAIIntegration.getSearchStats();
+  }
+
+  getWebSearchHistory() {
+    return webAIIntegration.getSearchHistory();
+  }
+
+  clearWebSearchHistory() {
+    return webAIIntegration.clearSearchHistory();
+  }
+
+  setWebSearchConfidenceThreshold(threshold) {
+    return webAIIntegration.setConfidenceThreshold(threshold);
+  }
+
+  getWebSearchConfidenceThreshold() {
+    return webAIIntegration.confidenceThreshold;
   }
 }
 
