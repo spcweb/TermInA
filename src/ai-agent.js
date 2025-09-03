@@ -114,7 +114,10 @@ class AIAgent {
       'notizie', 'ultime notizie', 'cosa succede', 'tendenze',
       'prezzi', 'costo', 'quanto costa', 'miglior', 'recensione',
       'come fare', 'tutorial', 'guida', 'istruzioni',
-      'tempo', 'meteo', 'traffico', 'orari', 'orario'
+      'tempo', 'meteo', 'previsioni', 'previsione', 'traffico', 'orari', 'orario',
+      'guerra', 'ucraina', 'russia', 'politica', 'economia', 'sport',
+      'tecnologia', 'ai', 'intelligenza artificiale', 'software', 'hardware',
+      'film', 'serie tv', 'musica', 'libri', 'cultura', 'scienza'
     ];
     
     // Se contiene parole che NON necessitano di web search, non attivare

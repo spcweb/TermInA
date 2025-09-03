@@ -9,7 +9,7 @@
 
 const aiAgent = require('../src/ai-agent');
 const webAIIntegration = require('../src/web-ai-integration');
-const webScraper = require('../src/webscraper');
+const webScraper = require('../src/webscraper-playwright');
 
 async function exampleBasicUsage() {
   console.log('=== Esempio: Utilizzo Base ===\n');

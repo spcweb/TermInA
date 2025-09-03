@@ -1,5 +1,5 @@
 // Integrazione WebScraper con Agente AI
-const webScraper = require('./webscraper-enhanced');
+const webScraper = require('./webscraper-playwright');
 const aiManager = require('./ai-manager');
 
 class WebAIIntegration {

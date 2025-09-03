@@ -181,8 +181,8 @@ class AIManager {
     console.log(`Context length: ${context.length}`);
     
     // Determina i timeout in base al modello
-    const isLargeModel = model.includes('llama3.1') || model.includes('llama3') || model.includes('8b') || model.includes('13b') || model.includes('70b');
-    const timeout = isLargeModel ? 60000 : 10000; // 60s per modelli grandi, 10s per modelli piccoli
+    const isLargeModel = model.includes('llama3.1') || model.includes('llama3') || model.includes('8b') || model.includes('13b') || model.includes('70b') || model.includes('20b') || model.includes('gpt-oss');
+    const timeout = isLargeModel ? 120000 : 30000; // 120s per modelli grandi (20b+), 30s per modelli piccoli
     
     console.log(`Using timeout: ${timeout}ms for model: ${model}`);
     

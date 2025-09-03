@@ -7,7 +7,7 @@ const config = require('./src/config');
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
 const ptyManager = require('./src/pty-manager');
-const webScraper = require('./src/webscraper-enhanced');
+const webScraper = require('./src/webscraper-playwright');
 const webAIIntegration = require('./src/web-ai-integration');
 
 let mainWindow;
