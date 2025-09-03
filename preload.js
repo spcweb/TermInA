@@ -20,6 +20,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCwd: () => ipcRenderer.invoke('get-cwd'),
   onCwdChanged: (callback) => ipcRenderer.on('cwd-changed', (event, cwd) => callback(cwd)),
   
+  // PTY operations
+  ptyCreateSession: () => ipcRenderer.invoke('pty-create-session'),
+  ptyWrite: (sessionId, data) => ipcRenderer.invoke('pty-write', sessionId, data),
+  ptyResize: (sessionId, cols, rows) => ipcRenderer.invoke('pty-resize', sessionId, cols, rows),
+  ptyKill: (sessionId) => ipcRenderer.invoke('pty-kill', sessionId),
+  ptyClear: (sessionId) => ipcRenderer.invoke('pty-clear', sessionId),
+  ptyGetOutput: (sessionId, fromIndex) => ipcRenderer.invoke('pty-get-output', sessionId, fromIndex),
+  ptyRunCommand: (command, options) => ipcRenderer.invoke('pty-run-command', command, options),
+  ptyGetSessions: () => ipcRenderer.invoke('pty-get-sessions'),
+  
   // Configuration
   getConfig: (key) => ipcRenderer.invoke('get-config', key),
   setConfig: (key, value) => ipcRenderer.invoke('set-config', key, value),

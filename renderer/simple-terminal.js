@@ -17,11 +17,39 @@ class SimpleTerminal {
         this.smoothScrollEnabled = true; // Scroll fluido o istantaneo
         this.isUserScrolling = false; // Traccia se l'utente sta scrollando manualmente
         this.contentObserver = null; // Observer per monitorare i cambiamenti di contenuto
-    this.currentAIGroup = null; // Contenitore corrente della sessione chat AI
+        this.currentAIGroup = null; // Contenitore corrente della sessione chat AI
+        
+        // Nuove proprietà PTY
+        this.ptyTerminal = null;
+        this.isPTYMode = false;
+        this.passwordMode = false;
+        this.passwordResolve = null;
+        this.currentLoadingIndicator = null;
+        this.commandStartTime = null;
+        this.timeoutWarningShown = false;
+        this.loadingAnimationFrame = null;
+        this.loadingDots = 0;
+        this.commandTimeoutTimer = null;
+        this.ptyCommands = [
+            'vim', 'vi', 'nano', 'emacs',           // Editor
+            'htop', 'top', 'watch',                 // Monitor in tempo reale
+            'yay', 'pacman', 'apt-get', 'apt',     // Package managers Linux
+            'git clone', 'git pull', 'git push',    // Git con progress
+            'npm install', 'npm run', 'yarn install', // NPM/Yarn
+            'pip install', 'pip download',          // Python
+            'brew install', 'brew upgrade',         // Homebrew
+            'wget', 'curl',                         // Download con progress
+            'rsync', 'scp',                         // Trasferimenti
+            'ssh', 'telnet',                        // Connessioni remote
+            'docker run', 'docker build',          // Docker
+            'make', 'cmake',                        // Build systems
+            'node', 'python', 'python3'            // REPL interattivi
+        ];
         
         console.log('=== VALORI DEFAULT INIZIALIZZATI ===');
         console.log('Auto-scroll enabled:', this.autoScrollEnabled);
         console.log('Smooth-scroll enabled:', this.smoothScrollEnabled);
+        console.log('PTY mode enabled:', this.ptyModeEnabled);
         this.init();
     }
 
@@ -36,6 +64,17 @@ class SimpleTerminal {
         this.loadInitialSettings();
         this.setupContentObserver(); // Nuovo observer per auto-scroll
         this.startPeriodicAIStatusCheck(); // Controllo periodico status AI
+        this.initializePTY(); // Inizializza il PTY terminal
+    }
+
+    async initializePTY() {
+        try {
+            this.ptyTerminal = new PTYTerminal(this);
+            console.log('PTY Terminal initialized');
+        } catch (error) {
+            console.error('Failed to initialize PTY Terminal:', error);
+            this.ptyModeEnabled = false;
+        }
     }
 
     createTerminalDisplay() {
@@ -211,13 +250,23 @@ class SimpleTerminal {
         const beforeCursor = this.currentLine.substring(0, this.cursorPosition);
         const afterCursor = this.currentLine.substring(this.cursorPosition);
         
+        // Se siamo in modalità password, nasconde l'input
+        let displayBefore, displayAfter;
+        if (this.passwordMode) {
+            displayBefore = '*'.repeat(beforeCursor.length);
+            displayAfter = '*'.repeat(afterCursor.length);
+        } else {
+            displayBefore = this.escapeHtml(beforeCursor);
+            displayAfter = this.escapeHtml(afterCursor);
+        }
+        
         // Usa lo stile del cursore attualmente configurato
         const cursorClass = `cursor-${this.cursorStyle}`;
         
         this.inputTextElement.innerHTML = 
-            `<span class="before-cursor">${this.escapeHtml(beforeCursor)}</span>` +
+            `<span class="before-cursor">${displayBefore}</span>` +
             `<span class="terminal-cursor ${cursorClass}"></span>` +
-            `<span class="after-cursor">${this.escapeHtml(afterCursor)}</span>`;
+            `<span class="after-cursor">${displayAfter}</span>`;
         
         // Aggiorna il riferimento al cursore
         this.cursor = this.inputTextElement.querySelector('.terminal-cursor');
@@ -227,7 +276,7 @@ class SimpleTerminal {
             
             // Per i cursori block e underline, aggiungi contenuto per visualizzare gli spazi
             if (this.cursorStyle === 'block' || this.cursorStyle === 'underline') {
-                const charAtCursor = this.currentLine.charAt(this.cursorPosition);
+                const charAtCursor = this.passwordMode ? '*' : this.currentLine.charAt(this.cursorPosition);
                 this.cursor.textContent = charAtCursor || '\u00A0'; // Spazio non-breaking se vuoto
             } else {
                 this.cursor.textContent = '';
@@ -749,10 +798,26 @@ class SimpleTerminal {
     }
 
     handleKeydown(e) {
+        // Se siamo in modalità password, gestisci diversamente
+        if (this.passwordMode) {
+            return this.handlePasswordKeydown(e);
+        }
+
+        // Se siamo in modalità PTY e la sessione è attiva, invia i tasti direttamente al PTY
+        if (this.isPTYMode && this.ptyTerminal && this.ptyTerminal.isActive) {
+            return this.handlePTYKeydown(e);
+        }
+
         // Gestione combinazioni di tasti (Cmd/Ctrl)
         if (e.metaKey || e.ctrlKey) {
             switch (e.key.toLowerCase()) {
                 case 'c':
+                    // In modalità PTY, Ctrl+C invia interrupt
+                    if (this.isPTYMode && this.ptyTerminal && this.ptyTerminal.isActive) {
+                        e.preventDefault();
+                        this.ptyTerminal.sendInterrupt();
+                        return;
+                    }
                     this.handleCopy(e);
                     return;
                 case 'v':
@@ -777,6 +842,14 @@ class SimpleTerminal {
                     e.preventDefault();
                     this.clearTerminal();
                     return;
+                case 'd':
+                    // Ctrl+D - EOF
+                    if (this.isPTYMode && this.ptyTerminal && this.ptyTerminal.isActive) {
+                        e.preventDefault();
+                        this.ptyTerminal.sendEOF();
+                        return;
+                    }
+                    break;
                 case 'end':
                 case 'j':
                     // Ctrl+J o Cmd+End - Vai in fondo al terminale
@@ -1092,6 +1165,12 @@ class SimpleTerminal {
     async processCommand() {
         const command = this.currentLine.trim();
         
+        // Se siamo in modalità password, gestisci diversamente
+        if (this.passwordMode) {
+            await this.handlePasswordInput();
+            return;
+        }
+        
         // Mostra il comando eseguito
         this.addOutput('$ ' + command);
         
@@ -1101,7 +1180,103 @@ class SimpleTerminal {
             this.historyIndex = -1; // Reset indice dopo nuovo comando
         }
 
-        // Processa il comando
+        // Controlla se il comando dovrebbe usare PTY
+        if (this.shouldUsePTY(command)) {
+            await this.executeWithPTY(command);
+        } else {
+            // Usa il sistema tradizionale per comandi semplici
+            await this.executeWithTraditionalSystem(command);
+        }
+
+        // Reset per nuovo comando
+        this.currentLine = '';
+        this.cursorPosition = 0;
+        this.showPrompt();
+    }
+
+    shouldUsePTY(command) {
+        if (!this.ptyModeEnabled || !this.ptyTerminal) {
+            return false;
+        }
+
+        // Comandi interni che non necessitano PTY
+        const internalCommands = [
+            'clear', 'help', 'exit', 'enable-pty', 'disable-pty', 'pty-status',
+            'save-ai-chat', 'clear-ai-chat', 'show-ai-chat', 'toggle-autoscroll',
+            'scroll-bottom', 'autoscroll-status', 'toggle-smooth-scroll',
+            'debug-fonts', 'debug-cursor', 'install-homebrew'
+        ];
+
+        if (internalCommands.includes(command) || 
+            command.startsWith('cursor-') ||
+            command.startsWith('ai ') || command.startsWith('ask ') ||
+            command.startsWith('execute ') || command.startsWith('run ')) {
+            return false;
+        }
+
+        // I comandi sudo usano il sistema sicuro di password
+        if (command.startsWith('sudo ')) {
+            return false; // Gestiti separatamente
+        }
+
+        // Verifica se è un comando che beneficia del PTY
+        return this.ptyCommands.some(cmd => 
+            command.startsWith(cmd) || 
+            command.includes(cmd + ' ')
+        ) ||
+        command.includes('curl -fsSL') && command.includes('install.sh') ||
+        command.includes('|') || // Pipes
+        command.includes('&&') || // Comandi concatenati
+        command.length > 50; // Comandi complessi
+    }
+
+    async executeWithPTY(command) {
+        try {
+            let loadingStartTime = null;
+            
+            // Mostra l'indicatore di loading per comandi PTY (tendenzialmente più lunghi)
+            if (this.shouldShowLoading(command)) {
+                loadingStartTime = Date.now();
+                this.showLoadingIndicator(command, {
+                    timeout: 300000, // 5 minuti per comandi PTY
+                    style: 'spinner',
+                    message: `Running in PTY: ${command}`
+                });
+            }
+            
+            this.isPTYMode = true;
+            
+            // Assicurati che la sessione PTY sia attiva
+            if (!this.ptyTerminal.isActive) {
+                const started = await this.ptyTerminal.startSession();
+                if (!started) {
+                    throw new Error('Failed to start PTY session');
+                }
+            }
+
+            // Aggiorna l'indicatore dello stato PTY
+            this.updatePTYStatusIndicator();
+
+            // Invia il comando al PTY
+            const success = await this.ptyTerminal.sendCommand(command);
+            if (!success) {
+                throw new Error('Failed to send command to PTY');
+            }
+
+            // Il PTY gestirà l'output in tempo reale attraverso il polling
+            // Il loading indicator verrà rimosso quando il comando completa in onPTYCommandComplete
+            
+        } catch (error) {
+            console.error('PTY execution failed:', error);
+            this.hideLoadingIndicator();
+            this.addOutput(`❌ PTY execution failed: ${error.message}`);
+            this.addOutput('🔄 Falling back to traditional execution...');
+            await this.executeWithTraditionalSystem(command);
+        }
+    }
+
+    async executeWithTraditionalSystem(command) {
+        // Processa il comando con il sistema tradizionale
         if (command === 'clear') {
             this.clearTerminal();
         } else if (command === 'help') {
@@ -1110,14 +1285,66 @@ class SimpleTerminal {
             window.close();
         } else if (command === 'enable-pty') {
             this.ptyModeEnabled = true;
-            this.addOutput('🔧 PTY mode enabled! Interactive commands (like Homebrew installer) will now work properly.');
+            this.addOutput('🔧 PTY mode enabled! Interactive commands will now work properly.');
         } else if (command === 'disable-pty') {
             this.ptyModeEnabled = false;
             this.addOutput('🔧 PTY mode disabled. Using standard command execution.');
+            if (this.ptyTerminal && this.ptyTerminal.isActive) {
+                await this.ptyTerminal.stopSession();
+                this.isPTYMode = false;
+            }
         } else if (command === 'pty-status') {
             this.addOutput(`🔧 PTY mode: ${this.ptyModeEnabled ? 'ENABLED' : 'DISABLED'}`);
-            this.addOutput('📝 PTY mode allows interactive commands like Homebrew installer to work properly.');
+            this.addOutput(`🔌 PTY session: ${this.ptyTerminal && this.ptyTerminal.isActive ? 'ACTIVE' : 'INACTIVE'}`);
+            this.addOutput(`⚡ Current mode: ${this.isPTYMode ? 'PTY' : 'TRADITIONAL'}`);
+            
+            // Ottieni lo status del PTY Manager
+            if (window.electronAPI && window.electronAPI.ptyGetSessions) {
+                try {
+                    const result = await window.electronAPI.ptyGetSessions();
+                    if (result.success) {
+                        this.addOutput(`📊 Active PTY sessions: ${result.sessions.length}`);
+                        result.sessions.forEach(session => {
+                            this.addOutput(`   - Session ${session.id}: ${session.type} (buffer: ${session.bufferSize} chars)`);
+                        });
+                    }
+                } catch (error) {
+                    this.addOutput(`❌ Error getting PTY status: ${error.message}`);
+                }
+            }
+            
+            this.addOutput('📝 PTY mode allows full interactive commands like yay, htop, vim, etc.');
             this.addOutput('💡 Use "enable-pty" or "disable-pty" to toggle this feature.');
+            this.addOutput('🔄 Use "pty-restart" to restart the PTY session.');
+        } else if (command === 'pty-restart') {
+            if (this.ptyTerminal) {
+                await this.ptyTerminal.stopSession();
+                const started = await this.ptyTerminal.startSession();
+                this.addOutput(started ? '✅ PTY session restarted' : '❌ Failed to restart PTY session');
+            } else {
+                this.addOutput('❌ PTY not initialized');
+            }
+        } else if (command === 'test-sudo') {
+            this.addOutput('🧪 Testing sudo functionality...');
+            this.addOutput('💡 Try: sudo ls -la /root');
+            this.addOutput('💡 Try: sudo softwareupdate -ia');
+            this.addOutput('💡 The system will prompt for password securely.');
+        } else if (command === 'test-pty') {
+            this.addOutput('🧪 Testing PTY functionality...');
+            if (this.ptyTerminal) {
+                const started = await this.ptyTerminal.startSession();
+                if (started) {
+                    this.addOutput('✅ PTY session started successfully');
+                    this.addOutput('💡 Try these commands:');
+                    this.addOutput('   - htop (if installed)');
+                    this.addOutput('   - watch date');
+                    this.addOutput('   - ping -c 3 google.com');
+                } else {
+                    this.addOutput('❌ Failed to start PTY session');
+                }
+            } else {
+                this.addOutput('❌ PTY not available');
+            }
         } else if (command === 'save-ai-chat') {
             this.saveAIConversation();
         } else if (command === 'clear-ai-chat') {
@@ -1150,27 +1377,308 @@ class SimpleTerminal {
         } else if (command.startsWith('ai ') || command.startsWith('ask ') ||
                    command.startsWith('execute ') || command.startsWith('run ')) {
             await this.processAICommand(command);
+        } else if (command.startsWith('sudo ')) {
+            // Gestione speciale per comandi sudo
+            await this.handleSudoCommand(command);
         } else if (command) {
             // Prova a eseguire il comando reale
             await this.executeCommand(command);
         }
+    }
 
-        // Reset per nuovo comando
+    async handleSudoCommand(command) {
+        this.addOutput('🔐 Sudo command detected: ' + command);
+        this.addOutput('🔑 Please enter your password when prompted...');
+        
+        try {
+            // Usa il sistema sudo sicuro dell'app
+            if (window.electronAPI && window.electronAPI.runSudoCommand) {
+                // Richiedi la password in modo sicuro
+                const password = await this.promptSecurePassword();
+                if (password) {
+                    this.addOutput('🔄 Executing sudo command...');
+                    const result = await window.electronAPI.runSudoCommand(command, password);
+                    this.addOutput(result);
+                } else {
+                    this.addOutput('❌ Password not provided, command cancelled');
+                }
+            } else {
+                this.addOutput('❌ Secure sudo not available, using standard execution');
+                await this.executeCommand(command);
+            }
+        } catch (error) {
+            this.addOutput(`❌ Error executing sudo command: ${error.message}`);
+        }
+    }
+
+    async promptSecurePassword() {
+        return new Promise((resolve) => {
+            this.addOutput('🔐 Enter your password below:');
+            this.passwordMode = true;
+            this.currentLine = '';
+            this.cursorPosition = 0;
+            this.showPrompt();
+            
+            // Store resolve function to call when password is entered
+            this.passwordResolve = resolve;
+        });
+    }
+
+    // Callback chiamato quando un comando PTY è completato
+    onPTYCommandComplete() {
+        this.isPTYMode = false;
+        
+        // Nascondi il loading indicator se presente
+        this.hideLoadingIndicator();
+        
+        // Aggiorna lo stato del PTY indicator
+        this.updatePTYStatusIndicator();
+        
+        // Debug: log command completion
+        console.log('PTY command completed');
+    }
+
+    // Mostra un prompt per la password
+    showPasswordPrompt(promptText) {
+        this.addOutput('🔐 Password required:');
+        this.addOutput(promptText.trim());
+        this.addOutput('💡 Type your password and press Enter (input will be hidden)');
+        
+        // Attiva modalità password
+        this.passwordMode = true;
         this.currentLine = '';
         this.cursorPosition = 0;
         this.showPrompt();
     }
 
+    // Gestisce l'input in modalità password
+    async handlePasswordInput() {
+        if (!this.passwordMode) {
+            return;
+        }
+
+        const password = this.currentLine;
+        this.passwordMode = false;
+        
+        // Nasconde la password nell'output
+        this.addOutput('🔐 [Password entered]');
+        
+        // Se c'è una resolve function in attesa (per sudo), chiamala
+        if (this.passwordResolve) {
+            const resolve = this.passwordResolve;
+            this.passwordResolve = null;
+            resolve(password);
+        } else if (this.ptyTerminal) {
+            // Altrimenti invia al PTY
+            const success = await this.ptyTerminal.sendInput(password + '\r');
+            if (success) {
+                this.addOutput('🔄 Password sent, continuing...');
+            } else {
+                this.addOutput('❌ Failed to send password');
+            }
+        }
+
+        // Reset della linea
+        this.currentLine = '';
+        this.cursorPosition = 0;
+        this.showPrompt();
+    }
+
+    // Metodo per aggiornare la linea corrente (usato dal PTY per output parziale)
+    updateCurrentLine(text) {
+        // Questo metodo può essere usato per aggiornare l'output in tempo reale
+        // durante l'esecuzione di comandi PTY
+        const lastLine = this.outputElement.lastElementChild;
+        if (lastLine && lastLine.classList.contains('pty-live-output')) {
+            lastLine.textContent = text;
+        } else {
+            const line = document.createElement('div');
+            line.className = 'output-line pty-live-output';
+            line.textContent = text;
+            this.outputElement.appendChild(line);
+        }
+    }
+
+    // Mostra un indicatore di loading per un comando
+    showLoadingIndicator(command, type = 'default') {
+        this.removeLoadingIndicator();
+        
+        const container = document.createElement('div');
+        container.className = 'command-executing';
+        
+        let content = '';
+        switch (type) {
+            case 'pty':
+                content = `
+                    <div class="loading-indicator">
+                        <div class="spinner"></div>
+                        <span>Executing in PTY mode: <span class="command-text">${this.escapeHtml(command)}</span></span>
+                    </div>
+                `;
+                break;
+            case 'sudo':
+                content = `
+                    <div class="loading-indicator sudo-password-prompt">
+                        <div class="progress-dots"></div>
+                        <span>Executing sudo command: <span class="command-text">${this.escapeHtml(command)}</span></span>
+                    </div>
+                `;
+                break;
+            case 'long':
+                content = `
+                    <div class="loading-indicator">
+                        <div class="spinner"></div>
+                        <span>Executing long-running command: <span class="command-text">${this.escapeHtml(command)}</span></span>
+                    </div>
+                `;
+                break;
+            default:
+                content = `
+                    <div class="loading-indicator">
+                        <div class="progress-dots"></div>
+                        <span>Executing: <span class="command-text">${this.escapeHtml(command)}</span></span>
+                    </div>
+                `;
+        }
+        
+        container.innerHTML = content;
+        this.outputElement.appendChild(container);
+        this.currentLoadingIndicator = container;
+        this.commandStartTime = Date.now();
+        
+        // Avvia il controllo del timeout
+        this.startTimeoutWarning(command);
+        
+        return container;
+    }
+
+    // Rimuove l'indicatore di loading
+    removeLoadingIndicator() {
+        if (this.currentLoadingIndicator) {
+            this.currentLoadingIndicator.remove();
+            this.currentLoadingIndicator = null;
+            this.commandStartTime = null;
+            this.timeoutWarningShown = false;
+        }
+    }
+
+    // Avvia il controllo del timeout per mostrare avvisi
+    startTimeoutWarning(command) {
+        // Dopo 10 secondi, mostra un avviso che il comando sta ancora eseguendo
+        setTimeout(() => {
+            if (this.currentLoadingIndicator && !this.timeoutWarningShown) {
+                this.timeoutWarningShown = true;
+                const warning = document.createElement('div');
+                warning.className = 'command-timeout-warning';
+                warning.innerHTML = `
+                    <div class="loading-indicator">
+                        ⏳ Command is taking longer than expected...
+                    </div>
+                    <div style="font-size: 0.9em; margin-top: 4px;">
+                        💡 For interactive commands, try pressing Enter or Ctrl+C if stuck
+                    </div>
+                `;
+                this.outputElement.appendChild(warning);
+            }
+        }, 10000);
+
+        // Dopo 30 secondi, mostra suggerimenti più specifici
+        setTimeout(() => {
+            if (this.currentLoadingIndicator) {
+                const suggestion = document.createElement('div');
+                suggestion.className = 'command-timeout-warning';
+                
+                let suggestionText = '';
+                if (command.includes('sudo')) {
+                    suggestionText = '🔐 If waiting for password, check if a password prompt appeared above';
+                } else if (command.includes('softwareupdate')) {
+                    suggestionText = '📦 Software updates can take 30+ minutes depending on update size';
+                } else if (command.includes('yay') || command.includes('pacman')) {
+                    suggestionText = '📦 Package installations may require user confirmation - check for prompts';
+                } else {
+                    suggestionText = '⚡ Long-running command detected - this is normal for some operations';
+                }
+                
+                suggestion.innerHTML = `
+                    <div class="loading-indicator">
+                        ${suggestionText}
+                    </div>
+                `;
+                this.outputElement.appendChild(suggestion);
+            }
+        }, 30000);
+    }
+
+    // Aggiorna l'indicatore con nuovo testo
+    updateLoadingIndicator(text) {
+        if (this.currentLoadingIndicator) {
+            const textSpan = this.currentLoadingIndicator.querySelector('.command-text');
+            if (textSpan) {
+                textSpan.textContent = text;
+            }
+        }
+    }
+
+    // Mostra l'indicatore dello stato PTY
+    updatePTYStatusIndicator() {
+        // Cerca un indicatore esistente
+        let indicator = document.querySelector('.pty-session-indicator');
+        
+        if (!indicator) {
+            // Crea nuovo indicatore
+            indicator = document.createElement('div');
+            indicator.className = 'pty-session-indicator';
+            
+            // Aggiungilo al prompt header
+            const promptHeader = document.querySelector('.prompt-header');
+            if (promptHeader) {
+                promptHeader.appendChild(indicator);
+            }
+        }
+        
+        // Aggiorna lo stato
+        const isActive = this.ptyTerminal && this.ptyTerminal.isActive;
+        indicator.className = `pty-session-indicator ${isActive ? 'active' : 'inactive'}`;
+        indicator.innerHTML = `
+            <div class="status-dot"></div>
+            <span>PTY ${isActive ? 'Active' : 'Inactive'}</span>
+        `;
+    }
+
     async executeCommand(command) {
         try {
+            // Verifica se il comando richiede un loading indicator
+            const needsLoading = this.shouldShowLoading(command);
+            let loadingStartTime = null;
+            
+            if (needsLoading) {
+                loadingStartTime = Date.now();
+                this.showLoadingIndicator(command, {
+                    timeout: 60000, // 1 minuto timeout
+                    style: 'spinner'
+                });
+            }
+
             // Controlla se è un comando sudo
             if (command.trim().startsWith('sudo ')) {
                 await this.handleSudoCommand(command);
+                
+                // Nascondi loading solo se è stato mostrato abbastanza a lungo
+                if (needsLoading) {
+                    const elapsed = Date.now() - loadingStartTime;
+                    if (elapsed < 500) {
+                        // Se il comando è stato molto veloce, aspetta un po' prima di nascondere
+                        setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
+                    } else {
+                        this.hideLoadingIndicator();
+                    }
+                }
                 return;
             }
 
             // Controlla se è un comando che potrebbe richiedere interazione (come installer)
             if (command.includes('curl -fsSL') && command.includes('install.sh')) {
+                if (needsLoading) this.hideLoadingIndicator();
                 this.addOutput(`🔄 Executing installer with interactive support...`);
                 
                 if (window.electronAPI && window.electronAPI.runInteractiveCommand) {
@@ -1185,12 +1693,26 @@ class SimpleTerminal {
             // Usa l'API per eseguire comandi reali
             if (window.electronAPI && window.electronAPI.runCommand) {
                 const result = await window.electronAPI.runCommand(command);
+                
+                // Nascondi loading con logica intelligente
+                if (needsLoading) {
+                    const elapsed = Date.now() - loadingStartTime;
+                    if (elapsed < 500) {
+                        // Comando molto veloce, aspetta un po'
+                        setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
+                    } else {
+                        this.hideLoadingIndicator();
+                    }
+                }
+                
                 this.addOutput(result);
             } else {
+                if (needsLoading) this.hideLoadingIndicator();
                 this.addOutput(`Command not found: ${command}`);
                 this.addOutput('Type "help" for available commands.');
             }
         } catch (error) {
+            this.hideLoadingIndicator();
             this.addOutput(`Error executing command: ${error.message}`);
         }
     }
@@ -1207,10 +1729,30 @@ class SimpleTerminal {
         }
 
         try {
+            // Nascondi il loading precedente e mostra uno specifico per sudo
+            this.hideLoadingIndicator();
+            const loadingStartTime = Date.now();
+            
+            this.showLoadingIndicator(command, {
+                timeout: 180000, // 3 minuti per comandi sudo lunghi
+                style: 'spinner',
+                message: `Executing sudo command: ${command.substring(5)}` // Rimuove "sudo "
+            });
+            
             this.addOutput('🔄 Executing sudo command...');
             const result = await window.electronAPI.runSudoCommand(command, password);
+            
+            // Logica intelligente per nascondere il loading
+            const elapsed = Date.now() - loadingStartTime;
+            if (elapsed < 500) {
+                setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
+            } else {
+                this.hideLoadingIndicator();
+            }
+            
             this.addOutput(result);
         } catch (error) {
+            this.hideLoadingIndicator();
             this.addOutput(`[Error] Failed to execute sudo command: ${error.message}`);
         }
     }
@@ -1421,12 +1963,24 @@ Enhanced Mode (🔧 ENABLED by default):
   📦 Interactive installs: npm install, pip install, etc.
   🌐 Downloads: wget, curl with progress bars
   📁 Git operations: git clone with progress
+  🔧 Package managers: yay, pacman, apt-get (full interactive support)
+  📝 Text editors: vim, nano, emacs (full terminal support)
+  📊 System monitors: htop, top, watch (real-time updates)
+
+PTY Commands:
+  pty-status         - Show PTY mode and session status
+  pty-restart        - Restart the PTY session
+  enable-pty         - Enable PTY mode for interactive commands
+  disable-pty        - Disable PTY mode (use traditional execution)
+  test-pty           - Test PTY functionality
+  test-sudo          - Test sudo functionality with secure password
 
 Important Notes:
   🍺 Homebrew: Enhanced mode improves compatibility with installers
-  🔐 Interactive Commands: Enhanced environment variables help automation
-  ⚡ Performance: Standard mode for simple commands if preferred
-  📱 Compatibility: Works without external dependencies
+  🔐 Interactive Commands: Full terminal emulation with real TTY
+  ⚡ Performance: Automatic fallback for simple commands
+  📱 Compatibility: Works with all standard Unix/Linux tools
+  🎮 Interactive Tools: yay, htop, vim work exactly like in a real terminal
 
 Keyboard Shortcuts:
   ↑/↓                - Navigate command history
@@ -1624,6 +2178,195 @@ AI Commands:
     clearAIConversation() {
         this.aiConversation = [];
         this.addOutput('🗑️ Cronologia conversazioni AI cancellata');
+    }
+
+    // Gestione loading indicator per comandi lunghi
+    showLoadingIndicator(command, options = {}) {
+        // Rimuovi eventuali loading indicator esistenti
+        this.hideLoadingIndicator();
+
+        // Configura opzioni
+        const config = {
+            showTime: options.showTime !== false, // Default true
+            timeout: options.timeout || 30000,    // 30 secondi default
+            style: options.style || 'spinner',    // 'dots', 'spinner', 'bar'
+            message: options.message || `Executing: ${command}`,
+            minDisplayTime: options.minDisplayTime || 500, // Mostra per almeno 500ms
+            ...options
+        };
+
+        // Crea elemento loading
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'command-loading-indicator';
+        loadingDiv.innerHTML = `
+            <div class="loading-content">
+                <div class="loading-animation">
+                    <span class="loading-icon"></span>
+                    <span class="loading-text">${config.message}</span>
+                </div>
+                <div class="loading-time" ${!config.showTime ? 'style="display: none;"' : ''}>
+                    <span class="time-elapsed">0s</span>
+                </div>
+            </div>
+        `;
+
+        // Aggiungi all'output
+        this.outputElement.appendChild(loadingDiv);
+        this.currentLoadingIndicator = loadingDiv;
+        this.commandStartTime = Date.now();
+        this.timeoutWarningShown = false;
+
+        // Avvia animazione
+        this.startLoadingAnimation(config.style);
+
+        // Timer per aggiornare il tempo
+        if (config.showTime) {
+            this.startTimeUpdater();
+        }
+
+        // Timer di timeout
+        if (config.timeout > 0) {
+            this.commandTimeoutTimer = setTimeout(() => {
+                this.showTimeoutWarning(config.timeout / 1000);
+            }, config.timeout);
+        }
+
+        // Auto-scroll
+        this.scrollToBottom();
+    }
+
+    hideLoadingIndicator() {
+        if (this.currentLoadingIndicator) {
+            this.currentLoadingIndicator.remove();
+            this.currentLoadingIndicator = null;
+        }
+
+        // Ferma animazioni e timer
+        if (this.loadingAnimationFrame) {
+            cancelAnimationFrame(this.loadingAnimationFrame);
+            this.loadingAnimationFrame = null;
+        }
+
+        if (this.commandTimeoutTimer) {
+            clearTimeout(this.commandTimeoutTimer);
+            this.commandTimeoutTimer = null;
+        }
+
+        this.commandStartTime = null;
+        this.timeoutWarningShown = false;
+    }
+
+    startLoadingAnimation(style = 'dots') {
+        if (!this.currentLoadingIndicator) return;
+
+        const iconElement = this.currentLoadingIndicator.querySelector('.loading-icon');
+        if (!iconElement) return;
+
+        const animate = () => {
+            if (!this.currentLoadingIndicator) return;
+
+            switch (style) {
+                case 'dots':
+                    this.loadingDots = (this.loadingDots + 1) % 4;
+                    iconElement.textContent = '⚪'.repeat(this.loadingDots) + '⚫'.repeat(3 - this.loadingDots);
+                    break;
+                case 'spinner':
+                    const spinners = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+                    this.loadingDots = (this.loadingDots + 1) % spinners.length;
+                    iconElement.textContent = spinners[this.loadingDots];
+                    break;
+                case 'bar':
+                    const bars = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█', '▇', '▆', '▅', '▄', '▃', '▂'];
+                    this.loadingDots = (this.loadingDots + 1) % bars.length;
+                    iconElement.textContent = bars[this.loadingDots];
+                    break;
+            }
+
+            this.loadingAnimationFrame = setTimeout(animate, 200);
+        };
+
+        animate();
+    }
+
+    startTimeUpdater() {
+        if (!this.currentLoadingIndicator || !this.commandStartTime) return;
+
+        const timeElement = this.currentLoadingIndicator.querySelector('.time-elapsed');
+        if (!timeElement) return;
+
+        const updateTime = () => {
+            if (!this.currentLoadingIndicator || !this.commandStartTime) return;
+
+            const elapsed = Math.floor((Date.now() - this.commandStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+
+            if (minutes > 0) {
+                timeElement.textContent = `${minutes}m ${seconds}s`;
+            } else {
+                timeElement.textContent = `${seconds}s`;
+            }
+
+            // Cambia colore se impiega troppo tempo
+            if (elapsed > 30) {
+                timeElement.style.color = '#ff9500'; // Arancione
+            }
+            if (elapsed > 60) {
+                timeElement.style.color = '#ff5722'; // Rosso
+            }
+
+            setTimeout(updateTime, 1000);
+        };
+
+        updateTime();
+    }
+
+    showTimeoutWarning(timeoutSeconds) {
+        if (this.timeoutWarningShown || !this.currentLoadingIndicator) return;
+        this.timeoutWarningShown = true;
+
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'timeout-warning';
+        warningDiv.innerHTML = `
+            ⚠️ Command is taking longer than expected (${timeoutSeconds}s).
+            Press Ctrl+C to cancel or wait for completion.
+        `;
+
+        this.currentLoadingIndicator.appendChild(warningDiv);
+    }
+
+    // Verifica se un comando richiede un loading indicator
+    shouldShowLoading(command) {
+        // Comandi interni che sono sempre istantanei
+        const instantCommands = [
+            'clear', 'help', 'exit', 'pwd', 'cd', 'ls', 'dir', 'echo',
+            'enable-pty', 'disable-pty', 'pty-status', 'pty-restart',
+            'save-ai-chat', 'clear-ai-chat', 'show-ai-chat', 
+            'toggle-autoscroll', 'scroll-bottom', 'autoscroll-status',
+            'toggle-smooth-scroll', 'debug-fonts', 'debug-cursor',
+            'test-pty', 'test-sudo', 'install-homebrew'
+        ];
+
+        const trimmedCommand = command.trim().toLowerCase();
+        
+        // Non mostrare loading per comandi AI (hanno il loro feedback)
+        if (trimmedCommand.startsWith('ai ') || 
+            trimmedCommand.startsWith('ask ') ||
+            trimmedCommand.startsWith('execute ') || 
+            trimmedCommand.startsWith('run ') ||
+            trimmedCommand.startsWith('cursor-')) {
+            return false;
+        }
+
+        // Non mostrare loading per comandi interni istantanei
+        if (instantCommands.includes(trimmedCommand) || 
+            instantCommands.some(cmd => trimmedCommand.startsWith(cmd + ' '))) {
+            return false;
+        }
+
+        // Mostra loading per tutti gli altri comandi
+        // Questo copre automaticamente tutti i comandi di sistema su tutte le piattaforme
+        return true;
     }
 
     showAIConversation() {
@@ -1985,6 +2728,140 @@ AI Commands:
         this.addOutput('');
         this.addOutput('🔍 Check if Homebrew is already installed:');
         this.addOutput('   brew --version');
+    }
+
+    handlePTYKeydown(e) {
+        // Gestione tasti speciali in modalità PTY
+        e.preventDefault();
+        
+        let keyToSend = '';
+        
+        if (e.ctrlKey) {
+            switch (e.key.toLowerCase()) {
+                case 'c':
+                    keyToSend = '\x03'; // Ctrl+C
+                    break;
+                case 'd':
+                    keyToSend = '\x04'; // Ctrl+D (EOF)
+                    break;
+                case 'z':
+                    keyToSend = '\x1a'; // Ctrl+Z
+                    break;
+                case 'l':
+                    keyToSend = '\x0c'; // Ctrl+L (clear)
+                    break;
+                default:
+                    return; // Altri Ctrl+ non gestiti
+            }
+        } else if (e.key === 'Enter') {
+            keyToSend = '\r';
+        } else if (e.key === 'Backspace') {
+            keyToSend = '\x7f';
+        } else if (e.key === 'Tab') {
+            keyToSend = '\t';
+        } else if (e.key === 'Escape') {
+            keyToSend = '\x1b';
+        } else if (e.key === 'ArrowUp') {
+            keyToSend = '\x1b[A';
+        } else if (e.key === 'ArrowDown') {
+            keyToSend = '\x1b[B';
+        } else if (e.key === 'ArrowRight') {
+            keyToSend = '\x1b[C';
+        } else if (e.key === 'ArrowLeft') {
+            keyToSend = '\x1b[D';
+        } else if (e.key === 'Home') {
+            keyToSend = '\x1b[H';
+        } else if (e.key === 'End') {
+            keyToSend = '\x1b[F';
+        } else if (e.key === 'PageUp') {
+            keyToSend = '\x1b[5~';
+        } else if (e.key === 'PageDown') {
+            keyToSend = '\x1b[6~';
+        } else if (e.key === 'Delete') {
+            keyToSend = '\x1b[3~';
+        } else if (e.key.length === 1) {
+            // Caratteri normali
+            keyToSend = e.key;
+        } else {
+            return; // Tasto non gestito
+        }
+        
+        if (keyToSend && this.ptyTerminal) {
+            this.ptyTerminal.sendInput(keyToSend);
+        }
+    }
+
+    handlePasswordKeydown(e) {
+        // Gestione limitata per modalità password
+        e.preventDefault();
+        
+        if (e.key === 'Enter') {
+            // Conferma password
+            this.processCommand();
+        } else if (e.key === 'Escape' || (e.ctrlKey && e.key.toLowerCase() === 'c')) {
+            // Cancella modalità password
+            this.passwordMode = false;
+            this.currentLine = '';
+            this.cursorPosition = 0;
+            this.addOutput('❌ Password input cancelled');
+            this.showPrompt();
+        } else if (e.key === 'Backspace') {
+            // Cancella carattere
+            if (this.cursorPosition > 0) {
+                this.currentLine = 
+                    this.currentLine.substring(0, this.cursorPosition - 1) + 
+                    this.currentLine.substring(this.cursorPosition);
+                this.cursorPosition--;
+                this.showPrompt();
+            }
+        } else if (e.key === 'ArrowLeft') {
+            // Muovi cursore a sinistra
+            if (this.cursorPosition > 0) {
+                this.cursorPosition--;
+                this.showPrompt();
+            }
+        } else if (e.key === 'ArrowRight') {
+            // Muovi cursore a destra
+            if (this.cursorPosition < this.currentLine.length) {
+                this.cursorPosition++;
+                this.showPrompt();
+            }
+        } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            // Aggiungi carattere normale
+            this.currentLine = 
+                this.currentLine.substring(0, this.cursorPosition) + 
+                e.key + 
+                this.currentLine.substring(this.cursorPosition);
+            this.cursorPosition++;
+            this.showPrompt();
+        }
+    }
+
+    // Chiamato quando un comando PTY viene completato
+    onPTYCommandComplete() {
+        // Rimuovi l'indicatore di loading
+        this.removeLoadingIndicator();
+        
+        // Aggiungi un separatore per indicare che il comando è terminato
+        const separator = document.createElement('div');
+        separator.className = 'command-completion-separator';
+        separator.innerHTML = `
+            <div style="border-top: 1px solid #4a5568; margin: 8px 0; opacity: 0.3;"></div>
+        `;
+        this.outputElement.appendChild(separator);
+        
+        // Aggiorna lo stato PTY
+        this.updatePTYStatusIndicator();
+        
+        // Scroll al bottom
+        this.scrollToBottom();
+    }
+
+    // Funzione di utilità per l'escape dell'HTML
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

@@ -6,6 +6,7 @@ const { exec, spawn } = require('child_process');
 const config = require('./src/config');
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
+const ptyManager = require('./src/pty-manager');
 
 let mainWindow;
 let settingsWindow;
@@ -111,7 +112,7 @@ ipcMain.handle('ai-agent-request', async (event, prompt, context = [], autoExecu
 });
 
 ipcMain.handle('run-command', async (event, command) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const trimmed = command.trim();
     // Gestione comando cd (supporta: cd, cd <path>, cd .., cd -, cd "dir con spazi", cd dir && ls)
     const cdMatch = trimmed.match(/^cd(\s+([^&;]+))?(?:\s*&&\s*(.*))?$/);
@@ -188,17 +189,59 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       return;
     }
 
-    // Controlla se è un comando che necessita di interazione completa (PTY)
-    const needsPty = command.includes('curl -fsSL') && command.includes('install.sh') ||
-                     command.includes('npm install') ||
-                     command.includes('pip install') ||
-                     command.includes('git clone') ||
-                     command.includes('wget') ||
-                     command.includes('brew install');
+    // Lista dei comandi che beneficiano del PTY (interattivi o con output dinamico)
+    const ptyCommands = [
+      'vim', 'vi', 'nano', 'emacs',           // Editor
+      'htop', 'top', 'watch',                 // Monitor in tempo reale
+      'git clone', 'git pull', 'git push',    // Git con progress
+      'npm install', 'npm run', 'yarn install', // NPM/Yarn
+      'pip install', 'pip download',          // Python
+      'brew install', 'brew upgrade',         // Homebrew
+      'yay', 'pacman', 'apt-get', 'apt',     // Package managers Linux
+      'wget', 'curl',                         // Download con progress
+      'rsync', 'scp',                         // Trasferimenti
+      'ssh', 'telnet',                        // Connessioni remote
+      'docker run', 'docker build',          // Docker
+      'make', 'cmake',                        // Build systems
+      'node', 'python', 'python3'            // REPL interattivi
+    ];
 
-    if (needsPty) {
-      // Usa PTY per comandi interattivi
-      return runCommandWithPty(command, resolve);
+    // Verifica se il comando dovrebbe usare PTY
+    const shouldUsePty = ptyCommands.some(cmd => 
+      trimmed.startsWith(cmd) || 
+      trimmed.includes(cmd + ' ')
+    ) || 
+    trimmed.includes('curl -fsSL') && trimmed.includes('install.sh') ||
+    trimmed.includes('|') || // Pipes potrebbero essere interattivi
+    (trimmed.includes('&&') && !cdMatch); // Comandi concatenati
+
+    if (shouldUsePty) {
+      try {
+        console.log(`Using PTY for command: ${command}`);
+        const ptyResult = await ptyManager.runCommand(command, { 
+          cwd: currentWorkingDirectory,
+          timeout: 120000 // 2 minuti per comandi interattivi come yay
+        });
+        
+        if (ptyResult.success) {
+          resolve(ptyResult.output || '[Success] Command completed');
+        } else {
+          resolve(`[Error] Command failed with exit code ${ptyResult.exitCode}\n${ptyResult.output}`);
+        }
+      } catch (error) {
+        console.error('PTY command failed, falling back to exec:', error.message);
+        // Fallback a exec normale
+        exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
+          if (error) {
+            resolve(`[Error] ${error.message}`);
+          } else if (stderr) {
+            resolve(`[Stderr] ${stderr}`);
+          } else {
+            resolve(stdout);
+          }
+        });
+      }
+      return;
     }
 
   exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
@@ -215,6 +258,113 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
 
 // IPC per ottenere cwd corrente
 ipcMain.handle('get-cwd', async () => currentWorkingDirectory);
+
+// ===== NUOVO SISTEMA PTY =====
+
+// Crea una nuova sessione PTY
+ipcMain.handle('pty-create-session', async (event) => {
+  try {
+    const session = ptyManager.createSession();
+    console.log(`PTY session created: ${session.id}`);
+    return { success: true, sessionId: session.id };
+  } catch (error) {
+    console.error('Error creating PTY session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Invia dati a una sessione PTY
+ipcMain.handle('pty-write', async (event, sessionId, data) => {
+  try {
+    const success = ptyManager.writeToSession(sessionId, data);
+    return { success };
+  } catch (error) {
+    console.error('Error writing to PTY:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ridimensiona una sessione PTY
+ipcMain.handle('pty-resize', async (event, sessionId, cols, rows) => {
+  try {
+    const success = ptyManager.resizeSession(sessionId, cols, rows);
+    return { success };
+  } catch (error) {
+    console.error('Error resizing PTY:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Uccidi una sessione PTY
+ipcMain.handle('pty-kill', async (event, sessionId) => {
+  try {
+    const success = ptyManager.killSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error killing PTY:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Pulisce una sessione PTY (comando clear)
+ipcMain.handle('pty-clear', async (event, sessionId) => {
+  try {
+    const success = ptyManager.clearSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error clearing PTY:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ottieni l'output di una sessione PTY
+ipcMain.handle('pty-get-output', async (event, sessionId, fromIndex) => {
+  try {
+    const output = ptyManager.getSessionOutput(sessionId, fromIndex);
+    return { success: true, output };
+  } catch (error) {
+    console.error('Error getting PTY output:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Esegui un comando singolo con PTY
+ipcMain.handle('pty-run-command', async (event, command, options = {}) => {
+  try {
+    // Aggiorna la working directory se necessario
+    if (options.cwd) {
+      currentWorkingDirectory = options.cwd;
+    }
+    
+    const result = await ptyManager.runCommand(command, {
+      ...options,
+      cwd: currentWorkingDirectory
+    });
+    
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Error running PTY command:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      output: '',
+      exitCode: 1
+    };
+  }
+});
+
+// Ottieni lista delle sessioni attive
+ipcMain.handle('pty-get-sessions', async (event) => {
+  try {
+    const sessions = ptyManager.getActiveSessions();
+    return { success: true, sessions };
+  } catch (error) {
+    console.error('Error getting PTY sessions:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ===== FINE NUOVO SISTEMA PTY =====
 
 // Handler speciale per comandi che richiedono input interattivo (come password)
 ipcMain.handle('run-interactive-command', async (event, command) => {
