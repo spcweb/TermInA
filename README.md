@@ -1,8 +1,16 @@
 # Electron Terminal Emulator
 
-# Termina 0.2 Beta 🚀
+<p align="center">
+  <img src="assets/logo.svg" alt="Termina logo" width="140" />
+  <h2>Termina — Modern terminal emulator with AI integration</h2>
+  
+  <p><strong>0.2 Beta 🚀</strong></p>
 
-Modern terminal emulator with AI integration - Inspired by Warp's sleek design
+  <details>
+    <summary><strong>Versione</strong></summary>
+    <p>v0.2 Beta</p>
+  </details>
+</p>
 
 ⚠️ Warning: This software is still in Beta version 0.2. Some features may be unstable.
 
