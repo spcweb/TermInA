@@ -459,102 +459,7 @@
       }
     }
     
-    // Function to save all settings
-    async function saveAllSettings() {
-      console.log('Saving settings...');
-      
-      const saveBtn = document.getElementById('save-btn');
-      const originalText = saveBtn.innerHTML;
-      saveBtn.innerHTML = '💾 Salvando...';
-      saveBtn.disabled = true;
-      
-      try {
-        // Raccogli tutti i valori
-        const newConfig = {
-          window: {
-            width: parseInt(getElementValue('window-width')) || 1200,
-            height: parseInt(getElementValue('window-height')) || 800,
-            transparency: getElementValue('transparency', 'checkbox'),
-            vibrancy: getElementValue('vibrancy') || 'dark'
-          },
-          theme: {
-            name: getElementValue('theme-name') || 'warp-dark',
-            background: getElementValue('color-background') || '#1e2124',
-            foreground: getElementValue('color-foreground') || '#ffffff',
-            cursor: getElementValue('color-cursor') || '#00ff00',
-            accent: getElementValue('color-accent') || '#00d4aa',
-            backgroundBlur: getElementValue('background-blur', 'checkbox')
-          },
-          terminal: {
-            fontSize: parseInt(getElementValue('font-size')) || 14,
-            fontFamily: getElementValue('font-family') || 'Monaco',
-            lineHeight: parseFloat(getElementValue('line-height')) || 1.4,
-            cursorStyle: getElementValue('cursor-style') || 'block',
-            cursorBlink: getElementValue('cursor-blink', 'checkbox'),
-            scrollback: parseInt(getElementValue('scrollback')) || 1000,
-            bellSound: getElementValue('bell-sound', 'checkbox')
-          },
-          ai: {
-            provider: getElementValue('ai-provider') || 'gemini',
-            autoExecute: getElementValue('ai-auto-execute', 'checkbox'),
-            contextLines: parseInt(getElementValue('ai-context-lines')) || 10,
-            gemini: {
-              apiKey: getElementValue('gemini-api-key') || '',
-              model: getElementValue('gemini-model') || 'gemini-2.5-flash'
-            },
-            lmStudio: {
-              endpoint: getElementValue('lm-studio-endpoint') || 'http://localhost:1234/v1',
-              model: getElementValue('lm-studio-model') || 'local-model',
-              apiKey: getElementValue('lm-studio-api-key') || 'lm-studio'
-            },
-            ollama: {
-              endpoint: getElementValue('ollama-endpoint') || 'http://localhost:11434',
-              model: getElementValue('ollama-model') || 'llama3.2',
-              apiKey: getElementValue('ollama-api-key') || ''
-            },
-            openai: {
-              apiKey: getElementValue('openai-api-key') || '',
-              model: getElementValue('openai-model') || 'gpt-3.5-turbo',
-              endpoint: 'https://api.openai.com/v1'
-            }
-          }
-        };
-        
-        console.log('Config da salvare:', newConfig);
-        
-        // Salva tramite API
-        if (window.api && window.api.saveConfig) {
-          await window.api.saveConfig(newConfig);
-          console.log('Impostazioni salvate con successo!');
-          
-          // Feedback di successo
-          saveBtn.innerHTML = '✅ Salvato!';
-          saveBtn.style.background = '#4CAF50';
-          
-          setTimeout(() => {
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
-            saveBtn.style.background = '';
-          }, 2000);
-          
-        } else {
-          throw new Error('saveConfig API not available');
-        }
-        
-      } catch (error) {
-        console.error('Error saving:', error);
-        
-        // Error feedback
-        saveBtn.innerHTML = '❌ Error';
-        saveBtn.style.background = '#f44336';
-        
-        setTimeout(() => {
-          saveBtn.innerHTML = originalText;
-          saveBtn.disabled = false;
-          saveBtn.style.background = '';
-        }, 2000);
-      }
-    }
+    // Funzione di salvataggio rimossa - ora gestita da SettingsManager
     
     // Helper function to get values
     function getElementValue(id, type = 'value') {
@@ -588,15 +493,8 @@
         console.log('Listener close button aggiunto');
       }
       
-      // Setup pulsante salva
-      const saveBtn = document.getElementById('save-btn');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', function() {
-          console.log('Pulsante salva cliccato');
-          saveAllSettings();
-        });
-        console.log('Listener save button aggiunto');
-      }
+      // Setup pulsante salva - gestito da SettingsManager
+      // Il listener viene aggiunto automaticamente dalla classe SettingsManager
       
       // Setup pulsante reset
       const resetBtn = document.getElementById('reset-btn');

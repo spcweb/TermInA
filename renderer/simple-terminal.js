@@ -2801,25 +2801,32 @@ AI Commands:
         // Crea un elemento di suggerimento comando stile Warp
         const suggestionDiv = document.createElement('div');
         suggestionDiv.className = 'ai-command-suggestion';
+        
+        // Genera un ID unico per questo suggerimento
+        const suggestionId = 'suggestion_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Salva il comando in un attributo data per evitare problemi con caratteri speciali
+        suggestionDiv.setAttribute('data-command', command);
+        
         suggestionDiv.innerHTML = `
             <div class="suggestion-header">
                 <span class="suggestion-icon">💡</span>
                 <span class="suggestion-text">Suggested command:</span>
             </div>
             <div class="suggested-command">
-                <code>${command}</code>
+                <code>${this.escapeHtml(command)}</code>
             </div>
             <div class="suggestion-actions">
-                <button class="btn-execute" onclick="terminal.executeAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-execute" data-suggestion-id="${suggestionId}">
                     ✅ Esegui
                 </button>
-                <button class="btn-copy" onclick="terminal.copyAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-copy" data-suggestion-id="${suggestionId}">
                     📋 Copia
                 </button>
-                <button class="btn-edit" onclick="terminal.editAISuggestion('${command.replace(/'/g, "\\'")}')">
+                <button class="btn-edit" data-suggestion-id="${suggestionId}">
                     ✏️ Modifica
                 </button>
-                <button class="btn-dismiss" onclick="terminal.dismissAISuggestion(this.closest('.ai-command-suggestion'))">
+                <button class="btn-dismiss" data-suggestion-id="${suggestionId}">
                     ❌ Ignora
                 </button>
             </div>
@@ -2828,8 +2835,59 @@ AI Commands:
         this.outputElement.appendChild(suggestionDiv);
         this.scrollToBottom();
         
+        // Aggiungi event listeners per i bottoni
+        this.attachSuggestionEventListeners(suggestionDiv, suggestionId);
+        
         // Aggiungi gli stili se non esistono già
         this.addSuggestionStyles();
+    }
+
+    // Metodo helper per escape HTML
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Attacca event listeners per i bottoni di suggerimento
+    attachSuggestionEventListeners(suggestionDiv, suggestionId) {
+        const command = suggestionDiv.getAttribute('data-command');
+        
+        // Bottone Esegui
+        const executeBtn = suggestionDiv.querySelector('.btn-execute');
+        if (executeBtn) {
+            executeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.executeAISuggestion(command);
+            });
+        }
+        
+        // Bottone Copia
+        const copyBtn = suggestionDiv.querySelector('.btn-copy');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.copyAISuggestion(command);
+            });
+        }
+        
+        // Bottone Modifica
+        const editBtn = suggestionDiv.querySelector('.btn-edit');
+        if (editBtn) {
+            editBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.editAISuggestion(command);
+            });
+        }
+        
+        // Bottone Ignora
+        const dismissBtn = suggestionDiv.querySelector('.btn-dismiss');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.dismissAISuggestion(suggestionDiv);
+            });
+        }
     }
 
     executeAISuggestion(command) {

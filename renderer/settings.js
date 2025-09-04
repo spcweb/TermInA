@@ -527,7 +527,15 @@ class SettingsManager {
     }
 
     async saveSettings() {
+        const saveBtn = document.getElementById('save-btn');
+        const originalText = saveBtn.innerHTML;
+        
         try {
+            // Mostra stato "saving"
+            saveBtn.innerHTML = '💾 Saving...';
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#2196F3';
+            
             const formData = this.gatherFormData();
             console.log('Saving settings:', formData);
 
@@ -535,15 +543,46 @@ class SettingsManager {
             const success = await window.electronAPI.saveConfig(formData);
             
             if (success) {
+                // Successo
+                saveBtn.innerHTML = '✅ Saved!';
+                saveBtn.style.background = '#4CAF50';
                 this.showNotification('Settings saved successfully!', 'success');
                 // Invia un messaggio alla finestra principale per applicare le modifiche
                 window.electronAPI.sendMessage('settings-saved', formData);
+                
+                // Ripristina il pulsante dopo 2 secondi
+                setTimeout(() => {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '';
+                }, 2000);
             } else {
+                // Errore di salvataggio
+                saveBtn.innerHTML = '❌ Error';
+                saveBtn.style.background = '#f44336';
                 this.showNotification('Error saving settings', 'error');
+                
+                // Ripristina il pulsante dopo 2 secondi
+                setTimeout(() => {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '';
+                }, 2000);
             }
         } catch (error) {
             console.error('Error saving:', error);
+            
+            // Errore di connessione/API
+            saveBtn.innerHTML = '❌ Error';
+            saveBtn.style.background = '#f44336';
             this.showNotification('Error saving settings', 'error');
+            
+            // Ripristina il pulsante dopo 2 secondi
+            setTimeout(() => {
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+                saveBtn.style.background = '';
+            }, 2000);
         }
     }
 
@@ -587,7 +626,7 @@ class SettingsManager {
 
         document.body.appendChild(notification);
 
-        // Rimuovi dopo 3 secondi
+        // Rimuovi dopo 1.5 secondi
         setTimeout(() => {
             notification.style.opacity = '0';
             notification.style.transform = 'translateX(100%)';
@@ -596,7 +635,7 @@ class SettingsManager {
                     notification.parentNode.removeChild(notification);
                 }
             }, 300);
-        }, 3000);
+        }, 1000);
     }
 
     async testAIConnection(provider) {
