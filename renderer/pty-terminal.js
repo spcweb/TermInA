@@ -1,14 +1,18 @@
 class PTYTerminal {
     constructor(terminalInstance) {
+        console.log('PTYTerminal: Constructor called');
         this.terminal = terminalInstance;
         this.sessionId = null;
         this.isActive = false;
         this.outputBuffer = '';
         this.lastOutputIndex = 0;
+        this.lastOutputTimestamp = 0;
         this.dataHandler = null;
         this.exitHandler = null;
         this.updateInterval = null;
         this.currentCommand = '';
+        this.isExecuting = false;
+        console.log('PTYTerminal: Constructor completed');
     }
 
     async startSession() {
@@ -17,12 +21,14 @@ class PTYTerminal {
                 await this.stopSession();
             }
 
+            console.log('PTY starting new session...');
             const result = await window.electronAPI.ptyCreateSession();
+            console.log('PTY create session result:', result);
             if (result.success) {
                 this.sessionId = result.sessionId;
                 this.isActive = true;
                 this.startDataPolling();
-                console.log(`PTY session started: ${this.sessionId}`);
+                console.log(`PTY session started: ${this.sessionId}, isActive: ${this.isActive}`);
                 return true;
             } else {
                 console.error('Failed to create PTY session:', result.error);
@@ -37,6 +43,7 @@ class PTYTerminal {
     async stopSession() {
         try {
             if (this.sessionId && this.isActive) {
+                console.log(`PTY stopping session ${this.sessionId}`);
                 await window.electronAPI.ptyKill(this.sessionId);
                 this.stopDataPolling();
                 this.isActive = false;
@@ -53,33 +60,68 @@ class PTYTerminal {
             clearInterval(this.updateInterval);
         }
 
+        console.log('PTYTerminal: Starting enhanced data polling...');
+        // Polling più frequente per output dinamici come npm install
         this.updateInterval = setInterval(async () => {
-            if (!this.isActive || !this.sessionId) return;
+            if (!this.isActive || !this.sessionId) {
+                console.log(`PTY polling: session not active (isActive: ${this.isActive}, sessionId: ${this.sessionId})`);
+                return;
+            }
 
             try {
-                const result = await window.electronAPI.ptyGetOutput(this.sessionId, this.lastOutputIndex);
-                if (result.success && result.output) {
+                // Usa l'output immediato per una risposta più veloce
+                const result = await window.electronAPI.ptyGetImmediateOutput(this.sessionId, this.lastOutputTimestamp);
+                if (result.success && result.hasNewData && result.output) {
                     const newData = result.output;
                     if (newData.length > 0) {
+                        console.log('PTY polling got new data:', newData.substring(0, 100) + (newData.length > 100 ? '...' : ''));
                         this.outputBuffer += newData;
                         this.lastOutputIndex = this.outputBuffer.length;
+                        this.lastOutputTimestamp = result.lastTimestamp;
                         this.handleNewData(newData);
                     }
+                } else if (result.success && !result.hasNewData) {
+                    // Debug: log quando non ci sono nuovi dati (meno frequente)
+                    if (Math.random() < 0.01) { // Solo 1% delle volte
+                        console.log('PTY polling: no new data');
+                    }
+                } else if (!result.success) {
+                    console.log('PTY polling: result not successful:', result);
                 }
             } catch (error) {
                 console.error('Error polling PTY output:', error);
             }
-        }, 100); // Poll ogni 100ms per responsività
+        }, 50); // Poll ogni 50ms per bilanciare performance e responsività
+        console.log('PTYTerminal: Enhanced data polling started');
     }
 
     stopDataPolling() {
         if (this.updateInterval) {
+            console.log('PTYTerminal: Stopping data polling...');
             clearInterval(this.updateInterval);
             this.updateInterval = null;
+            console.log('PTYTerminal: Data polling stopped');
+        }
+    }
+
+    async closeSession() {
+        if (this.sessionId) {
+            try {
+                console.log(`PTYTerminal: Closing session ${this.sessionId}`);
+                await window.electronAPI.ptyClose(this.sessionId);
+                this.sessionId = null;
+                this.isActive = false;
+                console.log('PTYTerminal: Session closed');
+            } catch (error) {
+                console.error('Error closing PTY session:', error);
+            }
         }
     }
 
     handleNewData(data) {
+        // Debug: log dell'output ricevuto
+        console.log('PTY received data:', data.substring(0, 200) + (data.length > 200 ? '...' : ''));
+        
         // Processa l'output del PTY
         const lines = data.split('\n');
         
@@ -95,17 +137,23 @@ class PTYTerminal {
             // Se è l'ultima linea e non termina con \n, potrebbe essere incompleta
             if (i === lines.length - 1 && !data.endsWith('\n') && line.length > 0) {
                 // Aggiorna la linea corrente invece di crearne una nuova
+                console.log('PTY updating current line:', line);
                 this.terminal.updateCurrentLine(line);
             } else if (line.length > 0 || i < lines.length - 1) {
                 // Aggiungi una nuova linea completa
+                console.log('PTY adding output line:', line);
                 this.terminal.addOutput(line);
             }
         }
 
         // Controlla se il comando è completato (presenza di prompt)
         if (this.isPromptVisible(data)) {
+            console.log('PTY command completed, prompt detected');
             this.onCommandComplete();
         }
+        
+        // Forza l'aggiornamento del display per output dinamici
+        this.terminal.forceDisplayUpdate();
     }
 
     isPasswordPrompt(data) {
@@ -132,14 +180,33 @@ class PTYTerminal {
             />\s*$/m,            // Prompt PowerShell/Windows
             /\#\s*$/m,           // Prompt root
             /❯\s*$/m,            // Prompt zsh moderno
-            /➜\s+.*\s+$/m        // Prompt oh-my-zsh
+            /➜\s+.*\s+$/m,       // Prompt oh-my-zsh
+            /\n\$\s*$/m,         // Prompt con newline (nostro formato)
+            /\$\s*$/m            // Prompt con spazio dopo $ (nostro formato)
         ];
         
-        return promptPatterns.some(pattern => pattern.test(data));
+        const hasPrompt = promptPatterns.some(pattern => pattern.test(data));
+        
+        // Debug: log per capire cosa sta succedendo
+        if (data.includes('$')) {
+            console.log('PTY isPromptVisible check:', {
+                data: data.substring(data.length - 50), // Ultimi 50 caratteri
+                hasPrompt: hasPrompt,
+                patterns: promptPatterns.map((p, i) => ({ index: i, matches: p.test(data) }))
+            });
+        }
+        
+        return hasPrompt;
     }
 
     onCommandComplete() {
         this.currentCommand = '';
+        this.isExecuting = false;
+        
+        // Chiudi la sessione PTY e ferma il polling
+        this.stopDataPolling();
+        this.closeSession();
+        
         this.terminal.onPTYCommandComplete();
     }
 
@@ -151,7 +218,10 @@ class PTYTerminal {
 
         try {
             this.currentCommand = command;
-            const result = await window.electronAPI.ptyWrite(this.sessionId, command + '\r');
+            this.isExecuting = true;
+            console.log(`PTY sending command: ${command}`);
+            const result = await window.electronAPI.ptyWrite(this.sessionId, command + '\n');
+            console.log(`PTY command send result:`, result);
             return result.success;
         } catch (error) {
             console.error('Error sending command to PTY:', error);
@@ -181,6 +251,36 @@ class PTYTerminal {
     async sendEOF() {
         // Invia Ctrl+D
         return await this.sendInput('\x04');
+    }
+
+    async sendKill() {
+        // Invia Ctrl+Z (sospende il processo)
+        return await this.sendInput('\x1a');
+    }
+
+    async sendQuit() {
+        // Invia Ctrl+\ (termina il processo)
+        return await this.sendInput('\x1c');
+    }
+
+    async sendBackspace() {
+        // Invia backspace
+        return await this.sendInput('\x08');
+    }
+
+    async sendTab() {
+        // Invia tab per autocompletamento
+        return await this.sendInput('\x09');
+    }
+
+    async sendEnter() {
+        // Invia enter
+        return await this.sendInput('\r');
+    }
+
+    async sendEscape() {
+        // Invia escape
+        return await this.sendInput('\x1b');
     }
 
     async clear() {
@@ -221,6 +321,7 @@ class PTYTerminal {
             isActive: this.isActive,
             sessionId: this.sessionId,
             currentCommand: this.currentCommand,
+            isExecuting: this.isExecuting,
             bufferSize: this.outputBuffer.length
         };
     }

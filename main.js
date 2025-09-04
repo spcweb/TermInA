@@ -226,39 +226,92 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       'vim', 'vi', 'nano', 'emacs',           // Editor
       'htop', 'top', 'watch',                 // Monitor in tempo reale
       'git clone', 'git pull', 'git push',    // Git con progress
-      'npm install', 'npm run', 'yarn install', // NPM/Yarn
-      'pip install', 'pip download',          // Python
-      'brew install', 'brew upgrade',         // Homebrew
-      'yay', 'pacman', 'apt-get', 'apt',     // Package managers Linux
+      'npm install', 'npm run', 'yarn install', 'yarn add', 'yarn remove', // NPM/Yarn
+      'pip install', 'pip download', 'pip uninstall', // Python
+      'brew install', 'brew upgrade', 'brew uninstall', // Homebrew
+      'yay', 'pacman', 'apt-get', 'apt', 'apt install', 'apt remove', // Package managers Linux
       'wget', 'curl',                         // Download con progress
       'rsync', 'scp',                         // Trasferimenti
       'ssh', 'telnet',                        // Connessioni remote
-      'docker run', 'docker build',          // Docker
-      'make', 'cmake',                        // Build systems
-      'node', 'python', 'python3'            // REPL interattivi
+      'docker run', 'docker build', 'docker pull', 'docker push', // Docker
+      'make', 'cmake', 'gcc', 'g++', 'clang', // Build systems
+      'node', 'python', 'python3', 'ruby', 'perl', // REPL interattivi
+      'composer install', 'composer update',  // PHP Composer
+      'gem install', 'gem update',            // Ruby Gems
+      'cargo build', 'cargo run', 'cargo install', // Rust Cargo
+      'go build', 'go run', 'go install',     // Go
+      'mvn install', 'mvn compile', 'gradle build' // Java build tools
     ];
 
     // Verifica se il comando dovrebbe usare PTY
-    const shouldUsePty = ptyCommands.some(cmd => 
-      trimmed.startsWith(cmd) || 
-      trimmed.includes(cmd + ' ')
-    ) || 
+    const shouldUsePty = ptyCommands.some(cmd => {
+      // Controlla se il comando inizia con il comando PTY
+      if (trimmed.startsWith(cmd)) return true;
+      
+      // Controlla se il comando contiene il comando PTY seguito da spazio
+      if (trimmed.includes(cmd + ' ')) return true;
+      
+      // Controlli speciali per comandi specifici
+      if (cmd === 'npm install' && trimmed.includes('npm install')) return true;
+      if (cmd === 'yarn install' && trimmed.includes('yarn install')) return true;
+      if (cmd === 'pip install' && trimmed.includes('pip install')) return true;
+      
+      return false;
+    }) || 
     trimmed.includes('curl -fsSL') && trimmed.includes('install.sh') ||
     trimmed.includes('|') || // Pipes potrebbero essere interattivi
-    (trimmed.includes('&&') && !cdMatch); // Comandi concatenati
+    (trimmed.includes('&&') && !cdMatch) || // Comandi concatenati
+    trimmed.includes('npm ') || // Tutti i comandi npm
+    trimmed.includes('yarn ') || // Tutti i comandi yarn
+    trimmed.includes('pip ') || // Tutti i comandi pip
+    trimmed.includes('brew ') || // Tutti i comandi brew
+    trimmed.includes('apt ') || // Tutti i comandi apt
+    trimmed.includes('pacman ') || // Tutti i comandi pacman
+    trimmed.includes('yay ') || // Tutti i comandi yay
+    trimmed.includes('docker ') || // Tutti i comandi docker
+    trimmed.includes('git ') || // Tutti i comandi git
+    trimmed.includes('make ') || // Tutti i comandi make
+    trimmed.includes('cmake ') || // Tutti i comandi cmake
+    trimmed.includes('cargo ') || // Tutti i comandi cargo
+    trimmed.includes('go ') || // Tutti i comandi go
+    trimmed.includes('mvn ') || // Tutti i comandi maven
+    trimmed.includes('gradle '); // Tutti i comandi gradle
 
     if (shouldUsePty) {
       try {
         console.log(`Using PTY for command: ${command}`);
+        // Determina il timeout basato sul tipo di comando
+        let timeout = 120000; // Default 2 minuti
+        if (trimmed.includes('npm install') || trimmed.includes('yarn install')) {
+          timeout = 600000; // 10 minuti per installazioni npm/yarn
+        } else if (trimmed.includes('pip install') || trimmed.includes('brew install')) {
+          timeout = 300000; // 5 minuti per installazioni pip/brew
+        } else if (trimmed.includes('docker build') || trimmed.includes('make')) {
+          timeout = 1800000; // 30 minuti per build complesse
+        } else if (trimmed.includes('git clone') || trimmed.includes('wget') || trimmed.includes('curl')) {
+          timeout = 300000; // 5 minuti per download
+        }
+        
         const ptyResult = await ptyManager.runCommand(command, { 
           cwd: currentWorkingDirectory,
-          timeout: 120000 // 2 minuti per comandi interattivi come yay
+          timeout: timeout
         });
         
         if (ptyResult.success) {
           resolve(ptyResult.output || '[Success] Command completed');
         } else {
-          resolve(`[Error] Command failed with exit code ${ptyResult.exitCode}\n${ptyResult.output}`);
+          let errorMessage = `[Error] Command failed`;
+          if (ptyResult.error) {
+            errorMessage += `: ${ptyResult.error}`;
+          } else if (ptyResult.signal) {
+            errorMessage += ` (terminated by signal: ${ptyResult.signal})`;
+          } else if (ptyResult.exitCode !== 0) {
+            errorMessage += ` with exit code ${ptyResult.exitCode}`;
+          }
+          if (ptyResult.output) {
+            errorMessage += `\n${ptyResult.output}`;
+          }
+          resolve(errorMessage);
         }
       } catch (error) {
         console.error('PTY command failed, falling back to exec:', error.message);
@@ -296,8 +349,9 @@ ipcMain.handle('get-cwd', async () => currentWorkingDirectory);
 // Crea una nuova sessione PTY
 ipcMain.handle('pty-create-session', async (event) => {
   try {
+    console.log('Main: Creating new PTY session...');
     const session = ptyManager.createSession();
-    console.log(`PTY session created: ${session.id}`);
+    console.log(`Main: PTY session created: ${session.id}, type: ${session.type}`);
     return { success: true, sessionId: session.id };
   } catch (error) {
     console.error('Error creating PTY session:', error);
@@ -308,7 +362,9 @@ ipcMain.handle('pty-create-session', async (event) => {
 // Invia dati a una sessione PTY
 ipcMain.handle('pty-write', async (event, sessionId, data) => {
   try {
+    console.log(`Main: Writing to PTY session ${sessionId}:`, data.substring(0, 100) + (data.length > 100 ? '...' : ''));
     const success = ptyManager.writeToSession(sessionId, data);
+    console.log(`Main: PTY write result:`, success);
     return { success };
   } catch (error) {
     console.error('Error writing to PTY:', error);
@@ -338,6 +394,17 @@ ipcMain.handle('pty-kill', async (event, sessionId) => {
   }
 });
 
+// Chiudi una sessione PTY
+ipcMain.handle('pty-close', async (event, sessionId) => {
+  try {
+    const success = ptyManager.closeSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error closing PTY:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Pulisce una sessione PTY (comando clear)
 ipcMain.handle('pty-clear', async (event, sessionId) => {
   try {
@@ -357,6 +424,29 @@ ipcMain.handle('pty-get-output', async (event, sessionId, fromIndex) => {
   } catch (error) {
     console.error('Error getting PTY output:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// Ottieni l'output immediato di una sessione PTY (per output dinamici)
+ipcMain.handle('pty-get-immediate-output', async (event, sessionId, fromTimestamp) => {
+  try {
+    const session = ptyManager.getSession(sessionId);
+    if (session && session.isActive) {
+      const output = ptyManager.getSessionOutputFromBuffer(sessionId, fromTimestamp);
+      const lastTimestamp = ptyManager.getLastOutputTimestamp(sessionId);
+      console.log(`Main: pty-get-immediate-output for session ${sessionId}, fromTimestamp: ${fromTimestamp}, output length: ${output.length}`);
+      return { 
+        success: true, 
+        output, 
+        hasNewData: output.length > 0,
+        lastTimestamp: lastTimestamp
+      };
+    }
+    console.log(`Main: pty-get-immediate-output for session ${sessionId} - session not found or inactive`);
+    return { success: false, output: '', hasNewData: false, lastTimestamp: 0 };
+  } catch (error) {
+    console.error('Error getting immediate PTY output:', error);
+    return { success: false, error: error.message, output: '', hasNewData: false, lastTimestamp: 0 };
   }
 });
 

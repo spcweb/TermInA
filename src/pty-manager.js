@@ -1,175 +1,47 @@
 const { spawn } = require('child_process');
 const os = require('os');
+const { EventEmitter } = require('events');
 
-class PTYManager {
+class PTYManager extends EventEmitter {
     constructor() {
+        super();
         this.sessions = new Map();
         this.nextSessionId = 1;
-        this.isAvailable = true; // Sarà true se PTY è disponibile
+        this.isAvailable = true;
         
-        try {
-            // Test se possiamo usare node-pty
-            require('node-pty');
-            this.usePty = true;
-        } catch (error) {
-            console.log('node-pty not available, using fallback PTY implementation');
-            this.usePty = false;
-        }
+        console.log('PTY Manager: Using enhanced child_process implementation');
     }
 
     createSession(sessionId = null) {
         const id = sessionId || this.nextSessionId++;
-        
-        if (this.usePty) {
-            return this.createPtySession(id);
-        } else {
-            return this.createFallbackSession(id);
-        }
+        return this.createEnhancedSession(id);
     }
 
-    createPtySession(id) {
-        const pty = require('node-pty');
+    createEnhancedSession(id) {
+        console.log(`PTY Manager creating enhanced session ${id}`);
         
-        // Determina la shell di default del sistema
-        const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'bash');
-        
-        // Crea un nuovo processo PTY
-        const ptyProcess = pty.spawn(shell, [], {
-            name: 'xterm-256color',
-            cols: 80,
-            rows: 24,
-            cwd: process.cwd(),
-            env: {
-                ...process.env,
-                TERM: 'xterm-256color',
-                COLORTERM: 'truecolor',
-                FORCE_COLOR: '1'
-            }
-        });
-
-        // Crea un oggetto sessione
+        // Per ora, creiamo una sessione "virtuale" che usa runCommand
+        // Questo evita i problemi con le shell interattive
         const session = {
             id: id,
-            pty: ptyProcess,
+            process: null, // Non usiamo un processo persistente
             isActive: true,
             lastActivity: Date.now(),
+            lastOutputTimestamp: Date.now(), // Timestamp per il polling
             buffer: '',
+            outputBuffer: [],
             onData: null,
             onExit: null,
-            type: 'pty'
-        };
-
-        // Handler per i dati in output dal PTY
-        ptyProcess.onData((data) => {
-            session.buffer += data;
-            session.lastActivity = Date.now();
-            if (session.onData) {
-                session.onData(data);
-            }
-        });
-
-        // Handler per la chiusura del PTY
-        ptyProcess.onExit(({ exitCode, signal }) => {
-            session.isActive = false;
-            if (session.onExit) {
-                session.onExit({ exitCode, signal });
-            }
-            this.sessions.delete(id);
-        });
-
-        this.sessions.set(id, session);
-        return session;
-    }
-
-    createFallbackSession(id) {
-        // Implementazione fallback usando spawn normale con tty
-        const shell = process.env.SHELL || (os.platform() === 'win32' ? 'cmd' : 'bash');
-        
-        // Inizia con una shell interattiva
-        const childProcess = spawn(shell, [], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: {
-                ...process.env,
-                TERM: 'xterm-256color',
-                COLORTERM: 'truecolor',
-                FORCE_COLOR: '1',
-                // Simula un TTY
-                TERM_PROGRAM: 'TermInA',
-                PS1: '\\u@\\h:\\w\\$ ',
-                // Importante per sudo
-                SUDO_ASKPASS: undefined,
-                SSH_ASKPASS: undefined
-            },
-            cwd: process.cwd(),
-            // Prova a simulare un terminale
-            detached: false
-        });
-
-        const session = {
-            id: id,
-            pty: childProcess,
-            isActive: true,
-            lastActivity: Date.now(),
-            buffer: '',
-            onData: null,
-            onExit: null,
-            type: 'fallback',
+            type: 'enhanced',
             waitingForPassword: false,
-            lastPrompt: ''
+            lastPrompt: '',
+            commandHistory: [],
+            currentCommand: '',
+            isExecuting: false,
+            isReady: true // Sempre pronta per comandi
         };
-
-        // Handler per stdout
-        childProcess.stdout.on('data', (data) => {
-            const text = data.toString();
-            session.buffer += text;
-            session.lastActivity = Date.now();
-            
-            // Controlla se è richiesta una password
-            if (this.isPasswordPrompt(text)) {
-                session.waitingForPassword = true;
-                session.lastPrompt = text;
-            }
-            
-            if (session.onData) {
-                session.onData(text);
-            }
-        });
-
-        // Handler per stderr
-        childProcess.stderr.on('data', (data) => {
-            const text = data.toString();
-            session.buffer += text;
-            session.lastActivity = Date.now();
-            
-            // Controlla se è richiesta una password anche in stderr
-            if (this.isPasswordPrompt(text)) {
-                session.waitingForPassword = true;
-                session.lastPrompt = text;
-            }
-            
-            if (session.onData) {
-                session.onData(text);
-            }
-        });
-
-        // Handler per la chiusura
-        childProcess.on('close', (exitCode, signal) => {
-            session.isActive = false;
-            if (session.onExit) {
-                session.onExit({ exitCode, signal });
-            }
-            this.sessions.delete(id);
-        });
-
-        // Handler per errori
-        childProcess.on('error', (error) => {
-            console.error('Fallback PTY error:', error);
-            session.isActive = false;
-            if (session.onExit) {
-                session.onExit({ exitCode: 1, signal: null, error });
-            }
-            this.sessions.delete(id);
-        });
+        
+        console.log(`PTY Manager: Virtual session created for session ${id}`);
 
         this.sessions.set(id, session);
         return session;
@@ -182,25 +54,100 @@ class PTYManager {
     writeToSession(sessionId, data) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
-            if (session.type === 'pty') {
-                session.pty.write(data);
+            console.log(`PTY Manager writing to session ${sessionId}:`, data.substring(0, 100) + (data.length > 100 ? '...' : ''));
+            
+            // Se è un comando completo, eseguilo direttamente
+            if (data.includes('\r') || data.includes('\n')) {
+                const command = data.replace(/[\r\n]/g, '').trim();
+                console.log(`PTY Manager: Detected complete command: "${command}"`);
+                if (command) {
+                    session.commandHistory.push(command);
+                    session.currentCommand = command;
+                    session.isExecuting = true;
+                    
+                    console.log(`PTY Manager: Starting execution of command: "${command}"`);
+                    // Esegui il comando direttamente
+                    this.runCommand(command).then(result => {
+                        console.log(`PTY Manager: Command "${command}" completed with result:`, {
+                            success: true,
+                            outputLength: result.output ? result.output.length : 0,
+                            errorLength: result.stderr ? result.stderr.length : 0
+                        });
+                        // Simula l'output del comando
+                        const output = result.output || '';
+                        const errorOutput = result.stderr || '';
+                        const fullOutput = output + (errorOutput ? '\n' + errorOutput : '');
+                        
+                        if (fullOutput) {
+                            session.buffer += fullOutput;
+                            const timestamp = Date.now();
+                            session.outputBuffer.push({
+                                data: fullOutput,
+                                timestamp: timestamp,
+                                source: 'stdout'
+                            });
+                            session.lastOutputTimestamp = timestamp;
+                            
+                            if (session.onData) {
+                                session.onData(fullOutput);
+                            }
+                        }
+                        
+                        // Aggiungi un prompt finale per indicare che il comando è completato
+                        const promptOutput = '\n$ ';
+                        session.buffer += promptOutput;
+                        const promptTimestamp = Date.now();
+                        session.outputBuffer.push({
+                            data: promptOutput,
+                            timestamp: promptTimestamp,
+                            source: 'stdout'
+                        });
+                        session.lastOutputTimestamp = promptTimestamp;
+                        
+                        if (session.onData) {
+                            session.onData(promptOutput);
+                        }
+                        
+                        session.isExecuting = false;
+                        session.currentCommand = '';
+                        session.lastActivity = Date.now();
+                    }).catch(error => {
+                        const errorOutput = `Error: ${error.message}\n$ `;
+                        session.buffer += errorOutput;
+                        const errorTimestamp = Date.now();
+                        session.outputBuffer.push({
+                            data: errorOutput,
+                            timestamp: errorTimestamp,
+                            source: 'stderr'
+                        });
+                        session.lastOutputTimestamp = errorTimestamp;
+                        
+                        if (session.onData) {
+                            session.onData(errorOutput);
+                        }
+                        
+                        session.isExecuting = false;
+                        session.currentCommand = '';
+                        session.lastActivity = Date.now();
+                    });
+                }
             } else {
-                // Fallback: scrive a stdin
-                session.pty.stdin.write(data);
+                // Input normale (caratteri singoli, backspace, etc.)
+                // Per ora, semplicemente aggiorniamo l'attività
+                session.lastActivity = Date.now();
+                console.log(`PTY Manager: Received normal input for session ${sessionId}: "${data}"`);
             }
+            
             session.lastActivity = Date.now();
             return true;
         }
+        console.log(`PTY Manager: session ${sessionId} not found or inactive`);
         return false;
     }
 
     resizeSession(sessionId, cols, rows) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
-            if (session.type === 'pty') {
-                session.pty.resize(cols, rows);
-                return true;
-            }
             // Nel fallback non possiamo ridimensionare, ma torniamo true comunque
             return true;
         }
@@ -210,12 +157,19 @@ class PTYManager {
     killSession(sessionId) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
-            if (session.type === 'pty') {
-                session.pty.kill();
-            } else {
-                session.pty.kill('SIGTERM');
-            }
+            // Per sessioni virtuali, semplicemente le rimuoviamo
             this.sessions.delete(sessionId);
+            return true;
+        }
+        return false;
+    }
+
+    closeSession(sessionId) {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+            // Per sessioni virtuali, semplicemente le rimuoviamo
+            this.sessions.delete(sessionId);
+            console.log(`PTY Manager: Session ${sessionId} closed`);
             return true;
         }
         return false;
@@ -225,12 +179,8 @@ class PTYManager {
         const session = this.sessions.get(sessionId);
         if (session) {
             session.buffer = '';
-            // Invia comando clear
-            if (session.type === 'pty') {
-                session.pty.write('clear\r');
-            } else {
-                session.pty.stdin.write('clear\n');
-            }
+            session.outputBuffer = [];
+            // Per sessioni virtuali, non c'è bisogno di inviare comandi
             return true;
         }
         return false;
@@ -239,13 +189,69 @@ class PTYManager {
     executeCommand(sessionId, command) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
-            if (session.type === 'pty') {
-                // Aggiungi \r per simulare l'invio
-                session.pty.write(command + '\r');
-            } else {
-                // Per il fallback, aggiungi \n
-                session.pty.stdin.write(command + '\n');
-            }
+            session.currentCommand = command;
+            session.isExecuting = true;
+            session.commandHistory.push(command);
+            
+            // Esegui il comando direttamente
+            this.runCommand(command).then(result => {
+                const output = result.output || '';
+                const errorOutput = result.stderr || '';
+                const fullOutput = output + (errorOutput ? '\n' + errorOutput : '');
+                
+                if (fullOutput) {
+                    session.buffer += fullOutput;
+                    const timestamp = Date.now();
+                    session.outputBuffer.push({
+                        data: fullOutput,
+                        timestamp: timestamp,
+                        source: 'stdout'
+                    });
+                    session.lastOutputTimestamp = timestamp;
+                    
+                    if (session.onData) {
+                        session.onData(fullOutput);
+                    }
+                }
+                
+                // Aggiungi un prompt finale per indicare che il comando è completato
+                const promptOutput = '\n$ ';
+                session.buffer += promptOutput;
+                const promptTimestamp = Date.now();
+                session.outputBuffer.push({
+                    data: promptOutput,
+                    timestamp: promptTimestamp,
+                    source: 'stdout'
+                });
+                session.lastOutputTimestamp = promptTimestamp;
+                
+                if (session.onData) {
+                    session.onData(promptOutput);
+                }
+                
+                session.isExecuting = false;
+                session.currentCommand = '';
+                session.lastActivity = Date.now();
+            }).catch(error => {
+                const errorOutput = `Error: ${error.message}\n$ `;
+                session.buffer += errorOutput;
+                const errorTimestamp = Date.now();
+                session.outputBuffer.push({
+                    data: errorOutput,
+                    timestamp: errorTimestamp,
+                    source: 'stderr'
+                });
+                session.lastOutputTimestamp = errorTimestamp;
+                
+                if (session.onData) {
+                    session.onData(errorOutput);
+                }
+                
+                session.isExecuting = false;
+                session.currentCommand = '';
+                session.lastActivity = Date.now();
+            });
+            
             session.lastActivity = Date.now();
             return true;
         }
@@ -260,65 +266,142 @@ class PTYManager {
         return '';
     }
 
-    // Crea una sessione temporanea per un singolo comando
+    getSessionOutputFromBuffer(sessionId, fromTimestamp = 0) {
+        const session = this.sessions.get(sessionId);
+        if (session && session.outputBuffer) {
+            return session.outputBuffer
+                .filter(item => item.timestamp > fromTimestamp)
+                .map(item => item.data)
+                .join('');
+        }
+        return '';
+    }
+
+    getLastOutputTimestamp(sessionId) {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+            return session.lastOutputTimestamp || 0;
+        }
+        return 0;
+    }
+
+    // Crea una sessione temporanea per un singolo comando con gestione migliorata
     async runCommand(command, options = {}) {
         return new Promise((resolve, reject) => {
-            const session = this.createSession();
+            console.log(`PTY Manager: Running command: ${command}`);
+            
+            // Determina la shell e gli argomenti
+            const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
+            const args = ['-c', command];
+            
+            // Crea un processo dedicato per il comando
+            const childProcess = spawn(shell, args, {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: {
+                    ...process.env,
+                    TERM: 'xterm-256color',
+                    COLORTERM: 'truecolor',
+                    FORCE_COLOR: '1',
+                    TERM_PROGRAM: 'TermInA',
+                    // Per npm e altri package manager
+                    npm_config_progress: 'true',
+                    npm_config_loglevel: 'info',
+                    // Per evitare problemi con output buffering
+                    PYTHONUNBUFFERED: '1',
+                    NODE_NO_READLINE: '1'
+                },
+                cwd: options.cwd || process.cwd(),
+                detached: false
+            });
+            
             let output = '';
+            let errorOutput = '';
             let hasStarted = false;
             let commandCompleted = false;
             
-            const timeout = options.timeout || 30000; // 30 secondi di default
+            const timeout = options.timeout || 300000; // 5 minuti di default
             
             // Timer di timeout
             const timeoutTimer = setTimeout(() => {
                 if (!commandCompleted) {
-                    this.killSession(session.id);
-                    reject(new Error(`Command timed out after ${timeout}ms`));
+                    childProcess.kill('SIGTERM');
+                    reject(new Error(`Command timed out after ${timeout}ms. Output received: ${output.substring(0, 1000)}...`));
                 }
             }, timeout);
 
-            // Handler per i dati
-            session.onData = (data) => {
-                output += data;
+            // Handler per stdout
+            childProcess.stdout.on('data', (data) => {
+                const text = data.toString();
+                output += text;
+                hasStarted = true;
                 
-                // Se vediamo il prompt finale, il comando è completato
-                if (hasStarted && this.isPromptVisible(data)) {
-                    commandCompleted = true;
-                    clearTimeout(timeoutTimer);
-                    this.killSession(session.id);
-                    
-                    // Pulisce l'output rimuovendo il comando e il prompt finale
-                    const cleanOutput = this.cleanCommandOutput(output, command);
-                    resolve({
-                        success: true,
-                        output: cleanOutput,
-                        exitCode: 0
-                    });
+                // Debug: log dell'output per comandi npm install
+                if (command.includes('npm install') || command.includes('yarn install')) {
+                    console.log(`Command Output (${command}):`, text.substring(0, 200) + (text.length > 200 ? '...' : ''));
                 }
-            };
+            });
 
-            // Handler per l'uscita
-            session.onExit = ({ exitCode, signal }) => {
+            // Handler per stderr
+            childProcess.stderr.on('data', (data) => {
+                const text = data.toString();
+                errorOutput += text;
+                hasStarted = true;
+                
+                // Debug: log dell'output per comandi npm install
+                if (command.includes('npm install') || command.includes('yarn install')) {
+                    console.log(`Command Error (${command}):`, text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+                }
+            });
+
+            // Handler per la chiusura
+            childProcess.on('close', (exitCode, signal) => {
                 if (!commandCompleted) {
                     commandCompleted = true;
                     clearTimeout(timeoutTimer);
                     
+                    // Debug: log dell'uscita per comandi npm install
+                    if (command.includes('npm install') || command.includes('yarn install')) {
+                        console.log(`Command Exit (${command}): exitCode=${exitCode}, signal=${signal}, outputLength=${output.length}`);
+                    }
+                    
                     const cleanOutput = this.cleanCommandOutput(output, command);
+                    
+                    // Gestione specifica degli errori
+                    let errorMessage = '';
+                    if (signal) {
+                        errorMessage = `Process terminated by signal: ${signal}`;
+                    } else if (exitCode !== 0) {
+                        errorMessage = `Process exited with code: ${exitCode}`;
+                    }
+                    
                     resolve({
-                        success: exitCode === 0,
+                        success: exitCode === 0 && !signal,
                         output: cleanOutput,
                         exitCode: exitCode || 0,
-                        signal
+                        signal,
+                        error: errorMessage,
+                        stderr: errorOutput
                     });
                 }
-            };
+            });
 
-            // Aspetta che il PTY sia pronto e invia il comando
-            setTimeout(() => {
-                hasStarted = true;
-                this.executeCommand(session.id, command);
-            }, 100);
+            // Handler per errori
+            childProcess.on('error', (error) => {
+                if (!commandCompleted) {
+                    commandCompleted = true;
+                    clearTimeout(timeoutTimer);
+                    
+                    console.error(`Command error (${command}):`, error);
+                    
+                    resolve({
+                        success: false,
+                        output: output,
+                        exitCode: 1,
+                        error: error.message,
+                        stderr: errorOutput
+                    });
+                }
+            });
         });
     }
 
@@ -341,7 +424,6 @@ class PTYManager {
 
     // Verifica se l'output contiene un prompt
     isPromptVisible(data) {
-        // Pattern comuni per i prompt della shell
         const promptPatterns = [
             /\$\s*$/,           // Prompt bash/zsh standard
             /%\s*$/,            // Prompt zsh
@@ -358,8 +440,10 @@ class PTYManager {
     cleanCommandOutput(output, command) {
         let lines = output.split('\n');
         
-        // Rimuovi le linee che contengono il comando originale
-        lines = lines.filter(line => !line.includes(command));
+        // Rimuovi le linee che contengono il comando originale (ma non per comandi npm/yarn)
+        if (!command.includes('npm') && !command.includes('yarn') && !command.includes('pip')) {
+            lines = lines.filter(line => !line.includes(command));
+        }
         
         // Rimuovi le linee vuote all'inizio e alla fine
         while (lines.length > 0 && lines[0].trim() === '') {
@@ -377,7 +461,14 @@ class PTYManager {
             }
         }
         
-        return lines.join('\n');
+        const result = lines.join('\n');
+        
+        // Debug: log del risultato pulito per comandi npm install
+        if (command.includes('npm install') || command.includes('yarn install')) {
+            console.log(`Cleaned output (${command}):`, result.substring(0, 500) + (result.length > 500 ? '...' : ''));
+        }
+        
+        return result;
     }
 
     // Ottieni informazioni su tutte le sessioni attive
@@ -389,7 +480,9 @@ class PTYManager {
                     id: id,
                     lastActivity: session.lastActivity,
                     bufferSize: session.buffer.length,
-                    type: session.type
+                    type: session.type,
+                    currentCommand: session.currentCommand,
+                    isExecuting: session.isExecuting
                 });
             }
         }
@@ -417,8 +510,9 @@ class PTYManager {
     getStatus() {
         return {
             available: this.isAvailable,
-            usingPty: this.usePty,
-            activeSessions: this.sessions.size
+            usingPty: false,
+            activeSessions: this.sessions.size,
+            type: 'enhanced'
         };
     }
 }

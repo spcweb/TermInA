@@ -35,8 +35,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ptyWrite: (sessionId, data) => ipcRenderer.invoke('pty-write', sessionId, data),
   ptyResize: (sessionId, cols, rows) => ipcRenderer.invoke('pty-resize', sessionId, cols, rows),
   ptyKill: (sessionId) => ipcRenderer.invoke('pty-kill', sessionId),
+  ptyClose: (sessionId) => ipcRenderer.invoke('pty-close', sessionId),
   ptyClear: (sessionId) => ipcRenderer.invoke('pty-clear', sessionId),
   ptyGetOutput: (sessionId, fromIndex) => ipcRenderer.invoke('pty-get-output', sessionId, fromIndex),
+  ptyGetImmediateOutput: (sessionId, fromTimestamp) => ipcRenderer.invoke('pty-get-immediate-output', sessionId, fromTimestamp),
   ptyRunCommand: (command, options) => ipcRenderer.invoke('pty-run-command', command, options),
   ptyGetSessions: () => ipcRenderer.invoke('pty-get-sessions'),
   

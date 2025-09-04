@@ -30,20 +30,26 @@ class SimpleTerminal {
         this.loadingAnimationFrame = null;
         this.loadingDots = 0;
         this.commandTimeoutTimer = null;
+        this.isExecuting = false;
         this.ptyCommands = [
             'vim', 'vi', 'nano', 'emacs',           // Editor
             'htop', 'top', 'watch',                 // Monitor in tempo reale
             'yay', 'pacman', 'apt-get', 'apt',     // Package managers Linux
             'git clone', 'git pull', 'git push',    // Git con progress
-            'npm install', 'npm run', 'yarn install', // NPM/Yarn
-            'pip install', 'pip download',          // Python
-            'brew install', 'brew upgrade',         // Homebrew
+            'npm install', 'npm run', 'yarn install', 'yarn add', 'yarn remove', // NPM/Yarn
+            'pip install', 'pip download', 'pip uninstall', // Python
+            'brew install', 'brew upgrade', 'brew uninstall', // Homebrew
             'wget', 'curl',                         // Download con progress
             'rsync', 'scp',                         // Trasferimenti
             'ssh', 'telnet',                        // Connessioni remote
-            'docker run', 'docker build',          // Docker
-            'make', 'cmake',                        // Build systems
-            'node', 'python', 'python3'            // REPL interattivi
+            'docker run', 'docker build', 'docker pull', 'docker push', // Docker
+            'make', 'cmake', 'gcc', 'g++', 'clang', // Build systems
+            'node', 'python', 'python3', 'ruby', 'perl', // REPL interattivi
+            'composer install', 'composer update',  // PHP Composer
+            'gem install', 'gem update',            // Ruby Gems
+            'cargo build', 'cargo run', 'cargo install', // Rust Cargo
+            'go build', 'go run', 'go install',     // Go
+            'mvn install', 'mvn compile', 'gradle build' // Java build tools
         ];
         
         console.log('=== VALORI DEFAULT INIZIALIZZATI ===');
@@ -69,10 +75,11 @@ class SimpleTerminal {
 
     async initializePTY() {
         try {
+            console.log('SimpleTerminal: Initializing PTY Terminal...');
             this.ptyTerminal = new PTYTerminal(this);
-            console.log('PTY Terminal initialized');
+            console.log('SimpleTerminal: PTY Terminal initialized successfully');
         } catch (error) {
-            console.error('Failed to initialize PTY Terminal:', error);
+            console.error('SimpleTerminal: Failed to initialize PTY Terminal:', error);
             this.ptyModeEnabled = false;
         }
     }
@@ -292,6 +299,9 @@ class SimpleTerminal {
     }
 
     addOutput(text) {
+        // Debug: log dell'output aggiunto
+        console.log('SimpleTerminal addOutput:', text.substring(0, 100) + (text.length > 100 ? '...' : ''));
+        
         // Se arriva output normale dopo una sessione AI, chiudi la sessione corrente
         if (this.currentAIGroup) {
             // Aggiungi un marcatore di fine (opzionale, per ora solo reset)
@@ -1181,9 +1191,14 @@ class SimpleTerminal {
         }
 
         // Controlla se il comando dovrebbe usare PTY
-        if (this.shouldUsePTY(command)) {
+        const shouldUsePTY = this.shouldUsePTY(command);
+        console.log(`SimpleTerminal: shouldUsePTY(${command}) = ${shouldUsePTY}`);
+        
+        if (shouldUsePTY) {
+            console.log('SimpleTerminal: Using PTY execution');
             await this.executeWithPTY(command);
         } else {
+            console.log('SimpleTerminal: Using traditional execution');
             // Usa il sistema tradizionale per comandi semplici
             await this.executeWithTraditionalSystem(command);
         }
@@ -1214,29 +1229,90 @@ class SimpleTerminal {
             return false;
         }
 
+        // Usa PTY solo per comandi specifici che ne hanno bisogno
+        const ptyCommands = [
+            'npm install', 'npm run', 'yarn install', 'yarn add', 'yarn remove',
+            'pip install', 'pip download', 'pip uninstall',
+            'brew install', 'brew upgrade', 'brew uninstall',
+            'git clone', 'git pull', 'git push',
+            'docker run', 'docker build', 'docker pull', 'docker push',
+            'make', 'cmake', 'gcc', 'g++', 'clang',
+            'cargo build', 'cargo run', 'cargo install',
+            'go build', 'go run', 'go install',
+            'mvn install', 'mvn compile', 'gradle build',
+            'composer install', 'composer update',
+            'gem install', 'gem update'
+        ];
+
+        // Controlla se il comando inizia con uno dei comandi PTY
+        const shouldUsePty = ptyCommands.some(cmd => {
+            return command.startsWith(cmd) || command.includes(cmd + ' ');
+        });
+
+        if (!shouldUsePty) {
+            return false;
+        }
+
         // I comandi sudo usano il sistema sicuro di password
         if (command.startsWith('sudo ')) {
             return false; // Gestiti separatamente
         }
 
         // Verifica se è un comando che beneficia del PTY
-        return this.ptyCommands.some(cmd => 
-            command.startsWith(cmd) || 
-            command.includes(cmd + ' ')
-        ) ||
+        const shouldUse = this.ptyCommands.some(cmd => {
+            // Controlla se il comando inizia con il comando PTY
+            if (command.startsWith(cmd)) return true;
+            
+            // Controlla se il comando contiene il comando PTY seguito da spazio
+            if (command.includes(cmd + ' ')) return true;
+            
+                    // Controlli speciali per comandi specifici
+        if (cmd === 'npm install' && command.includes('npm install')) return true;
+        if (cmd === 'yarn install' && command.includes('yarn install')) return true;
+        if (cmd === 'pip install' && command.includes('pip install')) return true;
+        
+        // Fix temporaneo: NON usare PTY per npm install, esegui direttamente
+        if (command.includes('npm install')) return false;
+            
+            return false;
+        }) ||
         command.includes('curl -fsSL') && command.includes('install.sh') ||
         command.includes('|') || // Pipes
         command.includes('&&') || // Comandi concatenati
+        command.includes('npm ') || // Tutti i comandi npm
+        command.includes('yarn ') || // Tutti i comandi yarn
+        command.includes('pip ') || // Tutti i comandi pip
+        command.includes('brew ') || // Tutti i comandi brew
+        command.includes('apt ') || // Tutti i comandi apt
+        command.includes('pacman ') || // Tutti i comandi pacman
+        command.includes('yay ') || // Tutti i comandi yay
+        command.includes('docker ') || // Tutti i comandi docker
+        command.includes('git ') || // Tutti i comandi git
+        command.includes('make ') || // Tutti i comandi make
+        command.includes('cmake ') || // Tutti i comandi cmake
+        command.includes('cargo ') || // Tutti i comandi cargo
+        command.includes('go ') || // Tutti i comandi go
+        command.includes('mvn ') || // Tutti i comandi maven
+        command.includes('gradle ') || // Tutti i comandi gradle
         command.length > 50; // Comandi complessi
+        
+        // Debug: log per comandi npm install
+        if (command.includes('npm install') || command.includes('yarn install')) {
+            console.log(`shouldUsePTY(${command}): ${shouldUse}`);
+        }
+        
+        return shouldUse;
     }
 
     async executeWithPTY(command) {
         try {
+            console.log(`SimpleTerminal: executeWithPTY called with command: ${command}`);
             let loadingStartTime = null;
             
             // Mostra l'indicatore di loading per comandi PTY (tendenzialmente più lunghi)
             if (this.shouldShowLoading(command)) {
                 loadingStartTime = Date.now();
+                console.log(`SimpleTerminal: Showing loading indicator for PTY command: ${command}`);
                 this.showLoadingIndicator(command, {
                     timeout: 300000, // 5 minuti per comandi PTY
                     style: 'spinner',
@@ -1245,26 +1321,32 @@ class SimpleTerminal {
             }
             
             this.isPTYMode = true;
+            console.log(`SimpleTerminal: PTY mode enabled, isActive: ${this.ptyTerminal.isActive}`);
             
             // Assicurati che la sessione PTY sia attiva
             if (!this.ptyTerminal.isActive) {
+                console.log(`SimpleTerminal: Starting PTY session...`);
                 const started = await this.ptyTerminal.startSession();
                 if (!started) {
                     throw new Error('Failed to start PTY session');
                 }
+                console.log(`SimpleTerminal: PTY session started successfully`);
             }
 
             // Aggiorna l'indicatore dello stato PTY
             this.updatePTYStatusIndicator();
 
             // Invia il comando al PTY
+            console.log(`SimpleTerminal: Sending command to PTY: ${command}`);
             const success = await this.ptyTerminal.sendCommand(command);
+            console.log(`SimpleTerminal: PTY sendCommand result: ${success}`);
             if (!success) {
                 throw new Error('Failed to send command to PTY');
             }
 
             // Il PTY gestirà l'output in tempo reale attraverso il polling
             // Il loading indicator verrà rimosso quando il comando completa in onPTYCommandComplete
+            console.log(`SimpleTerminal: Command sent to PTY, waiting for output...`);
             
         } catch (error) {
             console.error('PTY execution failed:', error);
@@ -1275,12 +1357,50 @@ class SimpleTerminal {
         }
     }
 
+    async executeInstallCommand(command) {
+        try {
+            this.addOutput(`🚀 Executing: ${command}`);
+            
+            // Mostra loading indicator
+            this.showLoadingIndicator(command, {
+                timeout: 300000, // 5 minuti
+                style: 'spinner',
+                message: `Installing packages: ${command}`
+            });
+
+            // Esegui il comando con output in tempo reale
+            const result = await window.electronAPI.runCommand(command);
+            
+            // Nascondi loading indicator
+            this.hideLoadingIndicator();
+            
+            if (result.success) {
+                // Mostra l'output del comando
+                if (result.output) {
+                    this.addOutput(result.output);
+                }
+                this.addOutput(`✅ Command completed successfully`);
+            } else {
+                this.addOutput(`❌ Command failed: ${result.error || 'Unknown error'}`);
+                if (result.output) {
+                    this.addOutput(result.output);
+                }
+            }
+        } catch (error) {
+            this.hideLoadingIndicator();
+            this.addOutput(`❌ Error executing command: ${error.message}`);
+        }
+    }
+
     async executeWithTraditionalSystem(command) {
         // Processa il comando con il sistema tradizionale
         if (command === 'clear') {
             this.clearTerminal();
         } else if (command === 'help') {
             this.showHelp();
+        } else if (command.includes('npm install') || command.includes('yarn install') || command.includes('pip install')) {
+            // Esegui comandi di installazione con output in tempo reale
+            await this.executeInstallCommand(command);
         } else if (command === 'exit') {
             window.close();
         } else if (command === 'enable-pty') {
@@ -1324,6 +1444,108 @@ class SimpleTerminal {
             } else {
                 this.addOutput('❌ PTY not initialized');
             }
+        } else if (command === 'test-pty-simple') {
+            this.addOutput('🧪 Testing PTY with simple command...');
+            if (this.ptyTerminal) {
+                // Test diretto senza loading indicator
+                const started = await this.ptyTerminal.startSession();
+                if (started) {
+                    this.addOutput('✅ PTY session started');
+                    const success = await this.ptyTerminal.sendCommand('echo "PTY test successful"');
+                    this.addOutput(success ? '✅ Command sent to PTY' : '❌ Failed to send command');
+                    
+                    // Aspetta un po' e poi mostra il buffer
+                    setTimeout(async () => {
+                        try {
+                            const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                            this.addOutput(`📊 PTY buffer content: ${result.output || 'empty'}`);
+                        } catch (error) {
+                            this.addOutput(`❌ Error getting PTY output: ${error.message}`);
+                        }
+                    }, 2000);
+                } else {
+                    this.addOutput('❌ Failed to start PTY session');
+                }
+            } else {
+                this.addOutput('❌ PTY not available');
+            }
+        } else if (command === 'test-pty-direct') {
+            this.addOutput('🧪 Testing direct PTY output...');
+            if (this.ptyTerminal && this.ptyTerminal.isActive) {
+                try {
+                    const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                    this.addOutput(`📊 Direct PTY output: "${result.output || 'empty'}"`);
+                    this.addOutput(`📊 Output length: ${result.output ? result.output.length : 0} characters`);
+                } catch (error) {
+                    this.addOutput(`❌ Error: ${error.message}`);
+                }
+            } else {
+                this.addOutput('❌ PTY session not active');
+            }
+        } else if (command === 'force-output') {
+            this.addOutput('🧪 Forcing PTY output display...');
+            if (this.ptyTerminal && this.ptyTerminal.isActive) {
+                try {
+                    // Forza la lettura dell'output
+                    const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                    if (result.output && result.output.length > 0) {
+                        this.addOutput('📊 PTY has output, displaying it:');
+                        this.addOutput(result.output);
+                    } else {
+                        this.addOutput('📊 PTY buffer is empty');
+                    }
+                } catch (error) {
+                    this.addOutput(`❌ Error: ${error.message}`);
+                }
+            } else {
+                this.addOutput('❌ PTY session not active');
+            }
+        } else if (command === 'test-pty-api') {
+            this.addOutput('🧪 Testing PTY API directly...');
+            try {
+                // Test creazione sessione
+                const createResult = await window.electronAPI.ptyCreateSession();
+                this.addOutput(`📊 Create session result: ${JSON.stringify(createResult)}`);
+                
+                if (createResult.success) {
+                    const sessionId = createResult.sessionId;
+                    
+                    // Test invio comando
+                    const writeResult = await window.electronAPI.ptyWrite(sessionId, 'echo "API test"\r');
+                    this.addOutput(`📊 Write result: ${JSON.stringify(writeResult)}`);
+                    
+                    // Test lettura output dopo delay
+                    setTimeout(async () => {
+                        try {
+                            const outputResult = await window.electronAPI.ptyGetOutput(sessionId, 0);
+                            this.addOutput(`📊 Output result: ${JSON.stringify(outputResult)}`);
+                            
+                            // Cleanup
+                            await window.electronAPI.ptyKill(sessionId);
+                        } catch (error) {
+                            this.addOutput(`❌ Error in delayed test: ${error.message}`);
+                        }
+                    }, 3000);
+                }
+            } catch (error) {
+                this.addOutput(`❌ API test error: ${error.message}`);
+            }
+        } else if (command === 'test-pty-detection') {
+            this.addOutput('🧪 Testing PTY command detection...');
+            const testCommands = [
+                'npm install lodash',
+                'yarn add lodash', 
+                'pip install requests',
+                'echo "test"',
+                'ls -la'
+            ];
+            
+            testCommands.forEach(cmd => {
+                const shouldUse = this.shouldUsePTY(cmd);
+                this.addOutput(`📊 shouldUsePTY("${cmd}") = ${shouldUse}`);
+            });
+            
+            this.addOutput('💡 Now try: npm install --dry-run lodash');
         } else if (command === 'test-sudo') {
             this.addOutput('🧪 Testing sudo functionality...');
             this.addOutput('💡 Try: sudo ls -la /root');
@@ -1486,6 +1708,9 @@ class SimpleTerminal {
 
     // Metodo per aggiornare la linea corrente (usato dal PTY per output parziale)
     updateCurrentLine(text) {
+        // Debug: log dell'aggiornamento della linea corrente
+        console.log('SimpleTerminal updateCurrentLine:', text.substring(0, 100) + (text.length > 100 ? '...' : ''));
+        
         // Questo metodo può essere usato per aggiornare l'output in tempo reale
         // durante l'esecuzione di comandi PTY
         const lastLine = this.outputElement.lastElementChild;
@@ -1496,6 +1721,19 @@ class SimpleTerminal {
             line.className = 'output-line pty-live-output';
             line.textContent = text;
             this.outputElement.appendChild(line);
+        }
+    }
+
+    // Forza l'aggiornamento del display per output dinamici
+    forceDisplayUpdate() {
+        // Forza il reflow del DOM per aggiornamenti immediati
+        if (this.outputElement) {
+            this.outputElement.offsetHeight; // Trigger reflow
+        }
+        
+        // Se l'auto-scroll è abilitato e l'utente non sta scrollando manualmente
+        if (this.autoScrollEnabled && !this.isUserScrolling) {
+            this.scrollToBottom();
         }
     }
 
@@ -2850,16 +3088,70 @@ AI Commands:
         if (e.ctrlKey) {
             switch (e.key.toLowerCase()) {
                 case 'c':
-                    keyToSend = '\x03'; // Ctrl+C
+                    keyToSend = '\x03'; // Ctrl+C (interrupt)
                     break;
                 case 'd':
                     keyToSend = '\x04'; // Ctrl+D (EOF)
                     break;
                 case 'z':
-                    keyToSend = '\x1a'; // Ctrl+Z
+                    keyToSend = '\x1a'; // Ctrl+Z (suspend)
                     break;
                 case 'l':
                     keyToSend = '\x0c'; // Ctrl+L (clear)
+                    break;
+                case '\\':
+                    keyToSend = '\x1c'; // Ctrl+\ (quit)
+                    break;
+                case 'h':
+                    keyToSend = '\x08'; // Ctrl+H (backspace)
+                    break;
+                case 'i':
+                    keyToSend = '\x09'; // Ctrl+I (tab)
+                    break;
+                case 'm':
+                    keyToSend = '\r'; // Ctrl+M (enter)
+                    break;
+                case '[':
+                    keyToSend = '\x1b'; // Ctrl+[ (escape)
+                    break;
+                case 'u':
+                    keyToSend = '\x15'; // Ctrl+U (kill line)
+                    break;
+                case 'k':
+                    keyToSend = '\x0b'; // Ctrl+K (kill to end of line)
+                    break;
+                case 'w':
+                    keyToSend = '\x17'; // Ctrl+W (kill word)
+                    break;
+                case 'a':
+                    keyToSend = '\x01'; // Ctrl+A (beginning of line)
+                    break;
+                case 'e':
+                    keyToSend = '\x05'; // Ctrl+E (end of line)
+                    break;
+                case 'b':
+                    keyToSend = '\x02'; // Ctrl+B (backward char)
+                    break;
+                case 'f':
+                    keyToSend = '\x06'; // Ctrl+F (forward char)
+                    break;
+                case 'n':
+                    keyToSend = '\x0e'; // Ctrl+N (next line)
+                    break;
+                case 'p':
+                    keyToSend = '\x10'; // Ctrl+P (previous line)
+                    break;
+                case 'r':
+                    keyToSend = '\x12'; // Ctrl+R (reverse search)
+                    break;
+                case 's':
+                    keyToSend = '\x13'; // Ctrl+S (forward search)
+                    break;
+                case 't':
+                    keyToSend = '\x14'; // Ctrl+T (transpose chars)
+                    break;
+                case 'y':
+                    keyToSend = '\x19'; // Ctrl+Y (yank)
                     break;
                 default:
                     return; // Altri Ctrl+ non gestiti
@@ -2890,6 +3182,32 @@ AI Commands:
             keyToSend = '\x1b[6~';
         } else if (e.key === 'Delete') {
             keyToSend = '\x1b[3~';
+        } else if (e.key === 'Insert') {
+            keyToSend = '\x1b[2~';
+        } else if (e.key === 'F1') {
+            keyToSend = '\x1bOP';
+        } else if (e.key === 'F2') {
+            keyToSend = '\x1bOQ';
+        } else if (e.key === 'F3') {
+            keyToSend = '\x1bOR';
+        } else if (e.key === 'F4') {
+            keyToSend = '\x1bOS';
+        } else if (e.key === 'F5') {
+            keyToSend = '\x1b[15~';
+        } else if (e.key === 'F6') {
+            keyToSend = '\x1b[17~';
+        } else if (e.key === 'F7') {
+            keyToSend = '\x1b[18~';
+        } else if (e.key === 'F8') {
+            keyToSend = '\x1b[19~';
+        } else if (e.key === 'F9') {
+            keyToSend = '\x1b[20~';
+        } else if (e.key === 'F10') {
+            keyToSend = '\x1b[21~';
+        } else if (e.key === 'F11') {
+            keyToSend = '\x1b[23~';
+        } else if (e.key === 'F12') {
+            keyToSend = '\x1b[24~';
         } else if (e.key.length === 1) {
             // Caratteri normali
             keyToSend = e.key;
