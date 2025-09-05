@@ -7,7 +7,7 @@
   <img src="assets/termina.png" position ="center" width="800px"/>
 
   <details>
-    <summary><strong>Versione</strong></summary>
+    <summary><strong>Version</strong></summary>
     <p>v0.2 Beta</p>
   </details>
 </p>
@@ -475,22 +475,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ by Simone Pappalardo Caltabiano**
 
-## Avvio rapido
+## Quick Start
 
-1. Installa le dipendenze:
+1. Install dependencies:
    ```bash
    npm install
    ```
-2. Avvia l'applicazione:
+2. Start the application:
    ```bash
    npm start
    ```
 
-## Struttura del progetto
-- `main.js`: Processo principale Electron
-- `renderer/`: Interfaccia utente e terminale (xterm.js)
-- `ai/`: Moduli per integrazione AI
+## Project Structure
+- `main.js`: Main Electron process
+- `renderer/`: User interface and terminal (xterm.js)
+- `src/`: AI integration modules
 
-## Note
-- Per integrare AI locale, consulta la documentazione di LM Studio o altre API compatibili.
-- L'app è pensata per essere estendibile e personalizzabile.
+## Notes
+- For local AI integration, consult LM Studio documentation or other compatible APIs.
+- The app is designed to be extensible and customizable.
