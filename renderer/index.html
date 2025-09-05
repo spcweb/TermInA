@@ -6,6 +6,7 @@
   <title>Termina - Modern Terminal</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="simple-terminal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 </head>
 <body>
   <div id="terminal-container">
@@ -31,10 +32,37 @@
       <div id="welcome-container"></div>
       <div id="terminal"></div>
     </div>
+    
+    <!-- Overlay per Terminale Interattivo -->
+    <div id="interactive-terminal-overlay" class="interactive-terminal-overlay" style="display: none;">
+      <div id="interactive-terminal-container" class="interactive-terminal-container">
+        <div class="interactive-terminal-header">
+          <div class="interactive-terminal-title">
+            <span class="terminal-icon">🖥️</span>
+            <span id="interactive-command-name">Terminale Interattivo</span>
+          </div>
+          <div class="interactive-terminal-controls">
+            <button id="interactive-terminal-close" class="control-btn close-btn" title="Chiudi">×</button>
+          </div>
+        </div>
+        <div class="interactive-terminal-body">
+          <div id="interactive-terminal" class="interactive-terminal"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script>
+    // Esponi FitAddon globalmente
+    if (typeof window.FitAddon === 'undefined' && typeof FitAddon !== 'undefined') {
+      window.FitAddon = FitAddon;
+    }
+  </script>
   <script src="pty-terminal.js"></script>
   <script src="simple-terminal.js"></script>
+  <script src="interactive-terminal.js"></script>
   <!-- <script src="renderer.js"></script> -->
 </body>
 </html>

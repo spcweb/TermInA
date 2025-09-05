@@ -12,7 +12,7 @@ const webAIIntegration = require('./src/web-ai-integration');
 
 let mainWindow;
 let settingsWindow;
-let currentWorkingDirectory = process.cwd();
+let currentWorkingDirectory = require('os').homedir();
 let previousWorkingDirectory = currentWorkingDirectory;
 
 function resolvePath(inputPath) {
@@ -221,10 +221,23 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       return;
     }
 
+    // Lista dei comandi che richiedono un terminale completo (interattivi)
+    const fullTerminalCommands = [
+      'top', 'htop', 'btop', 'btop++',        // Monitor di sistema
+      'vim', 'vi', 'nano', 'emacs',           // Editor di testo
+      'less', 'more', 'man',                  // Visualizzatori
+      'ssh', 'telnet', 'ftp',                 // Connessioni remote
+      'mysql', 'psql', 'sqlite3',             // Database CLI
+      'python', 'python3', 'node', 'ruby', 'perl', // REPL interattivi
+      'irb', 'pry', 'rails console',          // Ruby REPL
+      'ipython', 'jupyter console',           // Python REPL
+      'gdb', 'lldb',                          // Debugger
+      'screen', 'tmux',                       // Multiplexer
+      'watch', 'tail -f', 'journalctl -f'     // Monitor in tempo reale
+    ];
+
     // Lista dei comandi che beneficiano del PTY (interattivi o con output dinamico)
     const ptyCommands = [
-      'vim', 'vi', 'nano', 'emacs',           // Editor
-      'htop', 'top', 'watch',                 // Monitor in tempo reale
       'git clone', 'git pull', 'git push',    // Git con progress
       'npm install', 'npm run', 'yarn install', 'yarn add', 'yarn remove', // NPM/Yarn
       'pip install', 'pip download', 'pip uninstall', // Python
@@ -232,16 +245,42 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       'yay', 'pacman', 'apt-get', 'apt', 'apt install', 'apt remove', // Package managers Linux
       'wget', 'curl',                         // Download con progress
       'rsync', 'scp',                         // Trasferimenti
-      'ssh', 'telnet',                        // Connessioni remote
       'docker run', 'docker build', 'docker pull', 'docker push', // Docker
       'make', 'cmake', 'gcc', 'g++', 'clang', // Build systems
-      'node', 'python', 'python3', 'ruby', 'perl', // REPL interattivi
       'composer install', 'composer update',  // PHP Composer
       'gem install', 'gem update',            // Ruby Gems
       'cargo build', 'cargo run', 'cargo install', // Rust Cargo
       'go build', 'go run', 'go install',     // Go
       'mvn install', 'mvn compile', 'gradle build' // Java build tools
     ];
+
+    // Verifica se il comando richiede un terminale completo
+    const requiresFullTerminal = fullTerminalCommands.some(cmd => {
+      // Controlla se il comando inizia con il comando
+      if (trimmed.startsWith(cmd)) return true;
+      
+      // Controlla se il comando contiene il comando seguito da spazio
+      if (trimmed.includes(cmd + ' ')) return true;
+      
+      // Controlli speciali per comandi specifici
+      if (cmd === 'tail -f' && trimmed.includes('tail -f')) return true;
+      if (cmd === 'journalctl -f' && trimmed.includes('journalctl -f')) return true;
+      
+      return false;
+    });
+
+    // Se richiede un terminale completo, apri una finestra integrata
+    if (requiresFullTerminal) {
+      console.log(`Opening integrated terminal for command: ${command}`);
+      if (mainWindow) {
+        mainWindow.webContents.send('open-interactive-terminal', {
+          command: command,
+          cwd: currentWorkingDirectory
+        });
+      }
+      resolve(`[TermInA] Opening interactive command "${command}" in integrated terminal...`);
+      return;
+    }
 
     // Verifica se il comando dovrebbe usare PTY
     const shouldUsePty = ptyCommands.some(cmd => {
@@ -487,6 +526,40 @@ ipcMain.handle('pty-get-sessions', async (event) => {
 });
 
 // ===== FINE NUOVO SISTEMA PTY =====
+
+// ===== SISTEMA TERMINALE INTERATTIVO INTEGRATO =====
+
+// Crea una sessione PTY per comandi interattivi
+ipcMain.handle('create-interactive-session', async (event, command, cwd) => {
+  try {
+    console.log(`Creating interactive session for command: ${command}`);
+    const session = ptyManager.createSession();
+    
+    // Esegui il comando nella sessione
+    if (command) {
+      // Aggiungi il comando alla sessione
+      ptyManager.writeToSession(session.id, command + '\r');
+    }
+    
+    return { success: true, sessionId: session.id };
+  } catch (error) {
+    console.error('Error creating interactive session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Chiudi una sessione interattiva
+ipcMain.handle('close-interactive-session', async (event, sessionId) => {
+  try {
+    const success = ptyManager.closeSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error closing interactive session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ===== FINE SISTEMA TERMINALE INTERATTIVO INTEGRATO =====
 
 // Handler speciale per comandi che richiedono input interattivo (come password)
 ipcMain.handle('run-interactive-command', async (event, command) => {

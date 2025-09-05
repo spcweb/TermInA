@@ -1,4 +1,11 @@
 const { spawn } = require('child_process');
+let nodePty = null;
+try {
+    // Optional: real PTY if available
+    nodePty = require('node-pty');
+} catch (err) {
+    nodePty = null;
+}
 const os = require('os');
 const { EventEmitter } = require('events');
 
@@ -15,6 +22,69 @@ class PTYManager extends EventEmitter {
     createSession(sessionId = null) {
         const id = sessionId || this.nextSessionId++;
         return this.createEnhancedSession(id);
+    }
+
+    createInteractiveSession(cwd) {
+        const id = this.nextSessionId++;
+        if (!nodePty) {
+            console.log('PTY Manager: node-pty not available, falling back to enhanced session');
+            return this.createEnhancedSession(id);
+        }
+        console.log(`PTY Manager creating node-pty session ${id}`);
+        const env = {
+            ...process.env,
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+            FORCE_COLOR: '1',
+            TERM_PROGRAM: 'TermInA'
+        };
+        const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
+        const ptyProcess = nodePty.spawn(shell, ['-l'], {
+            name: 'xterm-256color',
+            cols: 80,
+            rows: 24,
+            cwd: cwd || os.homedir(),
+            env
+        });
+        const session = {
+            id,
+            process: ptyProcess,
+            isActive: true,
+            lastActivity: Date.now(),
+            lastOutputTimestamp: Date.now(),
+            buffer: '',
+            outputBuffer: [],
+            onData: null,
+            onExit: null,
+            type: 'pty',
+            waitingForPassword: false,
+            lastPrompt: '',
+            commandHistory: [],
+            currentCommand: '',
+            isExecuting: false,
+            isReady: true
+        };
+        ptyProcess.onData((data) => {
+            const timestamp = Date.now();
+            session.buffer += data;
+            session.outputBuffer.push({ data, timestamp, source: 'stdout' });
+            session.lastOutputTimestamp = timestamp;
+            session.lastActivity = timestamp;
+            if (session.onData) session.onData(data);
+        });
+        ptyProcess.onExit(({ exitCode, signal }) => {
+            console.log(`PTY Manager: node-pty session ${id} exited: code=${exitCode}, signal=${signal}`);
+            session.isActive = false;
+            session.process = null;
+            const promptOutput = '\n$ ';
+            const timestamp = Date.now();
+            session.buffer += promptOutput;
+            session.outputBuffer.push({ data: promptOutput, timestamp, source: 'prompt' });
+            session.lastOutputTimestamp = timestamp;
+            if (session.onData) session.onData(promptOutput);
+        });
+        this.sessions.set(id, session);
+        return session;
     }
 
     createEnhancedSession(id) {
@@ -66,8 +136,13 @@ class PTYManager extends EventEmitter {
                     session.isExecuting = true;
                     
                     console.log(`PTY Manager: Starting execution of command: "${command}"`);
-                    // Esegui il comando direttamente
-                    this.runCommand(command).then(result => {
+                    
+                    // Per comandi interattivi, usa un approccio diverso
+                    if (this.isInteractiveCommand(command)) {
+                        this.runInteractiveCommand(session, command);
+                    } else {
+                        // Esegui il comando normale
+                        this.runCommand(command).then(result => {
                         console.log(`PTY Manager: Command "${command}" completed with result:`, {
                             success: true,
                             outputLength: result.output ? result.output.length : 0,
@@ -130,12 +205,24 @@ class PTYManager extends EventEmitter {
                         session.currentCommand = '';
                         session.lastActivity = Date.now();
                     });
+                    }
                 }
             } else {
                 // Input normale (caratteri singoli, backspace, etc.)
-                // Per ora, semplicemente aggiorniamo l'attività
-                session.lastActivity = Date.now();
-                console.log(`PTY Manager: Received normal input for session ${sessionId}: "${data}"`);
+                // Se c'è un processo attivo, invia l'input al processo
+                if (session.process && typeof session.process.write === 'function') {
+                    // node-pty style
+                    console.log(`PTY Manager: Sending input to PTY for session ${sessionId}: "${data}"`);
+                    session.process.write(data);
+                } else if (session.process && session.process.stdin) {
+                    // child_process style
+                    console.log(`PTY Manager: Sending input to process for session ${sessionId}: "${data}"`);
+                    session.process.stdin.write(data);
+                } else {
+                    // Per ora, semplicemente aggiorniamo l'attività
+                    session.lastActivity = Date.now();
+                    console.log(`PTY Manager: Received normal input for session ${sessionId}: "${data}"`);
+                }
             }
             
             session.lastActivity = Date.now();
@@ -145,9 +232,156 @@ class PTYManager extends EventEmitter {
         return false;
     }
 
+    runInteractiveCommand(session, command) {
+        console.log(`PTY Manager: Running interactive command: ${command}`);
+        
+        // Ambiente comune
+        const env = {
+            ...process.env,
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+            FORCE_COLOR: '1',
+            TERM_PROGRAM: 'TermInA',
+            PYTHONUNBUFFERED: '1',
+            NODE_NO_READLINE: '1'
+        };
+        
+        let childProcess;
+        
+        // Se node-pty è disponibile, preferiscilo
+        if (nodePty) {
+            const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
+            const pty = nodePty.spawn(shell, ['-l'], {
+                name: 'xterm-256color', cols: 80, rows: 24,
+                cwd: os.homedir(), env
+            });
+            // Adatta l'API per il resto del codice
+            childProcess = {
+                write: (data) => pty.write(data),
+                kill: (sig) => pty.kill(sig || 'SIGTERM'),
+                on: (evt, cb) => {
+                    if (evt === 'exit') pty.onExit(({ exitCode, signal }) => cb(exitCode, signal));
+                },
+                stdout: { on: (evt, cb) => { if (evt === 'data') pty.onData(cb); } },
+                stderr: { on: () => {} }
+            };
+            // Esegui il comando nella shell PTY
+            pty.write(command + '\r');
+        } else if (os.platform() === 'darwin' && (command === 'top' || command.startsWith('top '))) {
+            // macOS: usa top in modalità batch per stream continuo senza TTY
+            const args = ['-l', '0', '-s', '1'];
+            console.log(`PTY Manager: Spawning darwin top ${args.join(' ')}`);
+            childProcess = spawn('/usr/bin/top', args, { stdio: ['ignore', 'pipe', 'pipe'], env, cwd: os.homedir(), detached: false });
+        } else if (os.platform() === 'linux' && (command === 'top' || command.startsWith('top '))) {
+            // Linux: top batch mode
+            const args = ['-b', '-d', '1'];
+            console.log(`PTY Manager: Spawning linux top ${args.join(' ')}`);
+            childProcess = spawn('top', args, { stdio: ['ignore', 'pipe', 'pipe'], env, cwd: os.homedir(), detached: false });
+        } else {
+            // Fallback: shell con pipe (non interattivo vero, ma funziona per molti comandi)
+            const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
+            const args = ['-c', command];
+            console.log(`PTY Manager: Spawning shell fallback: ${shell} ${args.join(' ')}`);
+            childProcess = spawn(shell, args, { stdio: ['pipe', 'pipe', 'pipe'], env, cwd: os.homedir(), detached: false });
+        }
+        
+        // Salva il processo nella sessione
+        session.process = childProcess;
+        session.isExecuting = true;
+        
+        // Gestisci l'output in tempo reale
+        childProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            console.log(`PTY Manager: Interactive command output:`, output.substring(0, 100) + (output.length > 100 ? '...' : ''));
+            
+            session.buffer += output;
+            const timestamp = Date.now();
+            session.outputBuffer.push({
+                data: output,
+                timestamp: timestamp,
+                source: 'stdout'
+            });
+            session.lastOutputTimestamp = timestamp;
+            
+            if (session.onData) {
+                session.onData(output);
+            }
+        });
+        
+        childProcess.stderr.on('data', (data) => {
+            const errorOutput = data.toString();
+            console.log(`PTY Manager: Interactive command error:`, errorOutput.substring(0, 100) + (errorOutput.length > 100 ? '...' : ''));
+            
+            session.buffer += errorOutput;
+            const timestamp = Date.now();
+            session.outputBuffer.push({
+                data: errorOutput,
+                timestamp: timestamp,
+                source: 'stderr'
+            });
+            session.lastOutputTimestamp = timestamp;
+            
+            if (session.onData) {
+                session.onData(errorOutput);
+            }
+        });
+        
+        childProcess.on('exit', (code) => {
+            console.log(`PTY Manager: Interactive command exited with code: ${code}`);
+            session.isExecuting = false;
+            session.process = null;
+            
+            // Aggiungi un prompt finale
+            const promptOutput = '\n$ ';
+            session.buffer += promptOutput;
+            const timestamp = Date.now();
+            session.outputBuffer.push({
+                data: promptOutput,
+                timestamp: timestamp,
+                source: 'prompt'
+            });
+            session.lastOutputTimestamp = timestamp;
+            
+            if (session.onData) {
+                session.onData(promptOutput);
+            }
+        });
+        
+        childProcess.on('error', (error) => {
+            console.error(`PTY Manager: Interactive command error:`, error);
+            const errorOutput = `Error: ${error.message}\n$ `;
+            session.buffer += errorOutput;
+            const timestamp = Date.now();
+            session.outputBuffer.push({
+                data: errorOutput,
+                timestamp: timestamp,
+                source: 'stderr'
+            });
+            session.lastOutputTimestamp = timestamp;
+            
+            session.isExecuting = false;
+            session.process = null;
+            
+            if (session.onData) {
+                session.onData(errorOutput);
+            }
+        });
+    }
+
     resizeSession(sessionId, cols, rows) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
+            // Se è una sessione node-pty, applica il resize reale
+            if (session.process && typeof session.process.resize === 'function') {
+                try {
+                    session.process.resize(Math.max(1, cols | 0), Math.max(1, rows | 0));
+                    session.lastActivity = Date.now();
+                    return true;
+                } catch (err) {
+                    console.warn(`PTY Manager: resize failed for session ${sessionId}:`, err.message);
+                    return false;
+                }
+            }
             // Nel fallback non possiamo ridimensionare, ma torniamo true comunque
             return true;
         }
@@ -157,7 +391,13 @@ class PTYManager extends EventEmitter {
     killSession(sessionId) {
         const session = this.sessions.get(sessionId);
         if (session && session.isActive) {
-            // Per sessioni virtuali, semplicemente le rimuoviamo
+            // Se c'è un processo attivo, terminarlo
+            if (session.process) {
+                console.log(`PTY Manager: Killing process for session ${sessionId}`);
+                session.process.kill('SIGTERM');
+                session.process = null;
+            }
+            // Rimuovi la sessione
             this.sessions.delete(sessionId);
             return true;
         }
@@ -167,7 +407,13 @@ class PTYManager extends EventEmitter {
     closeSession(sessionId) {
         const session = this.sessions.get(sessionId);
         if (session) {
-            // Per sessioni virtuali, semplicemente le rimuoviamo
+            // Se c'è un processo attivo, terminarlo
+            if (session.process) {
+                console.log(`PTY Manager: Closing process for session ${sessionId}`);
+                session.process.kill('SIGTERM');
+                session.process = null;
+            }
+            // Rimuovi la sessione
             this.sessions.delete(sessionId);
             console.log(`PTY Manager: Session ${sessionId} closed`);
             return true;
@@ -294,23 +540,37 @@ class PTYManager extends EventEmitter {
             const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
             const args = ['-c', command];
             
+            // Configurazione ambiente per comandi interattivi
+            const env = {
+                ...process.env,
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
+                FORCE_COLOR: '1',
+                TERM_PROGRAM: 'TermInA',
+                // Per npm e altri package manager
+                npm_config_progress: 'true',
+                npm_config_loglevel: 'info',
+                // Per evitare problemi con output buffering
+                PYTHONUNBUFFERED: '1',
+                NODE_NO_READLINE: '1'
+            };
+
+            // Configurazioni specifiche per comandi interattivi
+            if (this.isInteractiveCommand(command)) {
+                env.TERM = 'xterm-256color';
+                env.COLORTERM = 'truecolor';
+                env.FORCE_COLOR = '1';
+                // Rimuovi variabili che potrebbero interferire con l'interattività
+                delete env.CI;
+                delete env.NONINTERACTIVE;
+                delete env.DEBIAN_FRONTEND;
+            }
+            
             // Crea un processo dedicato per il comando
             const childProcess = spawn(shell, args, {
                 stdio: ['pipe', 'pipe', 'pipe'],
-                env: {
-                    ...process.env,
-                    TERM: 'xterm-256color',
-                    COLORTERM: 'truecolor',
-                    FORCE_COLOR: '1',
-                    TERM_PROGRAM: 'TermInA',
-                    // Per npm e altri package manager
-                    npm_config_progress: 'true',
-                    npm_config_loglevel: 'info',
-                    // Per evitare problemi con output buffering
-                    PYTHONUNBUFFERED: '1',
-                    NODE_NO_READLINE: '1'
-                },
-                cwd: options.cwd || process.cwd(),
+                env: env,
+                cwd: options.cwd || require('os').homedir(),
                 detached: false
             });
             
@@ -505,6 +765,27 @@ class PTYManager extends EventEmitter {
         });
         
         return toDelete.length;
+    }
+
+    // Verifica se un comando è interattivo
+    isInteractiveCommand(command) {
+        const interactiveCommands = [
+            'top', 'htop', 'btop', 'btop++',
+            'vim', 'vi', 'nano', 'emacs',
+            'less', 'more', 'man',
+            'ssh', 'telnet', 'ftp',
+            'mysql', 'psql', 'sqlite3',
+            'python', 'python3', 'node', 'ruby', 'perl',
+            'irb', 'pry', 'rails console',
+            'ipython', 'jupyter console',
+            'gdb', 'lldb',
+            'screen', 'tmux',
+            'watch', 'tail -f', 'journalctl -f'
+        ];
+        
+        return interactiveCommands.some(cmd => {
+            return command.startsWith(cmd) || command.includes(cmd + ' ');
+        });
     }
 
     getStatus() {

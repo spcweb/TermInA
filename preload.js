@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ptyRunCommand: (command, options) => ipcRenderer.invoke('pty-run-command', command, options),
   ptyGetSessions: () => ipcRenderer.invoke('pty-get-sessions'),
   
+  // Interactive Terminal operations
+  createInteractiveSession: (command, cwd) => ipcRenderer.invoke('create-interactive-session', command, cwd),
+  closeInteractiveSession: (sessionId) => ipcRenderer.invoke('close-interactive-session', sessionId),
+  
   // Configuration
   getConfig: (key) => ipcRenderer.invoke('get-config', key),
   setConfig: (key, value) => ipcRenderer.invoke('set-config', key, value),
@@ -61,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNewTab: (callback) => ipcRenderer.on('new-tab', callback),
   onCloseTab: (callback) => ipcRenderer.on('close-tab', callback),
   onSettingsChanged: (callback) => ipcRenderer.on('settings-changed', callback),
+  onOpenInteractiveTerminal: (callback) => ipcRenderer.on('open-interactive-terminal', (event, data) => callback(data)),
   sendMessage: (channel, data) => ipcRenderer.send(channel, data),
   
   // Remove listeners
