@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Interactive Terminal operations
   createInteractiveSession: (command, cwd) => ipcRenderer.invoke('create-interactive-session', command, cwd),
   closeInteractiveSession: (sessionId) => ipcRenderer.invoke('close-interactive-session', sessionId),
+  setupSessionCallback: (sessionId) => ipcRenderer.invoke('setup-session-callback', sessionId),
+  onSessionData: (callback) => ipcRenderer.on('session-data', (event, data) => callback(data)),
   
   // Configuration
   getConfig: (key) => ipcRenderer.invoke('get-config', key),

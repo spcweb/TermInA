@@ -224,126 +224,29 @@ body {
   background: transparent !important;
 }
 
-/* Cursore super visibile - approccio aggressivo */
-/* FORZA AGGRESSIVAMENTE IL CURSORE XTERM */
+/* Cursore xterm ottimizzato per visibilità */
 .xterm .xterm-cursor {
-    background-color: #00ff00 !important;
+    background-color: #007acc !important;
     color: transparent !important;
     opacity: 1 !important;
     visibility: visible !important;
     display: block !important;
-    width: 3px !important;
+    width: 2px !important;
     height: 18px !important;
     border-radius: 1px !important;
-    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
-    z-index: 9999 !important;
-    animation: blink-smooth 1s ease-in-out infinite !important;
+    z-index: 10 !important;
+    animation: blink-cursor 1s ease-in-out infinite !important;
     position: relative !important;
-}
-
-/* Forza tutti i possibili selettori del cursore */
-.xterm-cursor,
-.xterm .xterm-cursor-blink,
-.xterm .xterm-cursor-bar,
-.xterm .xterm-cursor-block,
-.xterm .xterm-cursor-underline {
-    background-color: #00ff00 !important;
-    color: transparent !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    display: block !important;
-    width: 3px !important;
-    height: 18px !important;
-    border-radius: 1px !important;
-    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
-    z-index: 9999 !important;
-    animation: blink-smooth 1s ease-in-out infinite !important;
-}
-
-.xterm-cursor-layer {
-    z-index: 9999 !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-}
-
-/* Se ancora non funziona, creiamo un cursore con ::after */
-.xterm-screen::after {
-    content: '|';
-    color: #00ff00;
-    position: absolute;
-    left: 50px;
-    top: 400px;
-    font-size: 18px;
-    font-weight: bold;
-    animation: blink-smooth 1s ease-in-out infinite;
-    z-index: 9999;
-    pointer-events: none;
-}
-
-/* Nascondi solo il nostro cursore custom per ora */
-.custom-terminal-cursor,
-#super-cursor {
-    display: none !important;
-}
-
-/* Super visible custom cursor con animazione lampeggiante */
-.custom-terminal-cursor {
-    position: absolute !important;
-    background-color: #00ff00 !important;
-    width: 2px !important;
-    height: 18px !important;
-    border-radius: 1px !important;
-    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
-    z-index: 9999 !important;
-    animation: blink-smooth 1s ease-in-out infinite;
-}
-
-#super-cursor {
-    position: absolute !important;
-    background-color: #00ff00 !important;
-    width: 2px !important;
-    height: 18px !important;
-    border-radius: 1px !important;
-    box-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00aa !important;
-    z-index: 9999 !important;
-    animation: blink-smooth 1s ease-in-out infinite;
-    /* Rimuovo top e bottom fissi, li gestirà JavaScript */
 }
 
 /* Animazione lampeggiante fluida */
 @keyframes blink-cursor {
     0%, 50% { 
         opacity: 1;
-        transform: scaleY(1);
     }
     51%, 100% { 
-        opacity: 0.2;
-        transform: scaleY(0.95);
+        opacity: 0.3;
     }
-}/* Cursore personalizzato come ultimo resort */
-.custom-terminal-cursor {
-  position: absolute;
-  width: 3px;
-  height: 18px;
-  background-color: #00ff00;
-  border: 1px solid #ffffff;
-  box-shadow: 0 0 10px #00ff00;
-  z-index: 1000;
-  pointer-events: none;
-  animation: super-blink 1s infinite;
-}
-
-@keyframes super-blink {
-  0%, 50% { 
-    opacity: 1;
-    background-color: #00ff00;
-    box-shadow: 0 0 15px #00ff00;
-  }
-  51%, 100% { 
-    opacity: 0.4;
-    background-color: #00aa00;
-    box-shadow: 0 0 5px #00aa00;
-  }
 }
 
 /* Make sure text selection works */
@@ -727,15 +630,19 @@ body {
   overflow: hidden;
 }
 
-/* Modern xterm styling */
+/* Modern xterm styling ottimizzato */
 .xterm {
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace !important;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace !important;
   font-size: 14px !important;
-  line-height: 1.4 !important;
+  line-height: 1.2 !important;
   background: transparent !important;
   width: 100% !important;
   height: 100% !important;
   cursor: text;
+  font-weight: normal !important;
+  text-rendering: optimizeSpeed !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
 }
 
 .xterm .xterm-viewport {
@@ -999,12 +906,18 @@ body {
   overflow: hidden;
 }
 
-/* Forza font monospace e disabilita legature per allineamento colonne */
+/* Configurazione font monospace ottimizzata per allineamento colonne */
 .xterm, .xterm * {
-  font-family: Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", "SF Mono", "Courier New", monospace !important;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace !important;
+  font-size: 14px !important;
+  line-height: 1.2 !important;
   letter-spacing: 0 !important;
   font-variant-ligatures: none !important;
   font-feature-settings: "liga" 0, "clig" 0, "calt" 0 !important;
+  font-weight: normal !important;
+  text-rendering: optimizeSpeed !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
 }
 
 .interactive-terminal-header {

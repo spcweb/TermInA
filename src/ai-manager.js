@@ -19,6 +19,14 @@ class AIManager {
     const aiConfig = config.getAIConfig();
     const provider = aiConfig.provider;
     
+    // Se l'AI è disabilitato, restituisci una risposta di default
+    if (provider === 'disabled') {
+      return {
+        text: "AI temporaneamente disabilitato. Il terminale funziona normalmente.",
+        usage: { totalTokens: 0 }
+      };
+    }
+    
     if (!this.providers[provider]) {
       throw new Error(`Provider AI non supportato: ${provider}`);
     }
@@ -45,7 +53,7 @@ class AIManager {
 
   async geminiRequest(prompt, context = []) {
     const aiConfig = config.getAIConfig();
-    const { apiKey, model } = aiConfig.gemini;
+    const { apiKey, model, temperature = 0.7, maxOutputTokens = 4096 } = aiConfig.gemini;
     
     return new Promise((resolve, reject) => {
       const contextText = context.length > 0 ? 
@@ -58,8 +66,8 @@ class AIManager {
           parts: [{ text: fullPrompt }] 
         }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048
+          temperature: temperature,
+          maxOutputTokens: Math.max(256, Math.min(maxOutputTokens, 32768))
         }
       });
 
@@ -81,17 +89,52 @@ class AIManager {
             console.log('Gemini API response:', body);
             const json = JSON.parse(body);
             console.log('Parsed JSON:', JSON.stringify(json, null, 2));
-            
-            if (json.candidates && json.candidates[0] && 
-                json.candidates[0].content && 
-                json.candidates[0].content.parts && 
-                json.candidates[0].content.parts[0] && 
-                json.candidates[0].content.parts[0].text) {
-              resolve(json.candidates[0].content.parts[0].text);
-            } else {
-              console.error('Unexpected response structure:', json);
-              resolve(`[AI] Nessuna risposta valida ricevuta. Debug: ${JSON.stringify(json)}`);
+
+            // Se l'API ha restituito un errore, prova a gestirlo
+            if (json.error) {
+              const message = json.error.message || JSON.stringify(json.error);
+              // Gestione specifica MAX_TOKENS/limit
+              if (message && message.toUpperCase().includes('MAX_TOKENS')) {
+                // Retry con meno token e prompt conciso
+                const shortPrompt = `${prompt}`.slice(0, 4000);
+                const retryData = JSON.stringify({
+                  contents: [{ parts: [{ text: shortPrompt }] }],
+                  generationConfig: {
+                    temperature: temperature,
+                    maxOutputTokens: 1024
+                  }
+                });
+                const retryOptions = { ...options, headers: { ...options.headers, 'Content-Length': Buffer.byteLength(retryData) } };
+                const retryReq = https.request(retryOptions, retryRes => {
+                  let retryBody = '';
+                  retryRes.on('data', chunk => retryBody += chunk);
+                  retryRes.on('end', () => {
+                    try {
+                      const retryJson = JSON.parse(retryBody);
+                      const text = retryJson?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n');
+                      if (text) return resolve(text);
+                      return resolve(`[AI] Nessuna risposta valida ricevuta dopo retry. Debug: ${retryBody}`);
+                    } catch (err) {
+                      return resolve(`[AI] Errore nel retry dopo MAX_TOKENS: ${err.message}`);
+                    }
+                  });
+                });
+                retryReq.on('error', () => resolve(`[AI] Errore di rete durante il retry dopo MAX_TOKENS`));
+                retryReq.write(retryData);
+                retryReq.end();
+                return;
+              }
+              return resolve(`[AI] Errore Gemini: ${message}`);
             }
+
+            // Estrai testo in modo robusto: concatena tutte le parti testuali disponibili
+            const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n');
+            if (text && text.trim().length > 0) {
+              return resolve(text);
+            }
+            
+            console.error('Unexpected response structure:', json);
+            resolve(`[AI] Nessuna risposta valida ricevuta. Debug: ${JSON.stringify(json)}`);
           } catch (e) {
             console.error('JSON parse error:', e);
             console.error('Raw response:', body);

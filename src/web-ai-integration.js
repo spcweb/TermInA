@@ -99,7 +99,7 @@ Fornisci SOLO il JSON.`;
       const searchResults = await webScraper.searchWeb(
         searchAnalysis.searchQuery,
         searchAnalysis.searchEngine,
-        searchAnalysis.maxResults
+        Math.min(Math.max(3, searchAnalysis.maxResults || 5), 5)
       );
       
       if (!searchResults.success) {
@@ -143,13 +143,14 @@ Fornisci SOLO il JSON.`;
    */
   async integrateSearchResults(prompt, originalAIResponse, searchResults) {
     try {
+      const limitedSummary = (searchResults.summary || '').slice(0, 3000);
       const integrationPrompt = `Integra queste informazioni trovate su internet con la tua risposta originale per fornire una risposta completa e aggiornata.
 
 Richiesta originale dell'utente: "${prompt}"
 Risposta AI originale: "${originalAIResponse}"
 
 Informazioni trovate su internet:
-${searchResults.summary}
+${limitedSummary}
 
 Istruzioni:
 1. Mantieni la tua risposta originale se è corretta

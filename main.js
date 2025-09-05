@@ -4,6 +4,22 @@ const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const config = require('./src/config');
+
+// Gestione globale degli errori non catturati per evitare crash
+process.on('uncaughtException', (error) => {
+  // Gestisci errori EPIPE silenziosamente (pipe chiuso)
+  if (error.code === 'EPIPE') {
+    console.warn('Pipe closed - ignoring EPIPE error');
+    return;
+  }
+
+  // Per altri errori, logga ma non terminare il processo
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
 const ptyManager = require('./src/pty-manager');
@@ -532,13 +548,37 @@ ipcMain.handle('pty-get-sessions', async (event) => {
 // Crea una sessione PTY per comandi interattivi
 ipcMain.handle('create-interactive-session', async (event, command, cwd) => {
   try {
-    console.log(`Creating interactive session for command: ${command}`);
-    const session = ptyManager.createSession();
+    // Gestisci il log in modo sicuro per evitare errori EPIPE
+    try {
+      console.log(`Creating interactive session for command: ${command}`);
+    } catch (logError) {
+      // Ignora errori di log se il processo sta terminando
+      if (logError.code !== 'EPIPE') {
+        throw logError;
+      }
+    }
+    // Determina se è un comando interattivo
+    const isInteractive = ptyManager.isInteractiveCommand(command);
+    console.log(`DEBUG: Command "${command}" is interactive: ${isInteractive}`);
     
-    // Esegui il comando nella sessione
-    if (command) {
-      // Aggiungi il comando alla sessione
-      ptyManager.writeToSession(session.id, command + '\r');
+    let session;
+    if (isInteractive) {
+      // Per comandi interattivi, usa createInteractiveSession
+      session = ptyManager.createInteractiveSession(cwd);
+      console.log(`DEBUG: Created interactive session ${session.id} for command: ${command}`);
+      
+      // Esegui il comando nella sessione interattiva
+      if (command) {
+        ptyManager.writeToSession(session.id, command + '\r');
+      }
+    } else {
+      // Per comandi normali, usa createSession
+      session = ptyManager.createSession();
+      
+      // Esegui il comando nella sessione
+      if (command) {
+        ptyManager.writeToSession(session.id, command + '\r');
+      }
     }
     
     return { success: true, sessionId: session.id };
@@ -555,6 +595,26 @@ ipcMain.handle('close-interactive-session', async (event, sessionId) => {
     return { success };
   } catch (error) {
     console.error('Error closing interactive session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Imposta il callback per ricevere dati in tempo reale
+ipcMain.handle('setup-session-callback', async (event, sessionId) => {
+  try {
+    const session = ptyManager.getSession(sessionId);
+    if (session) {
+      // Imposta il callback per inviare dati al frontend
+      session.onData = (data) => {
+        console.log(`DEBUG: Sending data to frontend for session ${sessionId}: ${data.length} chars`);
+        event.sender.send('session-data', { sessionId, data });
+      };
+      console.log(`DEBUG: Callback setup completed for session ${sessionId}`);
+      return { success: true };
+    }
+    return { success: false, error: 'Session not found' };
+  } catch (error) {
+    console.error('Error setting up session callback:', error);
     return { success: false, error: error.message };
   }
 });

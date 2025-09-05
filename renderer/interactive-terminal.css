@@ -1,0 +1,130 @@
+/* Stili specifici per il terminale interattivo */
+
+/* Container del terminale interattivo */
+.interactive-terminal-container {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace !important;
+}
+
+/* Terminale xterm.js all'interno del container interattivo */
+.interactive-terminal .xterm {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace !important;
+  font-size: 14px !important;
+  line-height: 1.2 !important;
+  font-weight: normal !important;
+  letter-spacing: 0 !important;
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0 !important;
+  text-rendering: optimizeSpeed !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Assicura che il terminale occupi tutto lo spazio disponibile */
+.interactive-terminal {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Viewport del terminale */
+.interactive-terminal .xterm .xterm-viewport {
+  background: transparent !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Screen del terminale */
+.interactive-terminal .xterm .xterm-screen {
+  background: transparent !important;
+}
+
+/* Cursore del terminale interattivo */
+.interactive-terminal .xterm .xterm-cursor {
+  background-color: #007acc !important;
+  color: transparent !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  width: 2px !important;
+  height: 18px !important;
+  border-radius: 1px !important;
+  z-index: 10 !important;
+  animation: blink-cursor 1s ease-in-out infinite !important;
+  position: relative !important;
+}
+
+/* Animazione del cursore */
+@keyframes blink-cursor {
+  0%, 50% { 
+    opacity: 1;
+  }
+  51%, 100% { 
+    opacity: 0.3;
+  }
+}
+
+/* Selezione del testo */
+.interactive-terminal .xterm .xterm-selection div {
+  background: rgba(0, 122, 204, 0.3) !important;
+}
+
+/* Scrollbar personalizzata */
+.interactive-terminal .xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.interactive-terminal .xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.interactive-terminal .xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.interactive-terminal .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Assicura che il terminale sia focusabile */
+.interactive-terminal .xterm textarea {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Stili per il ridimensionamento */
+.interactive-terminal-container {
+  resize: both;
+  overflow: hidden;
+  min-width: 400px;
+  min-height: 300px;
+}
+
+/* Assicura che il terminale si adatti al container */
+.interactive-terminal .xterm {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+}
+
+/* Ottimizzazioni per le performance */
+.interactive-terminal .xterm .xterm-rows {
+  contain: layout style paint;
+}
+
+.interactive-terminal .xterm .xterm-rows > div {
+  contain: layout style paint;
+}
+
+/* Assicura che le sequenze ANSI vengano renderizzate correttamente */
+.interactive-terminal .xterm .xterm-rows {
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+}

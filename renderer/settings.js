@@ -363,6 +363,12 @@ class SettingsManager {
                 if (this.config.ai.gemini) {
                     this.setValueSafely('gemini-api-key', this.config.ai.gemini.apiKey);
                     this.setValueSafely('gemini-model', this.config.ai.gemini.model);
+                    if (this.config.ai.gemini.temperature !== undefined) {
+                        this.setValueSafely('gemini-temperature', this.config.ai.gemini.temperature);
+                    }
+                    if (this.config.ai.gemini.maxOutputTokens !== undefined) {
+                        this.setValueSafely('gemini-max-output', this.config.ai.gemini.maxOutputTokens);
+                    }
                 }
                 if (this.config.ai.openai) {
                     this.setValueSafely('openai-api-key', this.config.ai.openai.apiKey);
@@ -493,7 +499,9 @@ class SettingsManager {
                 contextLines: parseInt(this.getValueSafely('ai-context-lines', '10')),
                 gemini: {
                     apiKey: this.getValueSafely('gemini-api-key', ''),
-                    model: this.getValueSafely('gemini-model', 'gemini-2.5-flash')
+                    model: this.getValueSafely('gemini-model', 'gemini-2.5-flash'),
+                    temperature: parseFloat(this.getValueSafely('gemini-temperature', '0.7')),
+                    maxOutputTokens: parseInt(this.getValueSafely('gemini-max-output', '4096'))
                 },
                 openai: {
                     apiKey: this.getValueSafely('openai-api-key', ''),
