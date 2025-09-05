@@ -14,6 +14,34 @@
 
 ⚠️ Warning: This software is still in Beta version 0.2. Some features may be unstable.
 
+## 📥 Download
+
+<table>
+<tr>
+<td align="center">
+
+### 🪟 Windows
+**ARM64** | **x64**
+:---:|:---:
+[![Windows ARM](https://img.shields.io/badge/Windows%20ARM-Download-blue?style=for-the-badge&logo=windows)](https://secure.ue.internxt.com/sh/file/m_m9-XaqQ7a4KYQZA_KuZA/VMCxxoNI) | [![Windows x64](https://img.shields.io/badge/Windows%20x64-Download-blue?style=for-the-badge&logo=windows)](https://share.eu.internxt.com/sh/file/J0G83C-hRCKXdnUOpsfoRg/kGa4WdG1)
+
+</td>
+<td align="center">
+
+### 🍎 macOS
+[![macOS](https://img.shields.io/badge/macOS-Download-lightgrey?style=for-the-badge&logo=apple)](https://share.eu.internxt.com/sh/file/u2AZJKf_RVOxP7Bih1cwHw/s1MweZpd)
+
+</td>
+<td align="center">
+
+### 🐧 Linux
+**ARM64** | **x64**
+:---:|:---:
+[![Linux ARM](https://img.shields.io/badge/Linux%20ARM-Download-orange?style=for-the-badge&logo=linux)](https://secure.eu.internxt.com/sh/file/uhMTvpgYTuysThON9l616w/i95sx11a) | [![Linux x64](https://img.shields.io/badge/Linux%20x64-Download-orange?style=for-the-badge&logo=linux)](https://secure.ue.internxt.com/sh/file/UKSnsnDqQVqwXpDjWKxUPA/ZRWBfv_s)
+
+</td>
+</tr>
+</table>
 
 ## 🌟 Features
 
