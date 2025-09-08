@@ -168,6 +168,73 @@ class PTYManager extends EventEmitter {
                     // Per comandi interattivi, usa un approccio diverso
                     if (this.isInteractiveCommand(command)) {
                         this.runInteractiveCommand(session, command);
+                    } else if (this.isPrivilegedCommand(command) && nodePty) {
+                        // Per comandi privilegiati, usa node-pty
+                        this.runPrivilegedCommand(command).then(result => {
+                            console.log(`PTY Manager: Privileged command "${command}" completed with result:`, {
+                                success: result.success,
+                                outputLength: result.output ? result.output.length : 0,
+                                errorLength: result.stderr ? result.stderr.length : 0,
+                                requiresPassword: result.requiresPassword
+                            });
+                            
+                            // Simula l'output del comando
+                            const output = result.output || '';
+                            const errorOutput = result.stderr || '';
+                            const fullOutput = output + (errorOutput ? '\n' + errorOutput : '');
+                            
+                            if (fullOutput) {
+                                session.buffer += fullOutput;
+                                const timestamp = Date.now();
+                                session.outputBuffer.push({
+                                    data: fullOutput,
+                                    timestamp: timestamp,
+                                    source: 'stdout'
+                                });
+                                session.lastOutputTimestamp = timestamp;
+                                
+                                if (session.onData) {
+                                    session.onData(fullOutput);
+                                }
+                            }
+                            
+                            // Aggiungi un prompt finale per indicare che il comando è completato
+                            const promptOutput = '\n$ ';
+                            session.buffer += promptOutput;
+                            const promptTimestamp = Date.now();
+                            session.outputBuffer.push({
+                                data: promptOutput,
+                                timestamp: promptTimestamp,
+                                source: 'stdout'
+                            });
+                            session.lastOutputTimestamp = promptTimestamp;
+                            
+                            if (session.onData) {
+                                session.onData(promptOutput);
+                            }
+                            
+                            session.isExecuting = false;
+                            session.currentCommand = '';
+                            session.lastActivity = Date.now();
+                        }).catch(error => {
+                            const errorOutput = `Error: ${error.message}\n$ `;
+                            session.buffer += errorOutput;
+                            const errorTimestamp = Date.now();
+                            session.outputBuffer.push({
+                                data: errorOutput,
+                                timestamp: errorTimestamp,
+                                source: 'stderr'
+                            });
+                            session.lastOutputTimestamp = errorTimestamp;
+                            
+                            if (session.onData) {
+                                session.onData(errorOutput);
+                            }
+                            
+                            session.isExecuting = false;
+                            session.currentCommand = '';
+                            session.lastActivity = Date.now();
+                        });
                     } else {
                         // Esegui il comando normale
                         this.runCommand(command).then(result => {
@@ -636,6 +703,42 @@ class PTYManager extends EventEmitter {
         return new Promise((resolve, reject) => {
             console.log(`PTY Manager: Running command: ${command}`);
             
+            // Se è un comando che richiede solo input interattivo, rifiutalo
+            if (this.isInteractiveOnlyCommand(command)) {
+                console.log(`PTY Manager: Command requires interactive input: ${command}`);
+                resolve({
+                    success: false,
+                    output: `[Error] Command "${command}" requires interactive input. Please provide arguments or use a regular terminal.\n\nExamples:\n  ${command} --help\n  ${command} --version\n  ${command} <package-name>`,
+                    exitCode: 1,
+                    error: 'Interactive input required',
+                    stderr: 'Command requires interactive input'
+                });
+                return;
+            }
+
+            // Se è un comando sudo, non usare il PTY - lascia che il sistema di gestione password lo gestisca
+            if (command.trim().startsWith('sudo ')) {
+                console.log(`PTY Manager: Sudo command detected, not using PTY - let password system handle it`);
+                // Non eseguire il comando qui, lascia che il sistema di gestione password lo gestisca
+                resolve({
+                    success: false,
+                    output: `[TermInA] Sudo command detected: "${command}"\n\n🔐 Password required for: ${command}\n🔄 Executing sudo command...\n\nThe system will now prompt for your password securely.`,
+                    exitCode: 1,
+                    error: 'Password required - use password dialog',
+                    stderr: 'Sudo command requires password dialog',
+                    requiresPassword: true,
+                    usePasswordDialog: true
+                });
+                return;
+            }
+
+            // Se è un comando privilegiato e node-pty è disponibile, usalo
+            if (this.isPrivilegedCommand(command) && nodePty) {
+                console.log(`PTY Manager: Using node-pty for privileged command: ${command}`);
+                this.runPrivilegedCommand(command, options).then(resolve).catch(reject);
+                return;
+            }
+            
             // Determina la shell e gli argomenti
             const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
             const args = ['-c', command];
@@ -796,7 +899,10 @@ class PTYManager extends EventEmitter {
             />\s*$/,            // Prompt PowerShell/Windows
             /\#\s*$/,           // Prompt root
             /❯\s*$/,            // Prompt zsh moderno
-            /➜\s+.*\s+$/        // Prompt oh-my-zsh
+            /➜\s+.*\s+$/,       // Prompt oh-my-zsh
+            /~.*\s+.*\s+.*\s*$/, // Prompt zsh con path e tempo
+            /.*\s+.*\s+.*\s*$/,  // Prompt generico con caratteri speciali
+            /\n.*\s+.*\s+.*\s*$/m // Prompt su nuova linea
         ];
         
         return promptPatterns.some(pattern => pattern.test(data));
@@ -891,6 +997,189 @@ class PTYManager extends EventEmitter {
         
         return interactiveCommands.some(cmd => {
             return command.startsWith(cmd) || command.includes(cmd + ' ');
+        });
+    }
+
+    // Verifica se un comando richiede privilegi elevati
+    isPrivilegedCommand(command) {
+        const privilegedCommands = [
+            'sudo', 'su', 'pkexec', 'gksudo', 'kdesudo',
+            'yay', 'pacman', 'apt', 'apt-get', 'dnf', 'yum', 'zypper',
+            'systemctl', 'service', 'mount', 'umount',
+            'chmod', 'chown', 'useradd', 'userdel', 'groupadd', 'groupdel',
+            'visudo', 'passwd', 'usermod', 'groupmod',
+            'iptables', 'ufw', 'firewall-cmd',
+            'crontab', 'at', 'systemctl', 'service',
+            'npm install -g', 'pip install --user', 'gem install',
+            'docker', 'docker-compose'
+        ];
+        
+        return privilegedCommands.some(cmd => {
+            return command.startsWith(cmd) || command.includes(cmd + ' ');
+        });
+    }
+
+    // Verifica se un comando richiede input interattivo
+    isInteractiveOnlyCommand(command) {
+        const interactiveOnlyCommands = [
+            'yay', 'pacman', 'apt', 'apt-get', 'dnf', 'yum', 'zypper',
+            'python', 'python3', 'node', 'ruby', 'perl', 'irb', 'pry',
+            'mysql', 'psql', 'sqlite3', 'ssh', 'telnet', 'ftp'
+        ];
+        
+        // Se il comando è esattamente uno di questi (senza argomenti), richiede input interattivo
+        return interactiveOnlyCommands.some(cmd => {
+            return command.trim() === cmd;
+        });
+    }
+
+    // Esegue comandi privilegiati usando node-pty per gestire l'input della password
+    async runPrivilegedCommand(command, options = {}) {
+        return new Promise((resolve, reject) => {
+            console.log(`PTY Manager: Running privileged command with node-pty: ${command}`);
+            
+            const env = {
+                ...process.env,
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
+                FORCE_COLOR: '1',
+                TERM_PROGRAM: 'TermInA',
+                // Per evitare problemi con output buffering
+                PYTHONUNBUFFERED: '1',
+                NODE_NO_READLINE: '1',
+                // Configurazioni aggiuntive per impaginazione corretta
+                COLUMNS: '80',
+                LINES: '24',
+                // Assicura che le applicazioni interattive funzionino correttamente
+                LC_ALL: 'en_US.UTF-8',
+                LANG: 'en_US.UTF-8'
+            };
+
+            const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : 'zsh');
+            
+            // Crea un PTY temporaneo che esegue il comando e si chiude
+            const ptyProcess = nodePty.spawn(shell, ['-c', command], {
+                name: 'xterm-256color',
+                cols: 80,
+                rows: 24,
+                cwd: options.cwd || os.homedir(),
+                env
+            });
+
+            let output = '';
+            let errorOutput = '';
+            let commandCompleted = false;
+            let hasPasswordPrompt = false;
+
+            const timeout = options.timeout || 300000; // 5 minuti di default
+            
+            // Timer di timeout
+            const timeoutTimer = setTimeout(() => {
+                if (!commandCompleted) {
+                    ptyProcess.kill('SIGTERM');
+                    reject(new Error(`Privileged command timed out after ${timeout}ms. Output received: ${output.substring(0, 1000)}...`));
+                }
+            }, timeout);
+
+            // Gestisci l'output del PTY
+            ptyProcess.onData((data) => {
+                if (commandCompleted) return; // Ignora output se il comando è già completato
+                
+                const text = data.toString();
+                output += text;
+                
+                console.log(`PTY privileged command output:`, text.substring(0, 100) + (text.length > 100 ? '...' : ''));
+                
+                // Controlla se è richiesta una password
+                if (this.isPasswordPrompt(text)) {
+                    hasPasswordPrompt = true;
+                    console.log('PTY Manager: Password prompt detected for privileged command');
+                    
+                    // Per comandi sudo, usa il sistema di gestione password esistente
+                    if (command.startsWith('sudo ')) {
+                        console.log('PTY Manager: Sudo command detected, using password dialog system');
+                        
+                        // Termina il processo corrente
+                        ptyProcess.kill('SIGTERM');
+                        
+                        // Usa il sistema di gestione password esistente
+                        const errorMsg = `[TermInA] Sudo command detected: "${command}"
+
+🔐 To execute sudo commands with password prompt, the command will be processed through the secure password dialog.
+
+🔄 If you see issues with interactive scripts (like Homebrew installer), try:
+   - For Homebrew: Run without sudo: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   - For package managers: Use user-space alternatives when possible
+   - For system changes: Ensure the command actually needs root privileges
+
+💡 The system will now prompt for your password securely.`;
+                        errorOutput = errorMsg;
+                        output += errorMsg;
+                        
+                        clearTimeout(timeoutTimer);
+                        commandCompleted = true;
+                        
+                        resolve({
+                            success: false,
+                            output: output,
+                            exitCode: 1,
+                            error: 'Password required - use password dialog',
+                            stderr: errorOutput,
+                            requiresPassword: true,
+                            usePasswordDialog: true
+                        });
+                        return;
+                    } else {
+                        // Per altri comandi che richiedono password
+                        const errorMsg = `[Error] Command requires password input. Please run this command in a regular terminal with sudo privileges.\nCommand: ${command}`;
+                        errorOutput = errorMsg;
+                        output += errorMsg;
+                        
+                        clearTimeout(timeoutTimer);
+                        commandCompleted = true;
+                        ptyProcess.kill('SIGTERM');
+                        
+                        resolve({
+                            success: false,
+                            output: output,
+                            exitCode: 1,
+                            error: 'Password required',
+                            stderr: errorOutput,
+                            requiresPassword: true
+                        });
+                        return;
+                    }
+                }
+            });
+
+            // Gestisci l'uscita del processo
+            ptyProcess.onExit(({ exitCode, signal }) => {
+                if (!commandCompleted) {
+                    commandCompleted = true;
+                    clearTimeout(timeoutTimer);
+                    
+                    console.log(`PTY Manager: Privileged command exited with code: ${exitCode}, signal: ${signal}`);
+                    
+                    const cleanOutput = this.cleanCommandOutput(output, command);
+                    
+                    let errorMessage = '';
+                    if (signal) {
+                        errorMessage = `Process terminated by signal: ${signal}`;
+                    } else if (exitCode !== 0) {
+                        errorMessage = `Process exited with code: ${exitCode}`;
+                    }
+                    
+                    resolve({
+                        success: exitCode === 0 && !signal,
+                        output: cleanOutput,
+                        exitCode: exitCode || 0,
+                        signal,
+                        error: errorMessage,
+                        stderr: errorOutput,
+                        requiresPassword: hasPasswordPrompt
+                    });
+                }
+            });
         });
     }
 

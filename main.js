@@ -199,17 +199,13 @@ ipcMain.handle('run-command', async (event, command) => {
 
     // Controlla se il comando richiede sudo
     if (command.trim().startsWith('sudo ')) {
-      // Per comandi sudo, suggerisci l'uso del dialog password
+      // Per comandi sudo, attiva il dialog password
       resolve(`[TermInA] Sudo command detected: "${command}"
 
-🔐 To execute sudo commands with password prompt, the command will be processed through the secure password dialog.
+🔐 Password required for: ${command}
+🔄 Executing sudo command...
 
-� If you see issues with interactive scripts (like Homebrew installer), try:
-   - For Homebrew: Run without sudo: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   - For package managers: Use user-space alternatives when possible
-   - For system changes: Ensure the command actually needs root privileges
-
-The command will now be executed through the sudo handler...`);
+�The system will now prompt for your password securely.`);
       return;
     }
 
@@ -259,6 +255,12 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
       'pip install', 'pip download', 'pip uninstall', // Python
       'brew install', 'brew upgrade', 'brew uninstall', // Homebrew
       'yay', 'pacman', 'apt-get', 'apt', 'apt install', 'apt remove', // Package managers Linux
+      'sudo', 'su', 'pkexec', 'gksudo', 'kdesudo', // Privilege escalation
+      'systemctl', 'service', 'mount', 'umount', // System services
+      'chmod', 'chown', 'useradd', 'userdel', 'groupadd', 'groupdel', // User/group management
+      'visudo', 'passwd', 'usermod', 'groupmod', // User administration
+      'iptables', 'ufw', 'firewall-cmd', // Firewall
+      'crontab', 'at', // Scheduling
       'wget', 'curl',                         // Download con progress
       'rsync', 'scp',                         // Trasferimenti
       'docker run', 'docker build', 'docker pull', 'docker push', // Docker
@@ -781,7 +783,13 @@ ipcMain.handle('run-sudo-command', async (event, command, password) => {
     console.log(`Executing sudo command: ${command}`);
 
     // Rimuovi sudo dal comando
-    const actualCommand = command.substring(5);
+    let actualCommand = command.substring(5);
+    
+    // Per comandi pacman, aggiungi --noconfirm se non è già presente
+    if (actualCommand.includes('pacman') && !actualCommand.includes('--noconfirm')) {
+      actualCommand = actualCommand.replace('pacman', 'pacman --noconfirm');
+      console.log(`Modified command to be non-interactive: ${actualCommand}`);
+    }
     
     // Per comandi sudo con installer interattivi (come Homebrew)
     const isInteractiveInstaller = actualCommand.includes('install.sh') || 

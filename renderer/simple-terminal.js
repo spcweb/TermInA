@@ -1943,6 +1943,18 @@ class SimpleTerminal {
                     }
                 }
                 
+                // Controlla se il risultato indica che serve un dialog password
+                if (typeof result === 'string' && result.includes('Password required for:')) {
+                    // Estrai il comando dal messaggio
+                    const commandMatch = result.match(/Password required for: (.+)/);
+                    if (commandMatch) {
+                        const sudoCommand = commandMatch[1].trim();
+                        console.log('Frontend: Detected sudo command, calling handleSudoCommand:', sudoCommand);
+                        await this.handleSudoCommand(sudoCommand);
+                        return;
+                    }
+                }
+                
                 this.addOutput(result);
             } else {
                 if (needsLoading) this.hideLoadingIndicator();
@@ -1978,7 +1990,9 @@ class SimpleTerminal {
             });
             
             this.addOutput('🔄 Executing sudo command...');
+            console.log('Frontend: Calling runSudoCommand with:', { command, passwordLength: password ? password.length : 0 });
             const result = await window.electronAPI.runSudoCommand(command, password);
+            console.log('Frontend: Received result:', result);
             
             // Logica intelligente per nascondere il loading
             const elapsed = Date.now() - loadingStartTime;
