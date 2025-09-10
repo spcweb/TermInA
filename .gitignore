@@ -132,3 +132,18 @@ test-results/
 
 # TypeScript
 *.tsbuildinfo
+
+# --- Altre cache comuni ---
+# Bun runtime cache
+.bun/
+
+# NYC/Istanbul coverage
+.nyc_output/
+.v8-coverage/
+
+# Vitest
+.vitest/
+
+# Cypress artifacts
+cypress/screenshots/
+cypress/videos/
