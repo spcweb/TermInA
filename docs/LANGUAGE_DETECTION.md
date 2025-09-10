@@ -1,111 +1,103 @@
-# Rilevamento Automatico della Lingua AI
+# AI Language Auto-Detection
 
-## Panoramica
+## Overview
 
-TermInA ora include il rilevamento automatico della lingua per le richieste AI. L'AI risponderà nella stessa lingua in cui viene posta la domanda, rendendo l'esperienza più naturale per gli utenti internazionali.
+TermInA includes automatic language detection for AI requests. The AI will reply in the same language as the prompt, making the experience natural for international users.
 
-## Lingue Supportate
+## Supported languages
 
-- **Italiano** (it)
-- **Inglese** (en) - lingua di fallback
-- **Spagnolo** (es)
-- **Francese** (fr)
-- **Tedesco** (de)
+- Italian (it)
+- English (en) — fallback
+- Spanish (es)
+- French (fr)
+- German (de)
 
-## Come Funziona
+## How it works
 
-1. **Rilevamento**: Quando viene inviata una richiesta AI, il sistema analizza il testo per identificare la lingua
-2. **Istruzione**: Viene aggiunta automaticamente un'istruzione specifica per la lingua rilevata
-3. **Risposta**: L'AI risponde nella lingua appropriata
+1) Detection: when a request is sent to the AI, we analyze the text to infer its language
+2) Instruction: we add a language-specific instruction to the prompt
+3) Response: the AI answers in the appropriate language
 
-## Algoritmo di Rilevamento
+## Detection approach
 
-Il sistema utilizza un approccio multi-livello:
+Multi-layer heuristic:
 
-### 1. Analisi delle Parole Chiave
-- Parole interrogative: come, cosa, where, how, etc.
-- Verbi comuni: spiegami, aiutami, explain, help, etc.
-- Sostantivi tecnici: file, cartella, comando, etc.
+### 1) Keyword analysis
+- Interrogatives: come, cosa, where, how, etc.
+- Common verbs: spiegami, aiutami, explain, help, etc.
+- Technical nouns: file, cartella, comando, etc.
 
-### 2. Analisi Grammaticale
-- Articoli: il/la/lo (italiano), the/a/an (inglese), etc.
-- Preposizioni: di/da/in (italiano), of/from/in (inglese), etc.
+### 2) Grammar hints
+- Articles: il/la/lo (IT), the/a/an (EN), etc.
+- Prepositions: di/da/in (IT), of/from/in (EN), etc.
 
-### 3. Caratteri Specifici
-- Accenti italiani: à, è, é, ì, ò, ù
-- Accenti spagnoli: á, é, í, ñ, ó, ú, ü, ¿, ¡
-- Caratteri francesi: à, â, ä, é, è, ê, ë, etc.
-- Caratteri tedeschi: ä, ö, ü, ß
+### 3) Script-specific characters
+- Italian accents: à, è, é, ì, ò, ù
+- Spanish accents: á, é, í, ñ, ó, ú, ü, ¿, ¡
+- French characters: à, â, ä, é, è, ê, ë, etc.
+- German characters: ä, ö, ü, ß
 
-## Esempi di Utilizzo
+## Examples
 
-### Italiano
+Italian
 ```
 ai Come posso installare Node.js?
 → AI risponde in italiano
 ```
 
-### Inglese
+English
 ```
 ai How can I install Node.js?
 → AI responds in English
 ```
 
-### Spagnolo
+Spanish
 ```
 ai ¿Cómo puedo instalar Node.js?
-→ AI responde en español
+→ La IA responde en español
 ```
 
-### Francese
+French
 ```
 ai Comment installer Node.js?
 → L'AI répond en français
 ```
 
-### Tedesco
+German
 ```
 ai Wie installiere ich Node.js?
 → AI antwortet auf Deutsch
 ```
 
-## Casi Limite
+## Edge cases
 
-- **Comandi puri** (es. `ls -la`): Fallback all'inglese
-- **Stringhe vuote**: Fallback all'inglese
-- **Testo misto**: Viene scelta la lingua predominante
-- **Testo ambiguo**: Fallback all'inglese
+- Pure commands (e.g., `ls -la`): fallback to English
+- Empty strings: fallback to English
+- Mixed text: pick the dominant language
+- Ambiguous text: fallback to English
 
-## Configurazione
+## Configuration
 
-La funzionalità è attiva di default e non richiede configurazione. Il rilevamento avviene automaticamente per tutti i comandi AI:
+This is enabled by default; no setup required. It applies to all AI commands:
 
-- `ai <domanda>`
-- `ask <domanda>`
-- `execute <compito>`
-- `run <compito>`
+- `ai <question>`
+- `ask <question>`
+- `execute <task>`
+- `run <task>`
 
-## File Coinvolti
+## Related files
 
-- `src/language-detector.js` - Classe principale per il rilevamento
-- `src/ai-manager.js` - Integrazione con il gestore AI
-- `src/ai-agent.js` - Integrazione con l'agente AI
-- `test-language-detection.js` - Test di verifica
+- `src/language-detector.js` — detection heuristics
+- `src/ai-manager.js` — AI pipeline integration
+- `src/ai-agent.js` — agent integration
 
-## Benefici
+## Benefits
 
-1. **Esperienza Naturale**: Gli utenti possono interagire nella loro lingua madre
-2. **Accessibilità**: Supporto per utenti internazionali
-3. **Automatico**: Nessuna configurazione richiesta
-4. **Accurato**: Rilevamento preciso basato su multiple euristiche
-5. **Robusto**: Gestione intelligente dei casi limite
+1) Natural UX for non-English users
+2) Zero configuration
+3) Accurate heuristics across five languages
+4) Robust handling of edge cases
 
-## Test
+## Manual testing
 
-Per testare il rilevamento della lingua:
-
-```bash
-node test-language-detection.js
-```
-
-Questo eseguirà una serie completa di test con frasi in tutte le lingue supportate.
+Try different prompts in the terminal using the commands above and verify the response language matches the input.

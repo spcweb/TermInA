@@ -1,52 +1,52 @@
 # TermInA Terminal - Rust Implementation
 
-Questo è il modulo terminale riscritto in Rust per risolvere i problemi con i comandi sudo e migliorare le prestazioni del terminale TermInA.
+This is the terminal module rewritten in Rust to fix sudo command issues and improve TermInA terminal performance.
 
-## Caratteristiche
+## Features
 
-- **Gestione PTY robusta**: Implementazione nativa in Rust per la gestione dei pseudo-terminali
-- **Supporto sudo sicuro**: Gestione sicura delle password e dei comandi privilegiati
-- **Interfaccia FFI**: Compatibilità con Node.js/Electron tramite interfaccia C
-- **Gestione asincrona**: Utilizzo di Tokio per operazioni asincrone
-- **Cross-platform**: Supporto per macOS, Linux e Windows
-- **Gestione sessioni**: Supporto per multiple sessioni terminale simultanee
+- **Robust PTY management**: Native Rust implementation for pseudo-terminal handling
+- **Secure sudo support**: Safe handling of passwords and privileged commands
+- **FFI interface**: Compatible with Node.js/Electron via C interface
+- **Asynchronous runtime**: Tokio-based async operations
+- **Cross-platform**: Supports macOS, Linux, and Windows
+- **Session management**: Multiple simultaneous terminal sessions
 
-## Struttura del Progetto
+## Project Structure
 
 ```
 src/
-├── lib.rs              # Libreria principale
-├── main.rs             # Punto di ingresso del binario
-├── pty_manager.rs      # Gestione PTY
-├── session.rs          # Gestione sessioni
-├── sudo_handler.rs     # Gestione comandi sudo
-└── ffi.rs              # Interfaccia FFI per Node.js
+├── lib.rs              # Core library
+├── main.rs             # Test binary entry point
+├── pty_manager.rs      # PTY management
+├── session.rs          # Session management
+├── sudo_handler.rs     # Sudo command handling
+└── ffi.rs              # FFI interface for Node.js
 ```
 
-## Dipendenze Principali
+## Key Dependencies
 
-- **tokio**: Runtime asincrono
-- **nix**: Interfacce Unix
-- **serde**: Serializzazione JSON
-- **rpassword**: Gestione password sicura
-- **anyhow**: Gestione errori
+- **tokio**: Async runtime
+- **nix**: Unix interfaces
+- **serde**: JSON serialization
+- **rpassword**: Secure password input
+- **anyhow**: Error handling
 - **log**: Logging
 
-## Compilazione
+## Build
 
-### Prerequisiti
+### Prerequisites
 
-1. Installa Rust:
+1. Install Rust:
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 ```
 
-2. Installa le dipendenze di sistema:
+2. Install system dependencies:
 
 **macOS:**
 ```bash
-# Nessuna dipendenza aggiuntiva richiesta
+# No additional dependencies required
 ```
 
 **Linux:**
@@ -56,34 +56,34 @@ sudo apt-get install build-essential libdbus-1-dev
 
 **Windows:**
 ```bash
-# Installa Visual Studio Build Tools
+# Install Visual Studio Build Tools
 ```
 
 ### Build
 
 ```bash
-# Build della libreria
+# Build the library
 cargo build --release
 
-# Build del binario di test
+# Build the test binary
 cargo build --bin termina-terminal
 
-# Esegui i test
+# Run tests
 cargo test
 
-# Esegui il binario di test
+# Run the test binary
 cargo run --bin termina-terminal
 ```
 
-## Integrazione con Node.js
+## Node.js Integration
 
-La libreria fornisce un'interfaccia FFI compatibile con C che può essere utilizzata da Node.js tramite:
+The library provides a C-compatible FFI interface usable from Node.js via:
 
 - `node-ffi`
 - `ffi-napi`
 - `@napi-rs/cli`
 
-### Esempio di utilizzo in Node.js
+### Node.js Usage Example
 
 ```javascript
 const ffi = require('ffi-napi');
@@ -96,33 +96,33 @@ const lib = ffi.Library('./target/release/libtermina_terminal', {
   'rust_terminal_free_string': ['void', ['string']]
 });
 
-// Inizializza il terminale
+// Initialize terminal
 lib.rust_terminal_init();
 
-// Crea una sessione
+// Create a session
 const sessionId = lib.rust_terminal_create_session(null);
 
-// Scrive un comando
+// Write a command
 lib.rust_terminal_write_to_session(sessionId, 'echo hello\n');
 
-// Chiude la sessione
+// Close the session
 lib.rust_terminal_close_session(sessionId);
 
-// Libera la memoria
+// Free memory
 lib.rust_terminal_free_string(sessionId);
 ```
 
-## API Rust
+## Rust API
 
-### Creazione del Terminale
+### Create Terminal
 
 ```rust
 use termina_terminal::RustTerminal;
 
-// Crea con configurazione di default
+// Create with default configuration
 let terminal = RustTerminal::new()?;
 
-// Crea con configurazione personalizzata
+// Create with custom configuration
 let config = TerminalConfig {
     default_shell: "zsh".to_string(),
     default_cwd: "/home/user".to_string(),
@@ -134,98 +134,98 @@ let config = TerminalConfig {
 let terminal = RustTerminal::with_config(config)?;
 ```
 
-### Gestione Sessioni
+### Session Management
 
 ```rust
-// Crea una sessione
+// Create a session
 let session_id = terminal.create_session(Some("/path/to/cwd".to_string()))?;
 
-// Scrive dati
+// Write data
 terminal.write_to_session(&session_id, "ls -la\n")?;
 
-// Ridimensiona
+// Resize
 terminal.resize_session(&session_id, 80, 24)?;
 
-// Ottiene output
+// Get output
 let output = terminal.get_session_output(&session_id)?;
 
-// Chiude sessione
+// Close session
 terminal.close_session(&session_id)?;
 ```
 
-### Comandi Sudo
+### Sudo Commands
 
 ```rust
-// Esegue comando sudo
+// Run sudo command
 terminal.run_sudo_command(&session_id, "sudo apt update", "password")?;
 ```
 
-## Test
+## Tests
 
 ```bash
-# Esegui tutti i test
+# Run all tests
 cargo test
 
-# Esegui test specifici
+# Run specific tests
 cargo test test_session_creation
 cargo test test_sudo_handling
 
-# Test con output verbose
+# Verbose tests
 cargo test -- --nocapture
 ```
 
 ## Debug
 
-Per abilitare il logging di debug:
+To enable debug logging:
 
 ```bash
 RUST_LOG=debug cargo run
 ```
 
-## Sicurezza
+## Security
 
-- Le password sudo non vengono mai loggate
-- I messaggi di password vengono filtrati dall'output
-- Timeout configurabili per prevenire hang
-- Gestione sicura della memoria con Rust
+- Sudo passwords are never logged
+- Password prompts are filtered from output
+- Configurable timeouts prevent hangs
+- Safe memory management with Rust
 
 ## Performance
 
-- Gestione asincrona con Tokio
-- Buffer ottimizzati per l'output
-- Cleanup automatico delle sessioni inattive
-- Gestione efficiente della memoria
+- Async handling with Tokio
+- Optimized output buffers
+- Automatic cleanup of inactive sessions
+- Efficient memory usage
 
 ## Troubleshooting
 
-### Problemi di Compilazione
+### Build Issues
 
-1. **Errore di dipendenze di sistema**:
-   - Assicurati di avere le dipendenze di build installate
-   - Su macOS, installa Xcode Command Line Tools
+1. **System dependencies**:
+   - Make sure build dependencies are installed
+   - On macOS, install Xcode Command Line Tools
 
-2. **Errore di linking**:
-   - Verifica che le librerie di sistema siano disponibili
-   - Controlla i percorsi delle librerie
+2. **Linking errors**:
+   - Verify system libraries are available
+   - Check library paths
 
-### Problemi Runtime
+### Runtime Issues
 
-1. **Sessioni non si creano**:
-   - Verifica che la shell di default sia disponibile
-   - Controlla i permessi della directory di lavoro
+1. **Sessions not created**:
+   - Ensure default shell is available
+   - Check working directory permissions
 
-2. **Comandi sudo falliscono**:
-   - Verifica che sudo sia installato e configurato
-   - Controlla che la password sia corretta
+2. **Sudo commands fail**:
+   - Ensure sudo is installed and configured
+   - Verify the password is correct
 
-## Contribuire
+## Contributing
 
-1. Fork del repository
-2. Crea un branch per la feature
-3. Implementa le modifiche
-4. Aggiungi test
-5. Crea una pull request
+1. Fork the repository
+2. Create a feature branch
+3. Implement changes
+4. Add tests
+5. Open a pull request
 
-## Licenza
+## License
 
-MIT License - vedi il file LICENSE per i dettagli.
+MIT License — see LICENSE for details.

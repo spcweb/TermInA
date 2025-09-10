@@ -40,16 +40,16 @@ This document describes the improvements implemented to bring TermInA’s termin
 
 #### Polling Real-Time
 ```javascript
-// Prima: 100ms polling
+// Before: 100ms polling
 setInterval(polling, 100);
 
-// Dopo: 16ms polling (~60fps)
+// After: 16ms polling (~60fps)
 setInterval(polling, 16);
 ```
 
 #### Timestamped Buffer
 ```javascript
-// Nuovo sistema di buffer
+// New buffer system
 outputBuffer: [{
     data: text,
     timestamp: Date.now(),
@@ -60,13 +60,13 @@ outputBuffer: [{
 ### 2) Improved Output Handling
 
 #### Immediate Output
-- Nuovo endpoint `pty-get-immediate-output`
-- Polling basato su timestamp invece di indice
-- Forzatura aggiornamento display
+- New endpoint `pty-get-immediate-output`
+- Polling based on timestamp instead of index
+- Force display refresh
 
 #### Supported Commands
 ```javascript
-// Lista estesa di comandi PTY
+// Extended list of PTY commands
 const ptyCommands = [
     'npm install', 'npm run', 'yarn install', 'yarn add', 'yarn remove',
     'pip install', 'pip download', 'pip uninstall',
@@ -78,7 +78,7 @@ const ptyCommands = [
     'cargo build', 'cargo run', 'cargo install',
     'go build', 'go run', 'go install',
     'mvn install', 'mvn compile', 'gradle build',
-    // ... e molti altri
+    // ... and many more
 ];
 ```
 
@@ -86,7 +86,7 @@ const ptyCommands = [
 
 #### Control Keys
 ```javascript
-// Supporto completo per tasti di controllo
+// Full support for control keys
 Ctrl+C  → \x03 (interrupt)
 Ctrl+D  → \x04 (EOF)
 Ctrl+Z  → \x1a (suspend)
@@ -95,12 +95,12 @@ Ctrl+H  → \x08 (backspace)
 Ctrl+I  → \x09 (tab)
 Ctrl+M  → \r (enter)
 Ctrl+[  → \x1b (escape)
-// ... e molti altri
+// ... and many more
 ```
 
 #### Special Keys
 ```javascript
-// Supporto per tasti speciali
+// Support for special keys
 Arrow Keys → \x1b[A/B/C/D
 Home/End   → \x1b[H/F
 Page Up/Dn → \x1b[5~/6~
@@ -113,12 +113,12 @@ F1-F12     → \x1bOP/OQ/OR/OS/[15~/[17~...
 
 #### Process Signals
 ```javascript
-// Gestione specifica dei segnali
+// Specific signal handling
 if (signal) {
     console.log(`Process terminated by signal: ${signal}`);
 }
 
-// Gestione errori specifici
+// Specific error handling
 if (error.code === 'ENOENT') {
     errorMessage = `Command not found: ${error.path}`;
 } else if (error.code === 'EACCES') {
@@ -128,39 +128,39 @@ if (error.code === 'ENOENT') {
 
 #### Configurable Timeouts
 ```javascript
-// Timeout basati sul tipo di comando
-let timeout = 120000; // Default 2 minuti
+// Timeouts based on command type
+let timeout = 120000; // Default 2 minutes
 if (trimmed.includes('npm install') || trimmed.includes('yarn install')) {
-    timeout = 600000; // 10 minuti per installazioni npm/yarn
+    timeout = 600000; // 10 minutes for npm/yarn installs
 } else if (trimmed.includes('docker build') || trimmed.includes('make')) {
-    timeout = 1800000; // 30 minuti per build complesse
+    timeout = 1800000; // 30 minutes for complex builds
 }
 ```
 
 ## 📊 Results
 
 ### Before Improvements
-- ❌ npm install: Nessun output visibile
-- ❌ Comandi interattivi: Non funzionanti
-- ❌ Tasti di controllo: Limitati
-- ❌ Gestione errori: Basica
-- ❌ Output dinamici: Perduti
+- ❌ npm install: No output visible
+- ❌ Interactive commands: Not working
+- ❌ Control keys: Limited
+- ❌ Error handling: Basic
+- ❌ Dynamic outputs: Lost
 
 ### After Improvements
 - ✅ npm install: Output completo e in tempo reale
-- ✅ Comandi interattivi: Supporto completo
-- ✅ Tasti di controllo: Tutti i tasti supportati
-- ✅ Gestione errori: Avanzata con messaggi dettagliati
-- ✅ Output dinamici: Fluido a 60fps
+- ✅ Interactive commands: Full support
+- ✅ Control keys: All standard keys supported
+- ✅ Error handling: Advanced with detailed messages
+- ✅ Dynamic outputs: Smooth at 60fps
 
 ## 🧪 Testing
 
 We created a comprehensive test script (`test-terminal-improvements.js`) that verifies:
 
-1. **npm install output visibility** - Verifica che l'output sia visibile
-2. **Interactive commands** - Testa comandi interattivi
-3. **Control signals** - Verifica gestione segnali
-4. **Long output commands** - Testa output lunghi
+1. **npm install output visibility** - Verify output is visible
+2. **Interactive commands** - Test interactive commands
+3. **Control signals** - Verify signal handling
+4. **Long output commands** - Test long outputs
 
 ### Run the Tests
 ```bash
@@ -171,40 +171,40 @@ node test-terminal-improvements.js
 
 TermInA’s terminal now supports:
 
-- ✅ **Output in tempo reale** - Polling a 60fps
-- ✅ **Comandi interattivi** - Supporto completo
-- ✅ **Tasti di controllo** - Tutti i tasti standard
-- ✅ **Gestione errori** - Messaggi dettagliati
-- ✅ **Segnali di processo** - Gestione completa
-- ✅ **Timeout configurabili** - Basati sul tipo di comando
-- ✅ **Buffer robusto** - Con timestamp e gestione errori
+- ✅ **Real-time output** - 60fps polling
+- ✅ **Interactive commands** - Full support
+- ✅ **Control keys** - All standard keys
+- ✅ **Error handling** - Detailed messages
+- ✅ **Process signals** - Full handling
+- ✅ **Configurable timeouts** - Based on command type
+- ✅ **Robust buffer** - With timestamps and error handling
 
 ## 🚀 Next Steps
 
-1. **Test in produzione** - Verificare con comandi reali
-2. **Ottimizzazioni** - Migliorare performance se necessario
-3. **Documentazione** - Aggiornare guide utente
-4. **Feedback** - Raccogliere feedback dagli utenti
+1. **Production testing** - Verify with real commands
+2. **Optimizations** - Improve performance as needed
+3. **Documentation** - Update user guides
+4. **Feedback** - Collect user feedback
 
 ## 📝 Technical Notes
 
 ### Modified Files
-- `renderer/pty-terminal.js` - Polling e gestione output
-- `src/pty-manager.js` - Buffer e gestione sessioni
-- `main.js` - Timeout e gestione comandi
-- `preload.js` - Nuove API
-- `renderer/simple-terminal.js` - Input interattivo
+- `renderer/pty-terminal.js` - Polling and output handling
+- `src/pty-manager.js` - Buffer and session management
+- `main.js` - Timeouts and command handling
+- `preload.js` - New APIs
+- `renderer/simple-terminal.js` - Interactive input
 
 ### New APIs
-- `ptyGetImmediateOutput` - Output in tempo reale
-- `getSessionOutputFromBuffer` - Buffer con timestamp
-- `getLastOutputTimestamp` - Timestamp ultimo output
+- `ptyGetImmediateOutput` - Real-time output
+- `getSessionOutputFromBuffer` - Timestamped buffer
+- `getLastOutputTimestamp` - Last output timestamp
 
 ### Configurations
 - Polling: 16ms (60fps)
-- Timeout npm/yarn: 10 minuti
-- Timeout build: 30 minuti
-- Timeout default: 2 minuti
+- npm/yarn timeout: 10 minutes
+- Build timeout: 30 minutes
+- Default timeout: 2 minutes
 
 ---
 

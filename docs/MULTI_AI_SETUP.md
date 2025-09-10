@@ -1,277 +1,219 @@
-# Guida Configurazione AI Multiple
+# Multi-AI Setup Guide
 
-TermInA supporta tre provider AI differenti che puoi configurare e utilizzare a piacimento. Ecco una guida completa per configurare ciascuno di essi.
+TermInA supports multiple AI providers you can configure and switch between. This guide covers how to set up each one.
 
-## 🤖 Provider AI Supportati
+## 🤖 Supported AI providers
 
-### 1. Google Gemini (Consigliato)
-- **Veloce e gratuito** (con limiti)
-- **Multimodale** (testo, immagini, code)
-- **Ottimo per uso generale**
+### 1) Google Gemini (recommended)
+- Fast and free (with limits)
+- Multimodal (text, images, code)
+- Great for general use
 
-### 2. OpenAI (GPT)
-- **Qualità eccellente**
-- **Modelli avanzati** (GPT-4, GPT-4o)
-- **A pagamento**
+### 2) OpenAI (GPT)
+- Excellent quality
+- Advanced models (GPT-4, GPT-4o)
+- Paid
 
-### 3. LM Studio (Locale)
-- **Completamente privato**
-- **Nessun costo dopo setup**
-- **Richiede hardware potente**
+### 3) LM Studio (local)
+- Fully private
+- No cost after setup
+- Requires stronger hardware
 
-### 4. Ollama (Locale)
-- **Completamente privato e open source**
-- **Facile da installare e configurare**
-- **Modelli ottimizzati per diverse task**
-- **Nessun costo dopo setup**
+### 4) Ollama (local)
+- Fully private and open source
+- Easy to install and configure
+- Optimized models for many tasks
+- No cost after setup
 
 ---
 
-## 📝 Configurazione Step-by-Step
+## 📝 Step-by-step configuration
 
 ### 🔮 Google Gemini
 
-#### 1. Ottieni API Key
-1. Vai su [Google AI Studio](https://makersuite.google.com/)
-2. Accedi con il tuo account Google
-3. Crea un nuovo progetto o seleziona esistente
-4. Vai su "API Keys" nel menu laterale
-5. Clicca "Create API Key"
-6. Copia la chiave generata (formato: `AIzaSy...`)
+#### 1) Get an API key
+1) Go to Google AI Studio: https://makersuite.google.com/
+2) Sign in
+3) Create/select a project
+4) Open “API Keys”
+5) Click “Create API Key”
+6) Copy the key (e.g., `AIzaSy...`)
 
-#### 2. Configura in TermInA
-1. Apri Impostazioni (⌘+,)
-2. Vai alla sezione "Artificial Intelligence"
-3. Seleziona "Google Gemini" dal dropdown
-4. Incolla la API Key nel campo "API Key"
-5. Scegli il modello:
-   - **Gemini 2.5 Flash**: Veloce, ideale per uso generale
-   - **Gemini Pro**: Più potente, per task complessi
-6. Clicca "Test Connection" per verificare
-7. Salva le impostazioni
+#### 2) Configure TermInA
+1) Open Settings (⌘+,)
+2) Open Artificial Intelligence
+3) Choose “Google Gemini”
+4) Paste the API key
+5) Pick a model:
+   - Gemini 2.5 Flash — fast, great for general tasks
+   - Gemini Pro — more powerful for complex tasks
+6) Click “Test Connection”
+7) Save
 
-#### 3. Limiti e Costi
-- **Gratuito**: 15 richieste/minuto, 1M token/mese
-- **A pagamento**: $0.075 per 1M token input, $0.30 per 1M token output
+#### 3) Limits and costs (typical)
+- Free: ~15 req/min, ~1M tokens/month
+- Paid: see latest Google pricing
 
 ---
 
 ### 🧠 OpenAI (ChatGPT)
 
-#### 1. Ottieni API Key
-1. Vai su [OpenAI Platform](https://platform.openai.com/)
-2. Crea un account o accedi
-3. Aggiungi un metodo di pagamento
-4. Vai su "API Keys" nel dashboard
-5. Crea una nuova Secret Key
-6. Copia la chiave (formato: `sk-...`)
+#### 1) Get an API key
+1) https://platform.openai.com/
+2) Sign up / sign in
+3) Add a payment method
+4) Create a new API key
+5) Copy it (format: `sk-...`)
 
-#### 2. Configura in TermInA
-1. Impostazioni → AI → Seleziona "OpenAI"
-2. Incolla la API Key
-3. Scegli il modello:
-   - **GPT-3.5 Turbo**: Economico, buona qualità
-   - **GPT-4**: Qualità superiore, più costoso
-   - **GPT-4 Turbo**: Versione ottimizzata di GPT-4
-   - **GPT-4o**: Modello più recente e veloce
-4. Test della connessione
-5. Salva
+#### 2) Configure TermInA
+1) Settings → AI → choose “OpenAI”
+2) Paste the API key
+3) Choose a model:
+   - GPT-3.5 Turbo — cheaper, decent quality
+   - GPT-4 — higher quality, higher cost
+   - GPT-4 Turbo — optimized GPT-4
+   - GPT-4o — latest, faster
+4) Test connection
+5) Save
 
-#### 3. Costi Approssimativi
-- **GPT-3.5 Turbo**: $0.50 per 1M token input, $1.50 per 1M token output
-- **GPT-4**: $30 per 1M token input, $60 per 1M token output
-- **GPT-4o**: $5 per 1M token input, $15 per 1M token output
+#### 3) Costs (typical)
+- See OpenAI pricing for up-to-date rates
 
 ---
 
-### 🏠 LM Studio (AI Locale)
+### 🏠 LM Studio (local)
 
-#### 1. Installa LM Studio
-1. Scarica da [lmstudio.ai](https://lmstudio.ai/)
-2. Installa l'applicazione
-3. Apri LM Studio
+#### 1) Install LM Studio
+https://lmstudio.ai/
 
-#### 2. Scarica un Modello
-1. Vai alla sezione "Search" in LM Studio
-2. Cerca modelli consigliati:
-   - **Llama 2 7B**: Buon equilibrio qualità/velocità
-   - **Code Llama 7B**: Specializzato in programmazione
-   - **Mistral 7B**: Eccellente qualità, multilingue
-   - **Phi-3 Mini**: Molto veloce, buono per chat
-3. Clicca "Download" sul modello scelto
-4. Attendi il completamento (può richiedere tempo)
+#### 2) Download a model
+Use Search in LM Studio, e.g. Llama 2 7B, Code Llama 7B, Mistral 7B, Phi-3 Mini
 
-#### 3. Avvia il Server Locale
-1. Vai alla sezione "Local Server" in LM Studio
-2. Seleziona il modello scaricato
-3. Configura le impostazioni:
-   - **Port**: 1234 (default)
-   - **Context Length**: 4096 o superiore
-   - **GPU Layers**: Massimo supportato dall'hardware
-4. Clicca "Start Server"
-5. Verifica che mostri "Server is running on http://localhost:1234"
+#### 3) Start local server
+- Port: 1234 (default)
+- Context: 4096+
+- GPU Layers: as supported
+Click Start Server; verify “Server is running on http://localhost:1234”.
 
-#### 4. Configura in TermInA
-1. Impostazioni → AI → Seleziona "LM Studio (Local)"
-2. Endpoint: `http://localhost:1234/v1`
-3. Model name: Nome del modello (es. "llama-2-7b-chat")
-4. API Key: Lascia "lm-studio" (default)
-5. Test della connessione
-6. Salva
+#### 4) Configure TermInA
+- Settings → AI → “LM Studio (Local)”
+- Endpoint: `http://localhost:1234/v1`
+- Model name: e.g., `llama-2-7b-chat`
+- API Key: `lm-studio` (or blank)
+- Test connection and Save
 
-#### 5. Requisiti Hardware
-- **Minimum**: 8GB RAM, CPU moderno
-- **Raccomandato**: 16GB+ RAM, GPU dedicata
-- **Ottimale**: 32GB+ RAM, GPU NVIDIA con 8GB+ VRAM
+#### 5) Hardware
+- Minimum: 8GB RAM, modern CPU
+- Recommended: 16GB+ RAM, dedicated GPU
+- Optimal: 32GB+ RAM, NVIDIA 8GB+ VRAM
 
 ---
 
-### 🦙 Ollama (AI Locale)
+### 🦙 Ollama (local)
 
-#### 1. Installa Ollama
-1. Scarica da [ollama.ai](https://ollama.ai/)
-2. Installa l'applicazione per il tuo sistema operativo
-3. Apri il terminale e verifica l'installazione:
-   ```bash
-   ollama --version
-   ```
-
-#### 2. Scarica un Modello
-1. Nel terminale, scarica un modello:
-   ```bash
-   # Modelli generali
-   ollama pull gemma3:270m    # Molto veloce, buona qualità
-   ollama pull llama3.2
-   ollama pull mistral
-   ollama pull codellama
-   
-   # Modelli specializzati
-   ollama pull llama3.2:3b    # Versione leggera
-   ollama pull llama3.2:8b    # Versione bilanciata
-   ollama pull llama3.2:70b   # Versione completa
-   ```
-
-#### 3. Avvia Ollama
-1. Ollama si avvia automaticamente come servizio
-2. Verifica che sia attivo:
-   ```bash
-   curl http://localhost:11434/api/tags
-   ```
-3. Dovresti vedere la lista dei modelli disponibili
-
-#### 4. Configura in TermInA
-1. Impostazioni → AI → Seleziona "Ollama (Local)"
-2. Endpoint: `http://localhost:11434` (default)
-3. Model name: Nome del modello scaricato (es. "gemma3:270m")
-4. API Key: Lascia vuoto per installazioni locali
-5. Test della connessione
-6. Salva
-
-#### 5. Requisiti Hardware
-- **Minimum**: 4GB RAM, CPU moderno
-- **Raccomandato**: 8GB+ RAM, CPU multi-core
-- **Ottimale**: 16GB+ RAM, GPU dedicata (opzionale)
+See dedicated guides:
+- docs/OLLAMA_SETUP.md — setup
+- docs/OLLAMA_COMPATIBILITY.md — troubleshooting
 
 ---
 
-## 🔄 Switching tra Provider
+## 🔄 Switching providers
 
-### Cambio Rapido
-1. Apri Impostazioni (⌘+,)
-2. Sezione AI → Cambia "AI Provider"
-3. Salva
-4. L'AI si adatta immediatamente al nuovo provider
+### Quick switch
+1) Open Settings (⌘+,)
+2) AI → change “AI Provider”
+3) Save
+4) The app switches immediately
 
-### Provider per Scenario
-- **Gemini**: Uso quotidiano, domande generali
-- **OpenAI**: Task complessi, analisi profonde
-- **LM Studio**: Privacy, uso offline, sperimentazione
-- **Ollama**: Privacy, facile setup, modelli ottimizzati
-
----
-
-## 🧪 Test delle Configurazioni
-
-Ogni provider ha un pulsante "Test Connection" che:
-1. ✅ Verifica la connettività
-2. ✅ Testa l'autenticazione
-3. ✅ Conferma che il modello risponde
-4. ✅ Mostra eventuali errori di configurazione
-
-### Risoluzione Problemi Comuni
-
-#### Gemini
-- **❌ 403 Forbidden**: API Key non valida
-- **❌ 429 Too Many Requests**: Limite rate raggiunto
-- **❌ 400 Bad Request**: Controlla formato richiesta
-
-#### OpenAI
-- **❌ 401 Unauthorized**: API Key non valida o scaduta
-- **❌ 429 Rate limit**: Troppi richieste, aspetta
-- **❌ 402 Payment Required**: Metodo pagamento richiesto
-
-#### LM Studio
-- **❌ Connection failed**: Server non avviato
-- **❌ 404 Not Found**: Endpoint URL errato
-- **❌ 500 Internal Error**: Modello non caricato correttamente
-
-#### Ollama
-- **❌ Connection failed**: Ollama non avviato
-- **❌ 404 Not Found**: Endpoint URL errato
-- **❌ 500 Internal Error**: Modello non scaricato o corrotto
-- **❌ Model not found**: Verifica che il modello sia stato scaricato con `ollama list`
+### Which provider when
+- Gemini: everyday use, general questions
+- OpenAI: complex tasks, deep analysis
+- LM Studio: privacy, offline, experiments
+- Ollama: privacy, easy setup, optimized models
 
 ---
 
-## 💡 Suggerimenti Avanzati
+## 🧪 Testing
 
-### Ottimizzazione Prestazioni
+Each provider has a “Test Connection” button that:
+1) Verifies connectivity
+2) Tests authentication
+3) Confirms the model responds
+4) Shows configuration errors
+
+### Common troubleshooting
+
+Gemini
+- 403 Forbidden — invalid API key
+- 429 Too Many Requests — rate limit
+- 400 Bad Request — check payload shape
+
+OpenAI
+- 401 Unauthorized — invalid/expired key
+- 429 Rate limit — too many requests
+- 402 Payment Required — set up billing
+
+LM Studio
+- Connection failed — server not running
+- 404 Not Found — wrong URL
+- 500 Internal Error — model not loaded
+
+Ollama
+- Connection failed — Ollama not running
+- 404 Not Found — wrong URL
+- 500 Internal Error — model missing/corrupted
+- Model not found — ensure it’s pulled (`ollama list`)
+
+---
+
+## 💡 Advanced tips
+
 ```bash
-# Test velocità provider
-ai "dimmi solo 'ok'"        # Test velocità base
-execute "crea file test"    # Test esecuzione comando
+# Quick sanity tests
+ai "say only: ok"
+execute "create a file named testfile.txt"
 ```
 
-### Configurazioni Multiple
-Puoi facilmente passare da un provider all'altro per ottimizzare:
-- **Gemini**: Per comandi rapidi e frequenti
-- **OpenAI**: Per analisi complesse
-- **LM Studio**: Per privacy e controllo completo
-- **Ollama**: Per privacy, facilità d'uso e modelli specializzati
+### Multiple configurations
+Switch providers based on needs:
+- Gemini: quick, frequent queries
+- OpenAI: complex analysis
+- LM Studio: privacy and control
+- Ollama: privacy and optimized local models
 
-### Backup Configurazioni
-Le configurazioni sono salvate in `~/.termina/config.json`:
+### Backup configuration
+Settings live in `~/.termina/config.json`:
 ```bash
-# Backup configurazioni
+# Backup settings
 cp ~/.termina/config.json ~/.termina/config.backup.json
 ```
 
-### Monitoraggio Costi
-- **Gemini**: Monitora su [Google Cloud Console](https://console.cloud.google.com/)
-- **OpenAI**: Dashboard usage su [platform.openai.com](https://platform.openai.com/usage)
-- **LM Studio**: Gratuito dopo setup iniziale
-- **Ollama**: Completamente gratuito dopo setup iniziale
+### Cost monitoring
+- Gemini: Google Cloud Console
+- OpenAI: https://platform.openai.com/usage
+- LM Studio: free after setup
+- Ollama: free after setup
 
 ---
 
-## 🚨 Note sulla Sicurezza
+## 🚨 Security notes
 
-1. **Non condividere mai le API Keys**
-2. **Usa variabili d'ambiente per deployment**
-3. **Monitora l'uso per evitare costi imprevisti**
-4. **LM Studio e Ollama sono le opzioni più private** (tutto locale)
-5. **Revoca le chiavi se compromesse**
-6. **Ollama offre il massimo controllo sui dati** (open source, locale)
+1) Never share API keys
+2) Use environment variables in deployments
+3) Monitor usage to avoid surprises
+4) LM Studio and Ollama are the most private (all local)
+5) Revoke keys if compromised
+6) Ollama offers maximum local control
 
 ---
 
-## 📞 Supporto
+## 📞 Support
 
-Se hai problemi con la configurazione:
-1. Controlla i log di TermInA
-2. Verifica la connessione internet
-3. Testa con il pulsante "Test Connection"
-4. Consulta la documentazione del provider
-5. Apri un issue su GitHub
+If you run into issues:
+1) Check TermInA logs
+2) Verify internet connection (for cloud)
+3) Use the Test Connection button
+4) Consult the provider’s docs
+5) Open a GitHub issue
 
-**Buona sperimentazione con l'AI integrata in TermInA! 🚀**
+Enjoy exploring TermInA’s AI! 🚀

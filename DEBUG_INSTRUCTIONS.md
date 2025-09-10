@@ -1,31 +1,31 @@
-# 🔍 Istruzioni per Debug PTY
+# 🔍 PTY Debug Instructions
 
-## 🎯 Problema Identificato
-Il PTY riceve il comando ma non produce output. Il buffer è sempre vuoto (`output length: 0`).
+## 🎯 Identified Problem
+The PTY receives the command but produces no output. The buffer is always empty (`output length: 0`).
 
-## 🧪 Test da Eseguire
+## 🧪 Tests to Run
 
-### 1. Test Detection PTY
+### 1. PTY Detection Test
 ```
 test-pty-detection
 ```
-Questo mostrerà se i comandi vengono rilevati come PTY.
+This shows whether commands are detected as PTY.
 
-### 2. Test API Diretta
+### 2. Direct API Test
 ```
 test-pty-api
 ```
-Questo testerà le API PTY direttamente senza il wrapper.
+This tests PTY APIs directly without the wrapper.
 
-### 3. Test Comando Reale
+### 3. Real Command Test
 ```
 npm install --dry-run lodash
 ```
-Questo dovrebbe mostrare tutti i log di debug.
+This should show all debug logs.
 
-## 📊 Log da Cercare
+## 📊 Logs to Look For
 
-### Console DevTools (F12)
+### DevTools Console (F12)
 
 #### 1. Detection
 - `SimpleTerminal: shouldUsePTY(npm install --dry-run lodash) = true`
@@ -37,7 +37,7 @@ Questo dovrebbe mostrare tutti i log di debug.
 - `SimpleTerminal: PTY mode enabled, isActive: true/false`
 
 #### 3. Session
-- `SimpleTerminal: Starting PTY session...` (se non attiva)
+- `SimpleTerminal: Starting PTY session...` (if not active)
 - `SimpleTerminal: PTY session started successfully`
 
 #### 4. Command Send
@@ -51,50 +51,50 @@ Questo dovrebbe mostrare tutti i log di debug.
 - `PTY Manager received data for session X:`
 - `PTY polling got new data:`
 
-## 🚨 Possibili Problemi
+## 🚨 Possible Issues
 
-### 1. Comando Non Rilevato come PTY
-Se vedi `shouldUsePTY = false`, il comando non viene rilevato come PTY.
+### 1. Command Not Detected as PTY
+If you see `shouldUsePTY = false`, the command is not detected as PTY.
 
-### 2. Sessione PTY Non Attiva
-Se vedi `isActive: false`, la sessione PTY non è attiva.
+### 2. PTY Session Not Active
+If you see `isActive: false`, the PTY session is not active.
 
-### 3. Comando Non Inviato
-Se non vedi `PTY sending command:`, il comando non viene inviato.
+### 3. Command Not Sent
+If you don't see `PTY sending command:`, the command is not being sent.
 
-### 4. PTY Non Riceve Dati
-Se non vedi `PTY Manager received data:`, il PTY non riceve output dal comando.
+### 4. PTY Not Receiving Data
+If you don't see `PTY Manager received data:`, the PTY is not receiving output from the command.
 
-## 🔧 Fix Rapidi
+## 🔧 Quick Fixes
 
-### Fix 1: Forza PTY Mode
-Se il comando non viene rilevato come PTY, aggiungi manualmente:
+### Fix 1: Force PTY Mode
+If the command isn't detected as PTY, add manually:
 ```javascript
-// In shouldUsePTY, aggiungi:
+// In shouldUsePTY, add:
 if (command.includes('npm install')) return true;
 ```
 
-### Fix 2: Verifica node-pty
-Se il PTY non riceve dati, potrebbe essere un problema con node-pty:
+### Fix 2: Verify node-pty
+If the PTY doesn't receive data, it may be a node-pty issue:
 ```bash
 npm rebuild node-pty
 ```
 
-### Fix 3: Usa Fallback
-Se node-pty non funziona, il sistema dovrebbe usare il fallback automaticamente.
+### Fix 3: Use Fallback
+If node-pty doesn't work, the system should automatically fallback.
 
-## 📝 Prossimo Passo
+## 📝 Next Step
 
-1. **Esegui i test** in ordine
-2. **Copia i log** dalla console DevTools
-3. **Identifica dove si blocca** il flusso
-4. **Applica il fix** appropriato
+1. **Run the tests** in order
+2. **Copy the logs** from DevTools console
+3. **Identify where the flow stalls**
+4. **Apply the appropriate fix**
 
-## 🎯 Risultato Atteso
+## 🎯 Expected Result
 
-Dopo il fix, dovresti vedere:
-- ✅ Comando rilevato come PTY
-- ✅ Sessione PTY attiva
-- ✅ Comando inviato al PTY
-- ✅ Output ricevuto dal PTY
-- ✅ Output visualizzato nel terminale
+After the fix, you should see:
+- ✅ Command detected as PTY
+- ✅ Active PTY session
+- ✅ Command sent to PTY
+- ✅ Output received from PTY
+- ✅ Output displayed in the terminal

@@ -1,158 +1,144 @@
-# 🔧 Guida Compatibilità Ollama
+# 🔧 Ollama Compatibility Guide
 
-Questa guida ti aiuta a risolvere i problemi di compatibilità più comuni con Ollama in TermInA.
+This guide helps you diagnose and fix common Ollama compatibility issues in TermInA.
 
-## 🚨 Problemi Comuni e Soluzioni
+## 🚨 Common issues and fixes
 
-### 1. **Endpoint API non raggiungibili**
+### 1) API endpoints unreachable
 
-#### Problema
-Gli endpoint `/api/chat` e `/api/generate` non sono raggiungibili durante i test.
+Problem
+Requests to `/api/chat` and `/api/generate` fail during tests.
 
-#### Soluzione
-- **Verifica che Ollama sia in esecuzione**: `ollama serve`
-- **Controlla la porta**: Ollama usa la porta 11434 per default
-- **Testa manualmente**: Usa curl per verificare gli endpoint
+Fix
+- Ensure Ollama is running: `ollama serve`
+- Check default port 11434 is free
+- Manually test with curl
 
 ```bash
-# Test endpoint
+# Test endpoints
 curl http://localhost:11434/api/tags
 curl -X POST http://localhost:11434/api/generate \
   -d '{"model": "gemma3:270m", "prompt": "test", "stream": false}'
 ```
 
-### 2. **Modello non trovato**
+### 2) Model not found
 
-#### Problema
-Il modello configurato non è disponibile in Ollama.
+Problem
+The configured model isn’t available in Ollama.
 
-#### Soluzione
-- **Verifica modelli disponibili**: `ollama list`
-- **Scarica il modello mancante**: `ollama pull nome-modello`
-- **Aggiorna la configurazione** in TermInA con il nome corretto
+Fix
+- List available models: `ollama list`
+- Pull the missing model: `ollama pull <model>`
+- Update TermInA settings with the exact model name
 
 ```bash
-# Lista modelli disponibili
 ollama list
-
-# Scarica un modello
 ollama pull gemma3:270m
 ```
 
-### 3. **Formato risposta non riconosciuto**
+### 3) Unrecognized response format
 
-#### Problema
-L'AI Manager non riesce a interpretare la risposta di Ollama.
+Problem
+The AI manager can’t parse Ollama’s response.
 
-#### Soluzione
-TermInA supporta automaticamente diversi formati di risposta:
-- **Formato Chat**: `{"message": {"content": "..."}}`
-- **Formato Generate**: `{"response": "..."}`
-- **Formato OpenAI**: `{"choices": [{"message": {"content": "..."}}]}`
+Fix
+TermInA supports multiple response shapes:
+- Chat format: `{"message": {"content": "..."}}`
+- Generate format: `{"response": "..."}`
+- OpenAI-like: `{"choices": [{"message": {"content": "..."}}]}`
 
-### 4. **Timeout di connessione**
+### 4) Connection timeouts
 
-#### Problema
-Le richieste ad Ollama impiegano troppo tempo o falliscono.
+Problem
+Requests take too long or fail.
 
-#### Soluzione
-- **Verifica performance del modello**: Modelli più grandi sono più lenti
-- **Controlla risorse sistema**: RAM e CPU sufficienti
-- **Usa modelli più piccoli** per test rapidi
+Fix
+- Large models are slower; try a smaller one
+- Check system resources (CPU/RAM)
+- Prefer lightweight models for quick tests
 
 ```bash
-# Modelli veloci per test
-ollama pull gemma3:270m    # 270M parametri
-ollama pull phi3:mini      # Molto veloce
-ollama pull tinyllama:1b   # Estremamente veloce
+# Fast test models
+ollama pull gemma3:270m
+ollama pull phi3:mini
+ollama pull tinyllama:1b
 ```
 
 ---
 
-## 🔍 Diagnostica Problemi
+## 🔍 Diagnostics
 
-### Test di Connessione Base
+### Basic connectivity tests
 ```bash
-# 1. Verifica che Ollama sia in esecuzione
-ps aux | grep ollama
+# 1) Make sure Ollama is running
+ps aux | grep -i ollama | grep -v grep
 
-# 2. Test endpoint base
+# 2) Test base endpoint
 curl http://localhost:11434/api/tags
 
-# 3. Test endpoint completamento
+# 3) Test generate endpoint
 curl -X POST http://localhost:11434/api/generate \
   -d '{"model": "gemma3:270m", "prompt": "test", "stream": false}'
 
-# 4. Test endpoint chat
+# 4) Test chat endpoint
 curl -X POST http://localhost:11434/api/chat \
   -d '{"model": "gemma3:270m", "messages": [{"role": "user", "content": "test"}], "stream": false}'
 ```
 
-### Test in TermInA
-1. **Apri Impostazioni** (⌘+,)
-2. **Sezione AI** → Seleziona "Ollama (Local)"
-3. **Configura endpoint** e modello
-4. **Testa connessione** con pulsante dedicato
-5. **Verifica log** per errori specifici
+### Inside TermInA
+1) Open Settings
+2) Select AI → "Ollama (Local)"
+3) Configure endpoint and model
+4) Use the Test Connection button
+5) Check logs for specific errors
 
 ---
 
-## 🛠️ Risoluzione Problemi Avanzata
+## 🛠️ Advanced troubleshooting
 
-### Problema: Ollama non si avvia
+### Ollama doesn’t start
 ```bash
-# Riavvia il servizio
 ollama stop
 ollama serve
-
-# Verifica log
 ollama serve --verbose
 ```
 
-### Problema: Modello corrotto
+### Corrupted model
 ```bash
-# Rimuovi e riscarica il modello
-ollama rm nome-modello
-ollama pull nome-modello
+ollama rm <model>
+ollama pull <model>
 ```
 
-### Problema: Porta già in uso
+### Port already in use
 ```bash
-# Trova processo che usa la porta
 lsof -i :11434
-
-# Termina processo
-kill -9 PID
+kill -9 <PID>
 ```
 
-### Problema: Permessi insufficienti
+### Permission issues
 ```bash
-# Verifica permessi directory Ollama
 ls -la ~/.ollama
-
-# Correggi permessi se necessario
 chmod 755 ~/.ollama
 ```
 
 ---
 
-## 📊 Compatibilità Versioni
+## 📊 Version compatibility
 
-### Versioni Ollama Supportate
-- **Ollama 0.1.x**: ✅ Supportato (endpoint `/api/generate`)
-- **Ollama 0.2.x**: ✅ Supportato (endpoint `/api/chat` e `/api/generate`)
-- **Ollama 0.3.x**: ✅ Supportato (endpoint `/api/chat` e `/api/generate`)
+### Supported Ollama versions
+- Ollama 0.1.x: ✅ `/api/generate`
+- Ollama 0.2.x: ✅ `/api/chat` and `/api/generate`
+- Ollama 0.3.x: ✅ `/api/chat` and `/api/generate`
 
-### Formati Modello Supportati
-- **GGUF**: ✅ Supportato nativamente
-- **GGML**: ✅ Supportato (deprecato)
-- **PyTorch**: ❌ Non supportato (converti in GGUF)
+### Supported model formats
+- GGUF: ✅ native support
+- GGML: ✅ supported (deprecated)
+- PyTorch: ❌ not supported (convert to GGUF)
 
 ---
 
-## 🔧 Configurazione Ottimale
+## 🔧 Recommended configuration
 
-### Configurazione Raccomandata
 ```json
 {
   "ai": {
@@ -166,54 +152,53 @@ chmod 755 ~/.ollama
 }
 ```
 
-### Modelli Consigliati per Test
-- **gemma3:270m**: Veloce, buona qualità, 270M parametri
-- **phi3:mini**: Molto veloce, 3.8B parametri
-- **llama3.2:3b**: Bilanciato, 3B parametri
+### Suggested models for testing
+- gemma3:270m — fast, good quality (270M)
+- phi3:mini — very fast (~3.8B)
+- llama3.2:3b — balanced (3B)
 
 ---
 
-## 📝 Log e Debug
+## 📝 Logs and debugging
 
-### Abilita Log Dettagliati
 ```bash
-# Avvia Ollama con log dettagliati
+# Verbose server logs
 ollama serve --verbose
 
-# In un altro terminale, verifica log
+# (If present) tail Ollama logs
 tail -f ~/.ollama/logs/ollama.log
 ```
 
-### Log TermInA
-- **Console principale**: Errori di connessione
-- **Console impostazioni**: Errori di configurazione
-- **Console AI**: Errori di elaborazione richieste
+TermInA consoles to check:
+- Main console: connection failures
+- Settings console: configuration errors
+- AI console: request processing errors
 
 ---
 
-## 🆘 Supporto e Troubleshooting
+## 🆘 Support and troubleshooting
 
-### Se i problemi persistono:
-1. **Verifica versione Ollama**: `ollama --version`
-2. **Controlla log sistema**: `journalctl -u ollama` (Linux)
-3. **Riavvia Ollama**: `ollama stop && ollama serve`
-4. **Verifica risorse**: RAM, CPU, spazio disco
-5. **Testa con curl** per isolare il problema
+If issues persist:
+1) Check Ollama version: `ollama --version`
+2) System logs (Linux): `journalctl -u ollama`
+3) Restart: `ollama stop && ollama serve`
+4) Verify resources: RAM, CPU, disk space
+5) Re-test with curl to isolate
 
-### Risorse Utili
-- [Documentazione Ollama](https://github.com/ollama/ollama/blob/main/docs/README.md)
-- [Community Discord](https://discord.gg/ollama)
-- [Issues GitHub](https://github.com/ollama/ollama/issues)
+Useful links
+- Docs: https://github.com/ollama/ollama/blob/main/docs/README.md
+- Discord: https://discord.gg/ollama
+- Issues: https://github.com/ollama/ollama/issues
 
 ---
 
-## ✅ Checklist Risoluzione
+## ✅ Final checklist
 
-- [ ] Ollama è in esecuzione (`ollama serve`)
-- [ ] Endpoint raggiungibile (`curl http://localhost:11434/api/tags`)
-- [ ] Modello scaricato (`ollama list`)
-- [ ] Configurazione corretta in TermInA
-- [ ] Test connessione superato
-- [ ] Log senza errori critici
+- [ ] Ollama is running (`ollama serve`)
+- [ ] Endpoint reachable (`curl http://localhost:11434/api/tags`)
+- [ ] Model pulled (`ollama list`)
+- [ ] Correct TermInA configuration
+- [ ] Test connection passes
+- [ ] No critical errors in logs
 
-**Se tutti i punti sono verificati, Ollama dovrebbe funzionare correttamente in TermInA! 🚀**
+If all items are ✅, Ollama should work smoothly in TermInA. 🚀

@@ -1,124 +1,117 @@
-# Configurazione LM Studio con Termina
+# LM Studio setup with TermInA
 
-Questa guida ti mostrerà come configurare LM Studio per utilizzare modelli AI locali con Termina.
+This guide shows how to configure LM Studio to use local AI models with TermInA.
 
-## 📦 Installazione di LM Studio
+## 📦 Install LM Studio
 
-1. Scarica LM Studio dal sito ufficiale: https://lmstudio.ai/
-2. Installa l'applicazione sul tuo sistema
-3. Avvia LM Studio
+1) Download from https://lmstudio.ai/
+2) Install the app
+3) Launch LM Studio
 
-## 🤖 Download di un Modello
+## 🤖 Download a model
 
-1. Apri LM Studio
-2. Vai alla sezione "Search" (🔍)
-3. Cerca un modello compatibile, ad esempio:
-   - `microsoft/DialoGPT-medium`
-   - `HuggingFaceH4/zephyr-7b-beta`
-   - `NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO`
-   - `TheBloke/CodeLlama-7B-Instruct-GGUF`
+1) Open LM Studio
+2) Go to Search (🔍)
+3) Find a compatible model, e.g.:
+   - microsoft/DialoGPT-medium
+   - HuggingFaceH4/zephyr-7b-beta
+   - NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO
+   - TheBloke/CodeLlama-7B-Instruct-GGUF
+4) Select and click Download
 
-4. Seleziona il modello e clicca "Download"
+## 🚀 Start the local server
 
-## 🚀 Avvio del Server Locale
+1) Go to Local Server (🌐)
+2) Pick the downloaded model
+3) Server options:
+   - Port: keep 1234 (default)
+   - CORS: enable if needed
+4) Click Start Server
 
-1. Una volta scaricato il modello, vai alla sezione "Local Server" (🌐)
-2. Seleziona il modello che hai scaricato
-3. Configura le impostazioni del server:
-   - **Port**: Mantieni 1234 (default)
-   - **Cross-Origin Resource Sharing (CORS)**: Abilita se necessario
-4. Clicca "Start Server"
+Server URL: `http://localhost:1234`
 
-Il server sarà disponibile all'indirizzo: `http://localhost:1234`
+## ⚙️ Configure TermInA
 
-## ⚙️ Configurazione in Termina
+1) Open TermInA
+2) Press ⌘+, (macOS) or Ctrl+, (Linux)
+3) Open Artificial Intelligence section
+4) Choose "LM Studio (Local)"
+5) Set:
+   - Endpoint: `http://localhost:1234/v1`
+   - Model name: the loaded model name
+   - API Key: `lm-studio` (or leave blank)
 
-1. Apri Termina
-2. Premi `⌘,` per aprire le impostazioni
-3. Vai alla sezione "Intelligenza Artificiale"
-4. Seleziona "LM Studio (Locale)" come provider
-5. Configura:
-   - **Endpoint**: `http://localhost:1234/v1`
-   - **Nome modello**: Il nome del modello che hai caricato
-   - **API Key**: `lm-studio` (o lascia vuoto)
+## 🧪 Test
 
-## 🧪 Test della Configurazione
+1) In the terminal, type: `ai: Hello, how are you?`
+2) Press Enter
 
-1. Torna al terminale
-2. Digita: `ai: Ciao, come stai?`
-3. Premi Invio
+If configured correctly, you’ll get a response from the local model.
 
-Se tutto è configurato correttamente, dovresti ricevere una risposta dal modello locale.
+## 💡 Tips
 
-## 💡 Suggerimenti
+### Recommended models
 
-### Modelli Consigliati per Termini
+| Model | Size | Speed | Quality | Use case |
+|-------|------|-------|---------|----------|
+| CodeLlama-7B-Instruct | ~4GB | ⚡⚡⚡ | ⭐⭐⭐⭐ | Coding |
+| Zephyr-7B-Beta | ~4GB | ⚡⚡⚡ | ⭐⭐⭐⭐⭐ | General |
+| Nous-Hermes-2 | ~8GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | Complex chats |
+| Mixtral-8x7B | ~16GB | ⚡ | ⭐⭐⭐⭐⭐ | Highest quality |
 
-| Modello | Dimensione | Velocità | Qualità | Uso Consigliato |
-|---------|------------|----------|---------|-----------------|
-| **CodeLlama-7B-Instruct** | ~4GB | ⚡⚡⚡ | ⭐⭐⭐⭐ | Programmazione |
-| **Zephyr-7B-Beta** | ~4GB | ⚡⚡⚡ | ⭐⭐⭐⭐⭐ | Uso generale |
-| **Nous-Hermes-2** | ~8GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | Conversazioni complesse |
-| **Mixtral-8x7B** | ~16GB | ⚡ | ⭐⭐⭐⭐⭐ | Massima qualità |
+### Performance
 
-### Ottimizzazione delle Prestazioni
+1) Ensure at least 8GB of free RAM
+2) Larger models need stronger CPUs
+3) Enable GPU acceleration if available
+4) Reduce context length for faster replies
 
-1. **RAM**: Assicurati di avere almeno 8GB di RAM libera
-2. **CPU**: I modelli più grandi richiedono CPU potenti
-3. **GPU**: Se disponibile, abilita l'accelerazione GPU in LM Studio
-4. **Context Length**: Riduci la lunghezza del contesto per risposte più veloci
+### Troubleshooting
 
-### Risoluzione Problemi
+Server doesn’t start
+- Ensure port 1234 is free
+- Restart LM Studio
+- Check LM Studio logs
 
-#### Il server non si avvia
-- Verifica che la porta 1234 non sia in uso
-- Riavvia LM Studio
-- Controlla i log nella console di LM Studio
+Connection errors in TermInA
+- Endpoint should be `http://localhost:1234/v1`
+- Ensure the server is running
+- Temporarily disable firewall/antivirus if needed
 
-#### Errori di connessione in Termina
-- Verifica che l'endpoint sia `http://localhost:1234/v1`
-- Controlla che il server sia effettivamente avviato
-- Prova a disabilitare firewall/antivirus temporaneamente
+Slow or incomplete responses
+- Lower Max Tokens
+- Use a smaller model
+- Close other apps to free RAM
 
-#### Risposte lente o incomplete
-- Riduci il parametro "Max Tokens" in LM Studio
-- Usa un modello più piccolo
-- Chiudi altre applicazioni per liberare RAM
+“Model not found”
+- Model name in TermInA must match LM Studio
+- Double-check in LM Studio Chat tab
 
-#### Errore "Model not found"
-- Verifica che il nome del modello in Termina corrisponda a quello caricato in LM Studio
-- Controlla la sezione "Chat" di LM Studio per vedere il nome esatto
+## 🔧 Advanced
 
-## 🔧 Configurazione Avanzata
+### Model parameters
+Adjust in LM Studio:
+- Temperature (0.1–1.0)
+- Top P (0.1–1.0)
+- Max Tokens
+- Repeat Penalty
 
-### Parametri del Modello
+### Custom API endpoint
+Configure in:
+TermInA → Settings → AI → LM Studio → Endpoint
 
-In LM Studio puoi regolare:
+### Custom GGUF models
+1) Download the .gguf
+2) Drag into LM Studio
+3) Load it
 
-- **Temperature**: (0.1-1.0) Creatività delle risposte
-- **Top P**: (0.1-1.0) Diversità del vocabolario
-- **Max Tokens**: Lunghezza massima della risposta
-- **Repeat Penalty**: Evita ripetizioni
+## 📚 Resources
 
-### API Personalizzate
-
-Se usi un endpoint diverso da quello standard, puoi configurarlo in:
-`Termina → Impostazioni → AI → LM Studio → Endpoint`
-
-### Modelli Personalizzati
-
-Puoi anche usare modelli GGUF personalizzati:
-1. Scarica il file .gguf
-2. Trascinalo in LM Studio
-3. Caricalo come al solito
-
-## 📚 Risorse Utili
-
-- [LM Studio Documentation](https://lmstudio.ai/docs)
-- [Hugging Face Model Hub](https://huggingface.co/models)
-- [GGUF Format Guide](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md)
-- [Model Recommendations](https://lmstudio.ai/models)
+- https://lmstudio.ai/docs
+- https://huggingface.co/models
+- https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
+- https://lmstudio.ai/models
 
 ---
 
-**Nota**: I modelli AI locali richiedono risorse significative. Per prestazioni ottimali, usa un computer con almeno 16GB di RAM e una CPU moderna.
+Note: Local LLMs need significant resources. For best results, use a machine with 16GB+ RAM and a modern CPU.

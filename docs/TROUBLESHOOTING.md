@@ -1,180 +1,172 @@
-# 🔧 Troubleshooting Termina
+# �️ TermInA Troubleshooting Guide
 
-Guida per risolvere i problemi più comuni di Termina.
+Quick guide to diagnose and fix the most common TermInA issues.
 
-## 🚨 Problemi Comuni
+## 🚨 Common Issues
 
-### 1. Controlli finestra duplicati
-**Problema**: Vedo due set di bottoni chiudi/riduci/ingrandisci
-**Soluzione**: 
-- Verifica che `titleBarStyle` sia impostato su `'hidden'` in main.js
-- Assicurati che `frame: true` sia impostato
-- Riavvia l'applicazione
+### 1) Duplicate window controls
+Problem: You see two sets of close/minimize/maximize buttons.
+Fix:
+- Ensure `titleBarStyle: 'hidden'` in your main window options
+- Ensure `frame: true` is set
+- Restart the app
 
-### 2. Impossibile scrivere nel terminale
-**Problema**: Il terminale non accetta input da tastiera
-**Soluzioni**:
-- Clicca nell'area del terminale per dare focus
-- Verifica che il terminale sia inizializzato correttamente
-- Controlla la console per errori JavaScript
-- Riavvia l'applicazione
+### 2) Can't type in the terminal
+Problem: The terminal ignores keyboard input.
+Fixes:
+- Click inside the terminal to give it focus
+- Ensure the terminal is properly initialized
+- Check the DevTools console for JavaScript errors
+- Restart the app
 
-### 3. Bottoni della finestra non funzionano
-**Problema**: I controlli chiudi/riduci/ingrandisci non rispondono
-**Soluzioni**:
-- Verifica che i gestori IPC siano registrati in main.js
-- Controlla che preload.js esponga i metodi corretti
-- Assicurati che gli event listener siano collegati in renderer.js
+### 3) Window buttons not working
+Problem: Close/minimize/maximize buttons don’t respond.
+Fixes:
+- Verify IPC handlers are registered in main process
+- Ensure `preload.js` exposes the expected APIs
+- Check that renderer event listeners are wired up
 
-### 4. AI non risponde
-**Problema**: I comandi `ai:` non funzionano
-**Soluzioni**:
-- Verifica la configurazione del provider AI nelle impostazioni
-- Controlla la connessione internet (per provider cloud)
-- Per LM Studio: assicurati che sia in esecuzione su localhost:1234
-- Verifica che l'API key sia corretta (per Gemini/OpenAI)
+### 4) AI not responding
+Problem: `ai:`/`execute`/`run` commands don’t produce output.
+Fixes:
+- Check the AI provider configuration in Settings
+- For cloud providers, verify internet connectivity
+- For LM Studio, ensure it’s running on localhost:1234
+- For Gemini/OpenAI, verify the API key
 
-### 5. Errori di configurazione
-**Problema**: L'app non salva le impostazioni
-**Soluzioni**:
-- Controlla i permessi della cartella `~/.termina/`
-- Verifica che il file `config.json` sia scrivibile
-- Prova a eliminare `~/.termina/config.json` per reset
+### 5) Settings not saved
+Problem: App fails to persist preferences.
+Fixes:
+- Check permissions of `~/.termina/`
+- Ensure `~/.termina/config.json` is writable
+- As a last resort, remove `~/.termina/config.json` to reset
 
-## 🛠️ Debug
+## � Debug
 
-### Aprire DevTools
-Premi `F12` o `Cmd+Option+I` per aprire gli strumenti sviluppatore.
+### Open DevTools
+Press `F12` or `Cmd+Option+I` (macOS) / `Ctrl+Shift+I` (Linux/Windows).
 
-### Log del terminale
-Controlla la console per messaggi di debug:
+### Terminal logs
+Use the console to inspect state:
 ```javascript
-// Nel renderer, aggiungi:
+// In the renderer
 console.log('Terminal state:', this.terminal);
 console.log('Config:', this.config);
 ```
 
-### Test della configurazione
+### Config quick check
 ```bash
-# Esegui il test di sistema
-node test.js
-
-# Verifica file di config
+# Inspect config file
 cat ~/.termina/config.json
 ```
 
-### Reset completo
+### Full reset
 ```bash
-# Elimina la configurazione
+# Remove user config (irreversible)
 rm -rf ~/.termina/
 
-# Riavvia l'app
-npm start
+# Reinstall dependencies and start (from project root)
+npm install && npm start
 ```
 
-## 🔍 Debugging Avanzato
+## 🔍 Advanced debugging
 
-### 1. Problemi di dimensionamento terminale
+### 1) Terminal sizing issues
 ```javascript
-// Aggiungi in fitTerminal():
+// Inside fitTerminal()
 console.log('Container rect:', rect);
 console.log('Calculated cols/rows:', cols, rows);
 console.log('Character dimensions:', charWidth, charHeight);
 ```
 
-### 2. Problemi AI
+### 2) AI issues
 ```javascript
-// Aggiungi in ai-manager.js:
+// In ai-manager.js
 console.log('AI Request:', prompt);
 console.log('AI Response:', response);
 console.log('Provider config:', aiConfig);
 ```
 
-### 3. Problemi IPC
+### 3) IPC issues
 ```javascript
-// Nel main process:
+// In main process
 console.log('IPC handler called:', eventName, args);
 
-// Nel renderer:
+// In renderer
 console.log('Sending IPC:', method, args);
 ```
 
-## 📋 Checklist di Verifica
+## 📋 Verification checklist
 
-### Prima del avvio:
-- [ ] Node.js 16+ installato
-- [ ] `npm install` eseguito senza errori
-- [ ] File `test.js` passa tutti i controlli
+### Before starting
+- [ ] Node.js 16+ installed
+- [ ] `npm install` completes without errors
 
-### Dopo l'avvio:
-- [ ] Finestra si apre correttamente
-- [ ] Un solo set di controlli finestra visibile
-- [ ] Terminale accetta input da tastiera
-- [ ] Bottoni finestra funzionano
-- [ ] Comando `help` mostra l'aiuto
-- [ ] Comando `settings` apre le impostazioni
+### After starting
+- [ ] Window opens correctly
+- [ ] Only one set of window controls is visible
+- [ ] Terminal accepts keyboard input
+- [ ] Window buttons work
+- [ ] `help` shows usage
+- [ ] `settings` opens preferences
 
-### Test AI:
-- [ ] Provider configurato nelle impostazioni
-- [ ] Comando `ai: test` produce una risposta
-- [ ] Suggerimenti comandi funzionano
-- [ ] Esecuzione comandi con conferma
+### AI
+- [ ] Provider configured in Settings
+- [ ] `ai: test` returns a response
+- [ ] Command suggestions show up
+- [ ] Execution with confirmation works
 
-## 🐛 Report Bug
+## 🐛 Bug report
 
-Se il problema persiste:
+If the problem persists:
 
-1. **Raccogli informazioni**:
-   - Versione macOS/Linux
-   - Versione Node.js (`node --version`)
-   - Output di `node test.js`
-   - Screenshot del problema
+1) Collect details
+- OS version (Linux/macOS)
+- Node.js version (`node --version`)
+- Screenshots of the issue
 
-2. **Console log**:
-   - Apri DevTools (F12)
-   - Copia errori dalla console
-   - Includi log del processo main
+2) Console logs
+- Open DevTools
+- Copy errors from the console
+- Include any main-process logs
 
-3. **File configurazione**:
-   ```bash
-   cat ~/.termina/config.json
-   ```
-
-4. **Crea issue**:
-   - Descrizione dettagliata
-   - Passi per riprodurre
-   - Log e screenshot
-   - Configurazione sistema
-
-## 🚑 Riparazione Rapida
-
-### Script di reset automatico:
+3) Config file
 ```bash
-#!/bin/bash
-echo "🔧 Riparazione Termina..."
-
-# Stop processi
-pkill -f "electron ."
-
-# Reset configurazione
-rm -rf ~/.termina/
-
-# Reinstalla dipendenze
-cd /path/to/termina
-npm install
-
-# Restart
-npm start
-
-echo "✅ Riparazione completata!"
+cat ~/.termina/config.json
 ```
 
-## 📞 Supporto
+4) Create an issue
+- Clear description
+- Steps to reproduce
+- Logs and screenshots
+- System configuration
 
-- 🐛 GitHub Issues: [Report un bug](https://github.com/termina/issues)
-- 💬 Discord: [Comunità Termina](https://discord.gg/termina)
-- 📧 Email: support@termina.app
+## 🚑 Quick repair script (optional)
+
+```bash
+#!/usr/bin/env bash
+echo "🔧 Repairing TermInA..."
+
+# Stop any running dev instance
+pkill -f "electron ." 2>/dev/null || true
+
+# Reset user config (irreversible)
+rm -rf ~/.termina/
+
+# Reinstall dependencies and start (adjust path)
+cd /path/to/TermInA
+npm install
+npm start
+
+echo "✅ Repair completed"
+```
+
+## 📞 Support
+
+- GitHub Issues: open an issue in the repository
+- Community: Discord server (if available)
+- Email: support@termina.app
 
 ---
 
-**Suggerimento**: Mantieni sempre un backup della tua configurazione in `~/.termina/config.json`!
+Tip: Keep a backup of `~/.termina/config.json` if you customized settings.

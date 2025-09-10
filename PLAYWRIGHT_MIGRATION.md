@@ -1,17 +1,17 @@
-# Migrazione da WebScraper HTTP a Playwright
+# Migration from HTTP WebScraper to Playwright
 
-## Panoramica
+## Overview
 
-Questo documento descrive la migrazione del sistema di web scraping da un approccio basato su HTTP nativo a Playwright, un framework moderno per l'automazione dei browser.
+This document describes migrating the web scraping system from a native HTTP-based approach to Playwright, a modern browser automation framework.
 
-## Cambiamenti Principali
+## Main Changes
 
-### 1. Sostituzione dei Moduli
+### 1. Module Replacement
 
-- **Vecchio**: `src/webscraper.js` e `src/webscraper-enhanced.js`
-- **Nuovo**: `src/webscraper-playwright.js`
+- **Old**: `src/webscraper.js` and `src/webscraper-enhanced.js`
+- **New**: `src/webscraper-playwright.js`
 
-### 2. Aggiornamenti delle Dipendenze
+### 2. Dependency Updates
 
 ```json
 {
@@ -21,33 +21,33 @@ Questo documento descrive la migrazione del sistema di web scraping da un approc
 }
 ```
 
-### 3. File Aggiornati
+### 3. Updated Files
 
-- `main.js` - Import del nuovo webscraper
-- `src/web-ai-integration.js` - Riferimento al nuovo modulo
-- `examples/web-integration-example.js` - Esempio aggiornato
+- `main.js` — Import the new webscraper
+- `src/web-ai-integration.js` — Reference to the new module
+- `examples/web-integration-example.js` — Updated example
 
-## Vantaggi di Playwright
+## Benefits of Playwright
 
-### 1. Gestione Avanzata del Browser
-- Supporto per Chromium, Firefox e WebKit
-- Gestione automatica di JavaScript dinamico
-- Rendering completo delle pagine web
+### 1. Advanced Browser Handling
+- Support for Chromium, Firefox, and WebKit
+- Automatic handling of dynamic JavaScript
+- Full page rendering
 
-### 2. Funzionalità Avanzate
-- Screenshot automatici
-- Generazione PDF
-- Gestione di popup e dialoghi
-- Supporto per SPA (Single Page Applications)
+### 2. Advanced Features
+- Automatic screenshots
+- PDF generation
+- Handling of popups and dialogs
+- SPA (Single Page Applications) support
 
-### 3. Affidabilità
-- Gestione automatica dei timeout
-- Retry automatici
-- Gestione degli errori migliorata
+### 3. Reliability
+- Automatic timeout handling
+- Automatic retries
+- Improved error handling
 
-## API Compatibile
+## Compatible API
 
-Il nuovo `WebScraperPlaywright` mantiene la stessa interfaccia pubblica del vecchio sistema:
+The new `WebScraperPlaywright` keeps the same public interface as the old system:
 
 ```javascript
 // Metodi principali (invariati)
@@ -66,147 +66,146 @@ await webScraper.setHeadlessMode(headless);
 webScraper.getBrowserInfo();
 ```
 
-## Configurazione
+## Configuration
 
-### 1. Installazione
+### 1. Installation
 
 ```bash
 npm install playwright
 npx playwright install
 ```
 
-### 2. Configurazione del Browser
+### 2. Browser Configuration
 
 ```javascript
-// Inizializzazione automatica (default)
+// Automatic initialization (default)
 const webScraper = require('./src/webscraper-playwright');
 
-// Inizializzazione manuale
+// Manual initialization
 await webScraper.initializeBrowser('chromium', true);
 await webScraper.initializeBrowser('firefox', false);
 await webScraper.initializeBrowser('webkit', true);
 ```
 
-### 3. Gestione delle Risorse
+### 3. Resource Management
 
 ```javascript
-// Importante: chiudi sempre il browser quando hai finito
+// Important: always close the browser when done
 await webScraper.closeBrowser();
 
-// Oppure usa try-finally
+// Or use try-finally
 try {
   const results = await webScraper.searchWeb('query', 'google', 5);
-  // ... usa i risultati
+  // ... use results
 } finally {
   await webScraper.closeBrowser();
 }
 ```
 
-## Test e Verifica
+## Testing and Verification
 
-### 1. Test Completo
+### 1. Full Test
 
 ```bash
 node test-playwright-webscraper.js
 ```
 
-### 2. Test Specifici
+### 2. Specific Tests
 
 ```javascript
 const { testPlaywrightWebScraper } = require('./test-playwright-webscraper');
 await testPlaywrightWebScraper();
 ```
 
-## Risoluzione Problemi
+## Troubleshooting
 
-### 1. Dipendenze Mancanti
+### 1. Missing Dependencies
 
-Se incontri errori di dipendenze su Linux:
+If you encounter dependency errors on Linux:
 
 ```bash
 sudo pacman -S icu libxml2 libwebp libffi
 ```
 
-### 2. Browser Non Inizializzato
+### 2. Browser Not Initialized
 
 ```javascript
-// Verifica lo stato del browser
+// Check browser status
 const browserInfo = webScraper.getBrowserInfo();
-console.log('Browser inizializzato:', browserInfo.isInitialized);
+console.log('Browser initialized:', browserInfo.isInitialized);
 
-// Reinizializza se necessario
+// Re-initialize if needed
 if (!browserInfo.isInitialized) {
   await webScraper.initializeBrowser();
 }
 ```
 
-### 3. Timeout e Errori di Rete
+### 3. Timeouts and Network Errors
 
 ```javascript
-// Aumenta i timeout se necessario
+// Increase timeouts if necessary
 webScraper.timeout = 60000; // 60 secondi
 
-// Usa il fallback automatico
+// Use automatic fallback
 const results = await webScraper.searchWeb('query', 'google', 5);
 if (results.fallback) {
-  console.log('Utilizzati risultati di fallback');
+  console.log('Used fallback results');
 }
 ```
+## Gradual Migration
 
-## Migrazione Graduale
+### 1. Phase 1: Install and Test
+- Install Playwright
+- Test the new system
+- Verify compatibility
 
-### 1. Fase 1: Installazione e Test
-- Installa Playwright
-- Testa il nuovo sistema
-- Verifica la compatibilità
+### 2. Phase 2: Replacement
+- Replace module references
+- Update imports
+- Test features
 
-### 2. Fase 2: Sostituzione
-- Sostituisci i riferimenti ai moduli
-- Aggiorna le importazioni
-- Testa le funzionalità
+### 3. Phase 3: Cleanup
+- Remove old modules
+- Update documentation
+- Verify performance
 
-### 3. Fase 3: Pulizia
-- Rimuovi i vecchi moduli
-- Aggiorna la documentazione
-- Verifica le performance
+## Performance and Resources
 
-## Performance e Risorse
+### 1. Memory Usage
+- **Old system**: ~50–100 MB
+- **New system**: ~200–500 MB (depends on browser)
 
-### 1. Utilizzo Memoria
-- **Vecchio sistema**: ~50-100MB
-- **Nuovo sistema**: ~200-500MB (dipende dal browser)
+### 2. Speed
+- **Old system**: Faster for simple requests
+- **New system**: Slower on startup, but handles complex JavaScript
 
-### 2. Velocità
-- **Vecchio sistema**: Più veloce per richieste semplici
-- **Nuovo sistema**: Più lento all'avvio, ma gestisce JavaScript complesso
+### 3. Reliability
+- **Old system**: May fail with dynamic JavaScript
+- **New system**: Automatically handles most cases
 
-### 3. Affidabilità
-- **Vecchio sistema**: Può fallire con JavaScript dinamico
-- **Nuovo sistema**: Gestisce automaticamente la maggior parte dei casi
+## Compatibility
 
-## Compatibilità
-
-### 1. Sistemi Operativi
+### 1. Operating Systems
 - ✅ Linux (Ubuntu, Arch, etc.)
 - ✅ macOS
 - ✅ Windows
 
-### 2. Browser Supportati
+### 2. Supported Browsers
 - ✅ Chromium (Chrome, Edge)
 - ✅ Firefox
 - ✅ WebKit (Safari)
 
-### 3. Architetture
+### 3. Architectures
 - ✅ x64
 - ✅ ARM64 (Apple Silicon, ARM Linux)
 
-## Conclusioni
+## Conclusions
 
-La migrazione a Playwright rappresenta un significativo miglioramento del sistema di web scraping:
+Migrating to Playwright represents a significant improvement to the web scraping system:
 
-1. **Affidabilità**: Gestione automatica di JavaScript e contenuti dinamici
-2. **Funzionalità**: Screenshot, PDF, supporto multi-browser
-3. **Manutenibilità**: Codice più pulito e standardizzato
-4. **Futuro**: Framework attivamente mantenuto e aggiornato
+1. **Reliability**: Automatic handling of JavaScript and dynamic content
+2. **Features**: Screenshots, PDF, multi-browser support
+3. **Maintainability**: Cleaner, standardized code
+4. **Future-proof**: Actively maintained and updated framework
 
-Il sistema mantiene la compatibilità con l'API esistente, rendendo la migrazione trasparente per gli utenti finali.
+The system remains compatible with the existing API, making the migration transparent to end users.

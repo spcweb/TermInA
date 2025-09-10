@@ -8,55 +8,55 @@ TermInA includes a Rust-based terminal implementation that fixes sudo command is
 
 ### Rust Components
 
-1. **`rust-terminal/`** - Progetto Rust principale
-   - `src/lib.rs` - Libreria principale con interfaccia FFI
-   - `src/pty_manager.rs` - Gestione PTY (Pseudo-Terminal)
-   - `src/session.rs` - Gestione delle sessioni terminale
-   - `src/sudo_handler.rs` - Gestione sicura dei comandi sudo
-   - `src/ffi.rs` - Interfaccia C per Node.js
+1. **`rust-terminal/`** — Main Rust project
+   - `src/lib.rs` — Core library with FFI interface
+   - `src/pty_manager.rs` — PTY (Pseudo-Terminal) management
+   - `src/session.rs` — Terminal session management
+   - `src/sudo_handler.rs` — Secure sudo command handling
+   - `src/ffi.rs` — C interface for Node.js
 
 ### Node.js Components
 
-1. **`src/rust-terminal-wrapper.js`** - Wrapper Node.js per la libreria Rust
-2. **`renderer/rust-terminal.js`** - Cliente frontend per il terminale Rust
-3. **Aggiornamenti in `main.js`** - Handler IPC per il terminale Rust
-4. **Aggiornamenti in `preload.js`** - API esposte al renderer
+1. **`src/rust-terminal-wrapper.js`** — Node.js wrapper for the Rust library
+2. **`renderer/rust-terminal.js`** — Frontend client for the Rust terminal
+3. **`main.js` updates** — IPC handlers for the Rust terminal
+4. **`preload.js` updates** — APIs exposed to the renderer
 
 ## Key Features
 
 ### 1) Robust PTY Management
-- Implementazione nativa in Rust per la gestione dei pseudo-terminali
-- Supporto per comandi interattivi
-- Gestione corretta delle sequenze ANSI
-- Ridimensionamento dinamico del terminale
+- Native Rust implementation for pseudo-terminal handling
+- Support for interactive commands
+- Proper ANSI sequence handling
+- Dynamic terminal resizing
 
 ### 2) Secure Sudo Support
-- Gestione sicura delle password
-- Filtraggio dei messaggi di password dall'output
-- Timeout configurabili per i comandi sudo
-- Supporto per comandi privilegiati
+- Secure password handling
+- Password prompt messages filtered from output
+- Configurable timeouts for sudo commands
+- Support for privileged commands
 
 ### 3) Session Management
-- Supporto per multiple sessioni simultanee
-- Cleanup automatico delle sessioni inattive
-- Buffer ottimizzati per l'output
-- Gestione asincrona con Tokio
+- Multiple simultaneous sessions
+- Automatic cleanup of inactive sessions
+- Optimized output buffers
+- Asynchronous execution with Tokio
 
 ### 4) FFI Interface
-- Compatibilità C per l'integrazione con Node.js
-- Comunicazione sicura tra processi
-- Gestione della memoria ottimizzata
+- C compatibility for Node.js integration
+- Secure inter-process communication
+- Optimized memory management
 
 ## Usage
 
 ### Build
 
 ```bash
-# Compila la libreria Rust
+# Build the Rust library
 cd rust-terminal
 cargo build --release --lib
 
-# La libreria compilata sarà in:
+# The compiled library will be at:
 # target/release/libtermina_terminal.dylib (macOS)
 # target/release/libtermina_terminal.so (Linux)
 # target/release/termina_terminal.dll (Windows)
@@ -64,7 +64,7 @@ cargo build --release --lib
 
 ### Electron Integration
 
-Il sistema è già integrato in TermInA. Per utilizzarlo:
+The system is already integrated into TermInA. To use it:
 
 1. **Start the application**:
    ```bash
@@ -72,9 +72,9 @@ Il sistema è già integrato in TermInA. Per utilizzarlo:
    ```
 
 2. **The Rust terminal is automatically available** for:
-   - Comandi interattivi
-   - Comandi sudo
-   - Gestione delle sessioni
+   - Interactive commands
+   - Sudo commands
+   - Session management
 
 ### Available APIs
 
@@ -93,7 +93,7 @@ await rustTerminal.executeSudoCommand('sudo apt update', 'password');
 
 // Handle output
 rustTerminal.handleNewData = (data) => {
-    console.log('Output ricevuto:', data);
+    console.log('Received output:', data);
 };
 ```
 
@@ -164,7 +164,7 @@ let config = TerminalConfig {
 
 ### Build Issues
 
-1. **Errore di dipendenze di sistema**:
+1. **System dependency errors**:
    ```bash
    # macOS
    xcode-select --install
@@ -173,41 +173,41 @@ let config = TerminalConfig {
    sudo apt-get install build-essential libdbus-1-dev
    
    # Windows
-   # Installa Visual Studio Build Tools
+   # Install Visual Studio Build Tools
    ```
 
 2. **Linker error**:
    ```bash
-   # Verifica che le librerie di sistema siano disponibili
+   # Verify system libraries are available
    cargo check --lib
    ```
 
 ### Runtime Issues
 
 1. **Sessions do not spawn**:
-   - Verifica che la shell di default sia disponibile
-   - Controlla i permessi della directory di lavoro
+   - Ensure the default shell is available
+   - Check permissions for the working directory
 
 2. **Sudo commands fail**:
-   - Verifica che sudo sia installato e configurato
-   - Controlla che la password sia corretta
-   - Verifica i permessi dell'utente
+   - Ensure sudo is installed and configured
+   - Verify the password is correct
+   - Check user permissions
 
 3. **No output displayed**:
-   - Controlla che il polling sia attivo
-   - Verifica che la sessione sia ancora attiva
-   - Controlla i log per errori
+   - Ensure polling is active
+   - Verify the session is still active
+   - Check logs for errors
 
 ### Debug
 
 ```bash
-# Abilita logging di debug
+# Enable debug logging
 RUST_LOG=debug npm start
 
-# Controlla lo stato del terminale Rust
+# Check Rust terminal status
 console.log(await window.electronAPI.rustTerminalGetStatus());
 
-# Lista sessioni attive
+# List active sessions
 console.log(await window.electronAPI.rustTerminalGetSessions());
 ```
 
@@ -215,54 +215,54 @@ console.log(await window.electronAPI.rustTerminalGetSessions());
 
 ### Optimizations
 
-1. **Gestione asincrona**: Utilizzo di Tokio per operazioni non bloccanti
-2. **Buffer ottimizzati**: Gestione efficiente della memoria per l'output
-3. **Cleanup automatico**: Rimozione automatica delle sessioni inattive
-4. **Polling ottimizzato**: Frequenza di polling bilanciata per performance e responsività
+1. **Asynchronous execution**: Tokio for non-blocking operations
+2. **Optimized buffers**: Efficient memory handling for output
+3. **Automatic cleanup**: Auto-removal of inactive sessions
+4. **Optimized polling**: Balanced frequency for performance and responsiveness
 
 ### Metrics
 
-- **Latenza**: < 50ms per comandi semplici
-- **Throughput**: > 1000 comandi/secondo
-- **Memoria**: < 10MB per sessione attiva
-- **CPU**: < 5% per sessione inattiva
+- **Latency**: < 50 ms for simple commands
+- **Throughput**: > 1000 commands/second
+- **Memory**: < 10 MB per active session
+- **CPU**: < 5% per inactive session
 
 ## Security
 
 ### Password Handling
 
-- Le password non vengono mai loggate
-- I messaggi di password vengono filtrati dall'output
-- Timeout configurabili per prevenire hang
-- Gestione sicura della memoria con Rust
+- Passwords are never logged
+- Password prompt messages are filtered from output
+- Configurable timeouts prevent hangs
+- Safe memory handling with Rust
 
 ### Isolation
 
-- Ogni sessione è isolata
-- Comunicazione sicura tra processi
-- Gestione degli errori robusta
-- Cleanup automatico delle risorse
+- Each session is isolated
+- Secure inter-process communication
+- Robust error handling
+- Automatic resource cleanup
 
 ## Future Development
 
 ### Roadmap
 
-1. **FFI Diretto**: Integrazione diretta con Node.js tramite FFI
-2. **Plugin System**: Sistema di plugin per estendere le funzionalità
-3. **Multi-Platform**: Supporto completo per Windows, Linux, macOS
-4. **Performance**: Ottimizzazioni aggiuntive per comandi complessi
+1. **Direct FFI**: Direct integration with Node.js via FFI
+2. **Plugin System**: Extensible plugin system
+3. **Multi-Platform**: Full support for Windows, Linux, macOS
+4. **Performance**: Further optimizations for complex commands
 
 ### Contributing
 
-1. Fork del repository
-2. Crea un branch per la feature
-3. Implementa le modifiche
-4. Aggiungi test
-5. Crea una pull request
+1. Fork the repository
+2. Create a feature branch
+3. Implement changes
+4. Add tests
+5. Open a pull request
 
 ## License
 
-MIT License - vedi il file LICENSE per i dettagli.
+MIT License — see LICENSE for details.
 
 ## Support
 

@@ -1,351 +1,263 @@
-# 🦙 Guida Configurazione Ollama in TermInA
+# 🦙 Setting up Ollama in TermInA
 
-Ollama è un sistema per eseguire modelli di linguaggio locali in modo semplice ed efficiente. TermInA supporta nativamente Ollama per offrirti un'alternativa completamente privata e gratuita alle AI cloud.
+Ollama is a local LLM runtime. TermInA supports Ollama natively as a private, zero-cost alternative to cloud AI.
 
-## 🚀 Vantaggi di Ollama
+## 🚀 Why use Ollama
 
-- **🔒 Privacy completa**: Tutti i dati rimangono sul tuo computer
-- **💰 Gratuito**: Nessun costo dopo l'installazione iniziale
-- **⚡ Veloce**: Esecuzione locale senza latenza di rete
-- **🔄 Open Source**: Controllo completo sul codice
-- **📱 Facile**: Installazione e configurazione semplici
-- **🎯 Modelli ottimizzati**: Supporto per modelli specializzati
+- 🔒 Privacy: everything stays on your machine
+- 💰 Free: no recurring costs after install
+- ⚡ Fast: no network latency
+- 🔄 Open source
+- 📱 Simple: easy setup
+- 🎯 Optimized models available
 
 ---
 
-## 📥 Installazione di Ollama
+## 📥 Install Ollama
 
-### macOS
+### macOS / Linux
 ```bash
-# Download e installazione automatica
 curl -fsSL https://ollama.ai/install.sh | sh
-
-# Verifica installazione
-ollama --version
-```
-
-### Linux
-```bash
-# Download e installazione automatica
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Verifica installazione
 ollama --version
 ```
 
 ### Windows
-1. Scarica l'installer da [ollama.ai](https://ollama.ai/)
-2. Esegui l'installer
-3. Riavvia il terminale
-4. Verifica: `ollama --version`
+1) Download installer from https://ollama.ai/
+2) Run the installer
+3) Restart your terminal
+4) Verify: `ollama --version`
 
 ---
 
-## 🎯 Modelli Disponibili
+## 🎯 Popular models
 
-### Modelli Generali
+### General-purpose
 ```bash
-# Modelli base (veloci, buona qualità)
-ollama pull gemma3:270m      # 270M parametri - molto veloce
-ollama pull llama3.2:3b      # 3B parametri - veloce
-ollama pull llama3.2:8b      # 8B parametri - bilanciato
-ollama pull mistral:7b       # 7B parametri - eccellente qualità
+ollama pull gemma3:270m      # very fast, small
+ollama pull llama3.2:3b      # fast
+ollama pull llama3.2:8b      # balanced
+ollama pull mistral:7b       # high quality
 
-# Modelli avanzati (più lenti, qualità superiore)
-ollama pull llama3.2:70b     # 70B parametri - massima qualità
-ollama pull codellama:70b    # 70B parametri - specializzato in codice
+# Larger (slower, higher quality)
+ollama pull llama3.2:70b
+ollama pull codellama:70b
 ```
 
-### Modelli Specializzati
+### Specialized
 ```bash
-# Programmazione
-ollama pull codellama:7b     # Specializzato in codice
-ollama pull deepseek-coder   # Ottimo per sviluppo
+# Coding
+ollama pull codellama:7b
+ollama pull deepseek-coder
 
-# Chat e assistenza
-ollama pull llama3.2:8b      # Conversazioni naturali
-ollama pull mistral:7b       # Multilingue, versatile
+# Chat
+ollama pull llama3.2:8b
+ollama pull mistral:7b
 
-# Modelli leggeri
-ollama pull phi3:mini        # Molto veloce, buono per chat
-ollama pull tinyllama:1b     # Estremamente veloce
-```
-
----
-
-## ⚙️ Configurazione in TermInA
-
-### 1. Apri le Impostazioni
-- Premi `⌘+,` (macOS) o `Ctrl+,` (Windows/Linux)
-- Vai alla sezione "Artificial Intelligence"
-
-### 2. Seleziona Ollama
-- Cambia "AI Provider" a "Ollama (Local)"
-
-### 3. Configura i Parametri
-- **Endpoint**: `http://localhost:11434` (default)
-- **Model name**: Nome del modello scaricato (es. "gemma3:270m")
-- **API Key**: Lascia vuoto per installazioni locali
-
-### 4. Test della Connessione
-- Clicca "Test Connection"
-- Verifica che la connessione sia riuscita
-
-### 5. Salva le Impostazioni
-- Clicca "Save" per applicare le modifiche
-
----
-
-## 🔧 Gestione Modelli
-
-### Lista Modelli Installati
-```bash
-ollama list
-```
-
-### Rimuovere un Modello
-```bash
-ollama rm nome-modello
-```
-
-### Aggiornare un Modello
-```bash
-ollama pull nome-modello
-```
-
-### Informazioni su un Modello
-```bash
-ollama show nome-modello
+# Lightweight
+ollama pull phi3:mini
+ollama pull tinyllama:1b
 ```
 
 ---
 
-## 🚀 Avvio e Gestione
+## ⚙️ Configure TermInA
 
-### Avvio Automatico
-Ollama si avvia automaticamente come servizio:
-- **macOS**: Si avvia al login
-- **Linux**: Servizio systemd
-- **Windows**: Servizio Windows
+1) Open Settings (⌘+, on macOS / Ctrl+, on Linux)
+2) AI section → choose "Ollama (Local)"
+3) Parameters
+  - Endpoint: `http://localhost:11434`
+  - Model: exact model name (e.g., `gemma3:270m`)
+  - API Key: leave empty
+4) Click "Test Connection"
+5) Save
 
-### Avvio Manuale
+---
+
+## 🧰 Manage models
+
 ```bash
-# Avvia Ollama
+ollama list                 # list models
+ollama pull <model>         # download
+ollama rm <model>           # remove
+ollama show <model>         # show info
+```
+
+---
+
+## 🚀 Start and control
+
+### Background service
+- macOS: starts at login
+- Linux: systemd service
+- Windows: background service
+
+### Manual
+```bash
 ollama serve
-
-# In un altro terminale, verifica lo stato
 curl http://localhost:11434/api/tags
 ```
 
-### Fermare Ollama
+### Stop
 ```bash
-# Ferma il servizio
 ollama stop
 ```
 
 ---
 
-## 📊 Requisiti Hardware
+## 📊 Hardware requirements
 
-### Requisiti Minimi
-- **RAM**: 4GB
-- **CPU**: Processore moderno (2018+)
-- **Storage**: 2GB liberi per modelli base
+Minimum
+- RAM: 4GB
+- CPU: 2018+ processor
+- Storage: 2GB free
 
-### Requisiti Raccomandati
-- **RAM**: 8GB+
-- **CPU**: Multi-core recente
-- **Storage**: 5GB+ liberi
-- **GPU**: Opzionale ma consigliata
+Recommended
+- RAM: 8GB+
+- CPU: modern multi-core
+- Storage: 5GB+
+- GPU: optional
 
-### Requisiti Ottimali
-- **RAM**: 16GB+
-- **CPU**: CPU moderna multi-core
-- **GPU**: NVIDIA con 8GB+ VRAM
-- **Storage**: SSD veloce
+Optimal
+- RAM: 16GB+
+- CPU: modern multi-core
+- GPU: NVIDIA 8GB+ VRAM
+- Storage: fast SSD
 
 ---
 
-## 🧪 Test e Verifica
+## 🧪 Test
 
-### Test Base
 ```bash
-# Test semplice
-ollama run gemma3:270m "Ciao, come stai?"
-
-# Test con contesto
-ollama run gemma3:270m "Spiega brevemente cosa è l'intelligenza artificiale"
+ollama run gemma3:270m "Hello!"
+ollama run gemma3:270m "Explain briefly what AI is"
 ```
 
-### Test in TermInA
-1. Apri TermInA
-2. Premi `⌘+Shift+A` per attivare l'AI
-3. Fai una domanda semplice
-4. Verifica che la risposta provenga da Ollama
+In TermInA
+1) Open the app
+2) Press ⌘+Shift+A
+3) Ask a simple question
+4) Confirm the response comes from Ollama
 
-### Verifica Connessione
+Connectivity
 ```bash
-# Test endpoint API
 curl http://localhost:11434/api/tags
-
-# Test completamento
-curl -X POST http://localhost:11434/api/generate \
-  -d '{"model": "gemma3:270m", "prompt": "Test"}'
+curl -X POST http://localhost:11434/api/generate -d '{"model": "gemma3:270m", "prompt": "Test"}'
 ```
 
 ---
 
-## 🔍 Risoluzione Problemi
+## � Troubleshooting
 
-### Problemi Comuni
+Common
 
-#### ❌ Ollama non si avvia
+❌ Ollama doesn’t start
 ```bash
-# Verifica se è già in esecuzione
-ps aux | grep ollama
-
-# Riavvia il servizio
+ps aux | grep -i ollama
 ollama stop
 ollama serve
 ```
 
-#### ❌ Modello non trovato
+❌ Model not found
 ```bash
-# Verifica modelli installati
 ollama list
-
-# Scarica il modello mancante
-ollama pull nome-modello
+ollama pull <model>
 ```
 
-#### ❌ Errore di memoria
-- Riduci la dimensione del modello
-- Chiudi altre applicazioni
-- Aumenta la RAM disponibile
+❌ Out of memory
+- Try a smaller model
+- Close other apps
+- Increase available RAM
 
-#### ❌ Connessione rifiutata
+❌ Connection refused
 ```bash
-# Verifica che Ollama sia in esecuzione
 curl http://localhost:11434/api/tags
-
-# Controlla i log
 ollama serve --verbose
 ```
 
-### Log e Debug
+Logs
 ```bash
-# Avvia con log dettagliati
 ollama serve --verbose
-
-# Verifica stato servizio
 ollama status
 ```
 
 ---
 
-## 🎯 Ottimizzazioni
+## 🎯 Optimization
 
-### Performance
+Performance
 ```bash
-# Usa modelli più piccoli per velocità
-ollama pull llama3.2:3b
-
-# Usa modelli più grandi per qualità
-ollama pull llama3.2:70b
+ollama pull llama3.2:3b   # speed
+ollama pull llama3.2:70b  # quality
 ```
 
-### Memoria
+Memory / env
 ```bash
-# Configura limiti di memoria
 export OLLAMA_HOST=0.0.0.0:11434
 export OLLAMA_ORIGINS=*
 ```
 
-### GPU
+GPU
 ```bash
-# Verifica supporto GPU
 nvidia-smi  # NVIDIA
 rocm-smi    # AMD
-
-# Ollama usa automaticamente la GPU se disponibile
+# Ollama uses GPU automatically when available
 ```
 
 ---
 
-## 🔄 Aggiornamenti
+## 🔄 Updates
 
-### Aggiornare Ollama
+Ollama
 ```bash
-# macOS/Linux
 curl -fsSL https://ollama.ai/install.sh | sh
-
-# Windows
-# Scarica e installa la nuova versione
 ```
 
-### Aggiornare Modelli
+Models
 ```bash
-# Aggiorna tutti i modelli
 ollama pull --latest
-
-# Aggiorna un modello specifico
-ollama pull nome-modello:latest
+ollama pull <model>:latest
 ```
 
 ---
 
-## 📚 Risorse Utili
+## 📚 Resources
 
-### Documentazione Ufficiale
-- [ollama.ai](https://ollama.ai/) - Sito ufficiale
-- [GitHub](https://github.com/ollama/ollama) - Codice sorgente
-- [Documentazione](https://github.com/ollama/ollama/blob/main/docs/README.md)
-
-### Community
-- [Discord](https://discord.gg/ollama) - Community ufficiale
-- [Reddit](https://reddit.com/r/ollama) - Discussioni e supporto
-
-### Modelli Popolari
-- [Ollama Library](https://ollama.ai/library) - Catalogo modelli
-- [Hugging Face](https://huggingface.co/) - Modelli alternativi
+- https://ollama.ai/
+- https://github.com/ollama/ollama
+- https://github.com/ollama/ollama/blob/main/docs/README.md
+- https://discord.gg/ollama
+- https://ollama.ai/library
 
 ---
 
-## 💡 Suggerimenti Avanzati
+## 💡 Advanced
 
-### Modelli Personalizzati
+Custom models
 ```bash
-# Crea un modello personalizzato
 ollama create custom-model -f Modelfile
 
-# Esempio Modelfile
+# Modelfile example
 FROM llama3.2:8b
-SYSTEM "Sei un assistente esperto in programmazione Python"
+SYSTEM "You are an expert Python assistant"
 ```
 
-### Integrazione con Altri Strumenti
-- **LangChain**: Framework per applicazioni AI
-- **Ollama Python**: Client Python ufficiale
-- **Ollama JavaScript**: Client JavaScript ufficiale
+Ecosystem
+- LangChain
+- Ollama Python
+- Ollama JavaScript
 
-### Backup e Ripristino
+Backup and restore
 ```bash
-# Backup modelli
-ollama cp nome-modello backup-modello
-
-# Ripristina modello
-ollama cp backup-modello nome-modello
+ollama cp <model> <backup-model>
+ollama cp <backup-model> <model>
 ```
 
 ---
 
-## 🎉 Prossimi Passi
+## 🎉 Next steps
 
-1. **Installa Ollama** seguendo questa guida
-2. **Scarica un modello** di base (es. gemma3:270m)
-3. **Configura TermInA** per usare Ollama
-4. **Testa la connessione** con domande semplici
-5. **Esplora modelli** diversi per trovare quello migliore per te
-6. **Condividi la tua esperienza** con la community
-
-**Buon divertimento con Ollama in TermInA! 🚀**
+1) Install Ollama
+2) Pull a base model (e.g., gemma3:270m)
+3) Configure TermInA
+4) Test connectivity
+5) Explore different models

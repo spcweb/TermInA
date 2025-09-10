@@ -1,41 +1,41 @@
-# 🐛 Debug PTY Output Issue
+# � Debug PTY Output Issue
 
-## 🎯 Problema
-Il terminale mostra la barra di caricamento ma non visualizza l'output dei comandi PTY (come `npm install`).
+## 🎯 Problem
+The terminal shows the loading bar but doesn't display output from PTY commands (like `npm install`).
 
-## 🔍 Debug Aggiunto
+## 🔍 Added Debugging
 
-Ho aggiunto debug estensivo in tutti i componenti per tracciare il flusso dei dati:
+Extensive debugging was added across components to trace the data flow:
 
-### File Modificati con Debug
-1. **renderer/pty-terminal.js** - Debug polling, creazione sessione, invio comandi
-2. **src/pty-manager.js** - Debug creazione sessioni, ricezione dati, write
-3. **main.js** - Debug API calls
-4. **renderer/simple-terminal.js** - Debug addOutput, shouldUsePTY
+### Files Modified with Debug
+1. **renderer/pty-terminal.js** — Polling, session creation, command send
+2. **src/pty-manager.js** — Session creation, data reception, write
+3. **main.js** — API call debugging
+4. **renderer/simple-terminal.js** — addOutput, shouldUsePTY
 
-## 🧪 Comandi di Test Aggiunti
+## 🧪 Added Test Commands
 
 ### 1. `test-pty-simple`
-Testa il PTY con un comando echo semplice e mostra il buffer dopo 2 secondi.
+Tests the PTY with a simple echo command and shows the buffer after 2 seconds.
 
-### 2. `test-pty-direct` 
-Mostra direttamente il contenuto del buffer PTY se la sessione è attiva.
+### 2. `test-pty-direct`
+Directly shows the PTY buffer content if the session is active.
 
 ### 3. `test-pty-api`
-Testa direttamente le API PTY senza il wrapper PTYTerminal.
+Directly tests PTY APIs without the PTYTerminal wrapper.
 
-## 📊 Come Debuggare
+## � How to Debug
 
-1. **Apri la Console DevTools** di Electron
-2. **Esegui un comando di test**:
+1. **Open Electron DevTools Console**
+2. **Run a test command**:
    ```
    test-pty-api
    ```
-3. **Osserva i log nella console** per vedere dove si blocca il flusso
+3. **Observe console logs** to see where the flow stalls
 
-## 🔍 Punti di Debug
+## � Debug Points
 
-### Console Logs da Cercare:
+### Console Logs to Look For:
 
 #### PTY Manager
 - `PTY Manager: node-pty available, using native PTY`
@@ -62,59 +62,59 @@ Testa direttamente le API PTY senza il wrapper PTYTerminal.
 - `SimpleTerminal: Using PTY execution`
 - `SimpleTerminal addOutput:`
 
-## 🚨 Possibili Cause
+## 🚨 Possible Causes
 
-### 1. node-pty Non Disponibile
-Se vedi `PTY Manager: node-pty not available`, il problema è che node-pty non è installato o compilato.
+### 1. node-pty Not Available
+If you see `PTY Manager: node-pty not available`, node-pty is not installed or compiled.
 
-**Soluzione**:
+**Solution**:
 ```bash
 npm install node-pty
-# o
+# or
 npm rebuild node-pty
 ```
 
-### 2. Sessione PTY Non Creata
-Se non vedi `PTY session started:`, la creazione della sessione fallisce.
+### 2. PTY Session Not Created
+If you don't see `PTY session started:`, session creation failed.
 
-### 3. Dati Non Ricevuti
-Se non vedi `PTY Manager received data for session X:`, il PTY non sta ricevendo output dal comando.
+### 3. No Data Received
+If you don't see `PTY Manager received data for session X:`, the PTY isn't receiving output from the command.
 
-### 4. Polling Non Funziona
-Se non vedi `PTY polling got new data:`, il polling non riceve i dati dal buffer.
+### 4. Polling Not Working
+If you don't see `PTY polling got new data:`, polling isn't receiving data from the buffer.
 
-### 5. Display Non Aggiorna
-Se vedi i dati nel polling ma non `SimpleTerminal addOutput:`, il problema è nella visualizzazione.
+### 5. Display Not Updating
+If you see data in polling but not `SimpleTerminal addOutput:`, the issue is in the view layer.
 
-## 🔧 Fix Rapidi
+## �️ Quick Fixes
 
-### Fix 1: Forza Reinstallazione node-pty
+### Fix 1: Force node-pty Reinstall
 ```bash
 npm uninstall node-pty
 npm install node-pty --save
 npm run electron-rebuild
 ```
 
-### Fix 2: Usa Fallback PTY
-Se node-pty non funziona, il sistema dovrebbe usare il fallback automaticamente.
+### Fix 2: Use PTY Fallback
+If node-pty doesn't work, the system should automatically fallback.
 
-### Fix 3: Verifica Permessi
-Su macOS, potrebbe essere necessario dare permessi al terminale:
+### Fix 3: Verify Permissions
+On macOS, you might need to grant permissions to the app:
 ```bash
 sudo xattr -rd com.apple.quarantine /path/to/TermInA.app
 ```
 
-## 📝 Prossimi Passi
+## 📝 Next Steps
 
-1. **Esegui i comandi di test** e controlla i log
-2. **Identifica dove si blocca** il flusso dei dati
-3. **Applica il fix appropriato** basato sui risultati
+1. **Run the test commands** and check logs
+2. **Identify where** the data flow stalls
+3. **Apply the appropriate fix** based on results
 
-## 🎯 Test Finale
+## 🎯 Final Test
 
-Dopo il fix, testa con:
+After the fix, test with:
 ```bash
 npm install --dry-run lodash
 ```
 
-Dovresti vedere tutto l'output in tempo reale senza solo la barra di caricamento.
+You should see full real-time output instead of only the loading bar.

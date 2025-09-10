@@ -1,8 +1,8 @@
-# Guida ai Temi di Termina
+# Termina Themes Guide
 
-Termina offre un sistema di temi flessibile che ti permette di personalizzare completamente l'aspetto del terminale.
+Termina offers a flexible theming system that lets you fully customize the terminal's appearance.
 
-## 🎨 Temi Predefiniti
+## 🎨 Built-in Themes
 
 ### Warp Dark (Default)
 Il tema principale ispirato a Warp Terminal.
@@ -18,7 +18,7 @@ Il tema principale ispirato a Warp Terminal.
 ```
 
 ### Warp Light
-Una versione chiara per l'uso diurno.
+A light variant for daytime use.
 ```json
 {
   "name": "warp-light", 
@@ -31,7 +31,7 @@ Una versione chiara per l'uso diurno.
 ```
 
 ### Terminal Classic
-Il tradizionale terminale verde su nero.
+The traditional green-on-black terminal.
 ```json
 {
   "name": "terminal-classic",
@@ -44,7 +44,7 @@ Il tradizionale terminale verde su nero.
 ```
 
 ### Cyberpunk
-Colori neon per un look futuristico.
+Neon colors for a futuristic look.
 ```json
 {
   "name": "cyberpunk",
@@ -56,16 +56,16 @@ Colori neon per un look futuristico.
 }
 ```
 
-## 🛠️ Creazione Temi Personalizzati
+## 🛠️ Creating Custom Themes
 
-### Tramite Interfaccia
-1. Apri le impostazioni (`⌘,`)
-2. Vai a "Aspetto"
-3. Seleziona "Custom" come tema
-4. Modifica i colori usando i selettori
+### Through the UI
+1. Open Settings (`⌘,`)
+2. Go to "Appearance"
+3. Select "Custom" as the theme
+4. Adjust colors using the pickers
 
-### Tramite File di Configurazione
-Edita `~/.termina/config.json`:
+### Through Configuration File
+Edit `~/.termina/config.json`:
 
 ```json
 {
@@ -84,21 +84,21 @@ Edita `~/.termina/config.json`:
 }
 ```
 
-## 🎯 Proprietà dei Temi
+## 🎯 Theme Properties
 
-| Proprietà | Descrizione | Esempio |
-|-----------|-------------|---------|
-| `background` | Colore di sfondo principale | `#1e2124` |
-| `foreground` | Colore del testo | `#ffffff` |
-| `cursor` | Colore del cursore | `#00d4aa` |
-| `accent` | Colore degli accenti (AI, bordi) | `#00d4aa` |
-| `border` | Colore dei bordi | `#36393f` |
-| `selection` | Colore della selezione | `rgba(255,255,255,0.3)` |
-| `backgroundBlur` | Abilita sfocatura sfondo | `true` |
+| Property | Description | Example |
+|----------|-------------|---------|
+| `background` | Main background color | `#1e2124` |
+| `foreground` | Text color | `#ffffff` |
+| `cursor` | Cursor color | `#00d4aa` |
+| `accent` | Accent color (AI, borders) | `#00d4aa` |
+| `border` | Border color | `#36393f` |
+| `selection` | Selection color | `rgba(255,255,255,0.3)` |
+| `backgroundBlur` | Enable background blur | `true` |
 
-## 🌈 Palette di Colori del Terminale
+## 🌈 Terminal Color Palette
 
-Puoi anche personalizzare i colori ANSI standard:
+You can also customize the standard ANSI colors:
 
 ```json
 {
@@ -125,27 +125,27 @@ Puoi anche personalizzare i colori ANSI standard:
 }
 ```
 
-## 💡 Suggerimenti per i Temi
+## 💡 Theme Tips
 
-### Contrasto
-- Assicurati che ci sia sufficiente contrasto tra testo e sfondo
-- Usa strumenti come [WebAIM](https://webaim.org/resources/contrastchecker/) per verificare
+### Contrast
+- Ensure sufficient contrast between text and background
+- Use tools like [WebAIM](https://webaim.org/resources/contrastchecker/) to verify
 
-### Colori AI
-- Il colore `accent` viene usato per l'AI e gli elementi interattivi
-- Scegli un colore che si distingua dal testo normale
+### AI Colors
+- The `accent` color is used for AI and interactive elements
+- Choose a color that stands out from normal text
 
-### Accessibilità
-- Evita combinazioni di colori problematiche per daltonici
-- Testa il tema in diverse condizioni di illuminazione
+### Accessibility
+- Avoid color combinations that are problematic for color blindness
+- Test the theme in various lighting conditions
 
 ### Performance
-- I temi con trasparenza richiedono più risorse
-- Disabilita `backgroundBlur` su sistemi meno potenti
+- Themes with transparency require more resources
+- Disable `backgroundBlur` on lower-end systems
 
-## 📱 Temi Adattivi
+## 📱 Adaptive Themes
 
-Puoi creare temi che si adattano all'ora del giorno:
+You can create themes that adapt to time of day:
 
 ```json
 {
@@ -163,7 +163,7 @@ Puoi creare temi che si adattano all'ora del giorno:
 }
 ```
 
-## 🎨 Galleria Temi Community
+## 🎨 Community Theme Gallery
 
 ### Dracula
 ```json
@@ -209,24 +209,24 @@ Puoi creare temi che si adattano all'ora del giorno:
 }
 ```
 
-## 📦 Condivisione Temi
+## 📦 Sharing Themes
 
-Per condividere un tema:
+To share a theme:
 
-1. Esporta la configurazione del tema
-2. Crea un file `.json` con il tema
-3. Condividi il file con altri utenti
-4. Importa tramite drag & drop nelle impostazioni (feature futura)
+1. Export the theme configuration
+2. Create a `.json` file with the theme
+3. Share the file with others
+4. Import via drag & drop in settings (future feature)
 
-## 🔧 Debugging Temi
+## 🧯 Theme Debugging
 
-Se un tema non funziona:
+If a theme doesn't work:
 
-1. Controlla la sintassi JSON
-2. Verifica che tutti i colori siano validi (hex, rgb, rgba)
-3. Riavvia Termina dopo le modifiche
-4. Controlla i log della console per errori
+1. Check JSON syntax
+2. Verify all colors are valid (hex, rgb, rgba)
+3. Restart Termina after changes
+4. Check console logs for errors
 
 ---
 
-**Suggerimento**: Usa il tema "Warp Dark" come base per i tuoi temi personalizzati!
+**Tip**: Use the "Warp Dark" theme as a base for your custom themes!

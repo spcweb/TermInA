@@ -222,8 +222,8 @@ const LOADER_MESSAGES = {
 node test-loader.js
 
 # Test specifico delle animazioni
-# (da eseguire nel terminale dell'app)
-ai: Qual è il prezzo di Bitcoin?
+# (to run inside the app terminal)
+ai: What is the price of Bitcoin?
 ```
 
 ### Timing Debug

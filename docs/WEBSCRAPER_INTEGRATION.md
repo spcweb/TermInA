@@ -1,47 +1,47 @@
-# Integrazione WebScraper con Agente AI
+# WebScraper Integration with AI Agent
 
-Questo documento descrive l'integrazione del webscraper con l'agente AI di Termina, permettendo all'agente di cercare informazioni su internet quando necessario.
+This document describes the integration of the webscraper with Termina's AI agent, allowing the agent to search the internet when needed.
 
-## Panoramica
+## Overview
 
-Il sistema di integrazione web permette all'agente AI di:
-- Determinare automaticamente quando una richiesta richiede informazioni aggiornate da internet
-- Eseguire ricerche web su diversi motori di ricerca
-- Integrare le informazioni trovate con le risposte AI esistenti
-- Fornire risposte più complete e aggiornate
+The web integration system allows the AI agent to:
+- Automatically determine when a request requires up-to-date information from the internet
+- Perform web searches across different search engines
+- Integrate retrieved information with existing AI answers
+- Provide more complete and up-to-date responses
 
-## Componenti Principali
+## Main Components
 
 ### 1. WebScraper (`src/webscraper.js`)
-Modulo base per l'estrazione di contenuti web e la ricerca su motori di ricerca.
+Base module for web content extraction and search engine queries.
 
-**Funzionalità:**
-- Ricerca su Google, Bing, DuckDuckGo
-- Estrazione e pulizia di contenuti HTML
-- Gestione di redirect e timeout
-- User-Agent rotazione per evitare blocchi
+**Features:**
+- Search on Google, Bing, DuckDuckGo
+- Extraction and cleanup of HTML content
+- Handling of redirects and timeouts
+- User-Agent rotation to avoid blocking
 
 ### 2. WebAI Integration (`src/web-ai-integration.js`)
-Modulo che integra il webscraper con l'agente AI.
+Module that integrates the webscraper with the AI agent.
 
-**Funzionalità:**
-- Analisi intelligente delle richieste per determinare se serve una ricerca web
-- Integrazione dei risultati web con le risposte AI
-- Gestione della cronologia delle ricerche
-- Configurazione della soglia di confidenza
+**Features:**
+- Intelligent analysis of requests to decide if a web search is needed
+- Integration of web results with AI responses
+- Search history management
+- Configurable confidence threshold
 
 ### 3. AI Agent Enhanced (`src/ai-agent.js`)
-Estensione dell'agente AI esistente con capacità web.
+Extension of the existing AI agent with web capabilities.
 
-**Nuovi metodi:**
-- `processRequestWithWeb()` - Processa richieste con integrazione web
-- `isWebServiceAvailable()` - Verifica disponibilità del servizio
-- `getWebSearchStats()` - Ottiene statistiche delle ricerche
+**New methods:**
+- `processRequestWithWeb()` — Process requests with web integration
+- `isWebServiceAvailable()` — Check service availability
+- `getWebSearchStats()` — Get search statistics
 
-## Configurazione
+## Configuration
 
-### File di Configurazione
-Le impostazioni del webscraper sono configurate in `~/.termina/config.json`:
+### Configuration File
+Webscraper settings are configured in `~/.termina/config.json`:
 
 ```json
 {
@@ -70,232 +70,232 @@ Le impostazioni del webscraper sono configurate in `~/.termina/config.json`:
 }
 ```
 
-### Parametri di Configurazione
+### Configuration Parameters
 
-| Parametro | Descrizione | Default |
+| Parameter | Description | Default |
 |-----------|-------------|---------|
-| `enabled` | Abilita/disabilita il webscraper | `true` |
-| `defaultSearchEngine` | Motore di ricerca predefinito | `"google"` |
-| `maxResults` | Numero massimo di risultati per ricerca | `5` |
-| `confidenceThreshold` | Soglia per decidere se cercare online (0.0-1.0) | `0.7` |
-| `timeout` | Timeout per le richieste HTTP (ms) | `10000` |
-| `maxRedirects` | Numero massimo di redirect | `3` |
+| `enabled` | Enable/disable the webscraper | `true` |
+| `defaultSearchEngine` | Default search engine | `"google"` |
+| `maxResults` | Max number of results per search | `5` |
+| `confidenceThreshold` | Threshold to decide whether to search online (0.0–1.0) | `0.7` |
+| `timeout` | HTTP request timeout (ms) | `10000` |
+| `maxRedirects` | Max number of redirects | `3` |
 
-## Utilizzo
+## Usage
 
-### Metodo Base
+### Basic Method
 ```javascript
 const aiAgent = require('./src/ai-agent');
 
-// Processa una richiesta con integrazione web
+// Process a request with web integration
 const result = await aiAgent.processRequestWithWeb(
-  'Qual è il prezzo attuale di Bitcoin?',
-  [], // contesto del terminale
+  'What is the current price of Bitcoin?',
+  [], // terminal context
   false // autoExecute
 );
 
 if (result.type === 'web_enhanced') {
-  console.log('Risposta arricchita:', result.enhancedResponse);
-  console.log('Query di ricerca:', result.searchQuery);
+  console.log('Enhanced response:', result.enhancedResponse);
+  console.log('Search query:', result.searchQuery);
 } else {
-  console.log('Risposta locale:', result.response);
+  console.log('Local response:', result.response);
 }
 ```
 
-### Metodo Avanzato
+### Advanced Method
 ```javascript
 const webAIIntegration = require('./src/web-ai-integration');
 
-// Analizza se serve una ricerca web
+// Analyze if a web search is required
 const analysis = await webAIIntegration.shouldSearchOnline(
-  'Qual è la versione più recente di Node.js?',
-  'La versione più recente di Node.js è la 20.x',
+  'What is the latest version of Node.js?',
+  'The latest version of Node.js is 20.x',
   []
 );
 
 if (analysis.shouldSearch) {
-  // Esegui ricerca e integra risultati
+  // Perform search and integrate results
   const enhanced = await webAIIntegration.enhanceResponseWithWebSearch(
-    'Qual è la versione più recente di Node.js?',
-    'La versione più recente di Node.js è la 20.x',
+    'What is the latest version of Node.js?',
+    'The latest version of Node.js is 20.x',
     analysis
   );
   
-  console.log('Risposta integrata:', enhanced.enhancedResponse);
+  console.log('Integrated response:', enhanced.enhancedResponse);
 }
 ```
 
-## Gestione delle Ricerche
+## Managing Searches
 
-### Cronologia
+### History
 ```javascript
-// Ottieni cronologia ricerche
+// Get search history
 const history = aiAgent.getWebSearchHistory();
 
-// Pulisci cronologia
+// Clear history
 aiAgent.clearWebSearchHistory();
 ```
 
-### Statistiche
+### Statistics
 ```javascript
-// Ottieni statistiche
+// Get stats
 const stats = aiAgent.getWebSearchStats();
-console.log('Ricerche totali:', stats.totalSearches);
-console.log('Ricerche eseguite:', stats.searchesPerformed);
-console.log('Confidenza media:', stats.averageConfidence);
+console.log('Total searches:', stats.totalSearches);
+console.log('Searches performed:', stats.searchesPerformed);
+console.log('Average confidence:', stats.averageConfidence);
 ```
 
-### Configurazione Dinamica
+### Dynamic Configuration
 ```javascript
-// Imposta soglia di confidenza
+// Set confidence threshold
 aiAgent.setWebSearchConfidenceThreshold(0.8);
 
-// Ottieni soglia attuale
+// Get current threshold
 const threshold = aiAgent.getWebSearchConfidenceThreshold();
 ```
 
-## Tipi di Risposta
+## Response Types
 
 ### 1. `web_enhanced`
-Risposta arricchita con informazioni trovate su internet:
+Response enhanced with information found online:
 ```javascript
 {
   type: 'web_enhanced',
-  response: 'Risposta integrata con informazioni web',
-  originalResponse: 'Risposta AI originale',
-  searchQuery: 'query di ricerca eseguita',
-  searchResults: { /* risultati della ricerca */ },
+  response: 'Response enhanced with web information',
+  originalResponse: 'Original AI response',
+  searchQuery: 'executed search query',
+  searchResults: { /* search results */ },
   confidence: 0.85,
-  reason: 'Informazioni richieste potrebbero essere obsolete'
+  reason: 'Requested information may be outdated'
 }
 ```
 
 ### 2. `local_only`
-Risposta basata solo sulla conoscenza locale dell'AI:
+Response based only on the AI's local knowledge:
 ```javascript
 {
   type: 'local_only',
-  response: 'Risposta AI locale',
+  response: 'Local AI response',
   confidence: 0.3,
-  reason: 'Informazioni sufficienti nella conoscenza locale'
+  reason: 'Sufficient information in local knowledge'
 }
 ```
 
 ### 3. `fallback`
-Fallback alla modalità normale se la ricerca web fallisce:
+Fallback to normal mode if the web search fails:
 ```javascript
 {
   type: 'fallback',
-  response: 'Risposta AI originale',
-  searchError: 'Errore durante la ricerca web',
-  reason: 'Fallback per errore di ricerca'
+  response: 'Original AI response',
+  searchError: 'Error during web search',
+  reason: 'Fallback due to search error'
 }
 ```
 
-## Gestione degli Errori
+## Error Handling
 
-### Errori Comuni
-- **Timeout**: Richieste HTTP che superano il limite di tempo
-- **Redirect eccessivi**: Troppi redirect HTTP
-- **Parsing fallito**: Impossibilità di estrarre contenuto dalle pagine
-- **Connettività**: Problemi di rete o firewall
+### Common Errors
+- **Timeout**: HTTP requests exceeding the time limit
+- **Too many redirects**: Excessive HTTP redirects
+- **Parsing failed**: Unable to extract content from pages
+- **Connectivity**: Network or firewall issues
 
-### Strategie di Fallback
-1. Se la ricerca web fallisce, l'agente AI usa la modalità normale
-2. Se l'integrazione fallisce, viene restituita la risposta AI originale
-3. Log dettagliati per il debugging
+### Fallback Strategies
+1. If the web search fails, the AI agent uses normal mode
+2. If integration fails, the original AI response is returned
+3. Detailed logs for debugging
 
-## Sicurezza e Privacy
+## Security and Privacy
 
-### Considerazioni
-- **Rate Limiting**: Pause tra le richieste per essere rispettosi
-- **User-Agent Rotation**: Rotazione degli User-Agent per evitare blocchi
-- **Timeout**: Limitazione del tempo di attesa per le richieste
-- **Validazione URL**: Verifica della validità degli URL prima dell'accesso
+### Considerations
+- **Rate Limiting**: Pauses between requests to be respectful
+- **User-Agent Rotation**: Rotate user agents to avoid blocking
+- **Timeout**: Limit wait time for requests
+- **URL Validation**: Check URL validity before access
 
 ### Best Practices
-- Non eseguire troppe richieste in rapida successione
-- Rispettare i robots.txt dei siti web
-- Utilizzare User-Agent appropriati
-- Implementare retry con backoff esponenziale
+- Avoid making too many requests in quick succession
+- Respect website robots.txt
+- Use appropriate User-Agents
+- Implement retries with exponential backoff
 
-## Test e Debug
+## Testing and Debug
 
-### Esecuzione Test
+### Run Tests
 ```bash
-# Esegui tutti i test
+# Run all tests
 node test-webscraper.js
 
-# Test specifici
+# Specific tests
 const { testWebScraper } = require('./test-webscraper');
 await testWebScraper();
 ```
 
-### Log e Debug
+### Logs and Debug
 ```javascript
-// Abilita log dettagliati
-console.log('WebAI: Processamento richiesta con integrazione web');
+// Enable detailed logs
+console.log('WebAI: Processing request with web integration');
 
-// Verifica disponibilità servizio
+// Check service availability
 const isAvailable = await aiAgent.isWebServiceAvailable();
-console.log('Servizio web disponibile:', isAvailable);
+console.log('Web service available:', isAvailable);
 ```
 
-## Limitazioni
+## Limitations
 
-### Limitazioni Attuali
-- **Parsing HTML**: Il parsing dei risultati di ricerca è semplificato
-- **API Rate Limits**: I motori di ricerca potrebbero limitare le richieste
-- **Contenuto Dinamico**: Difficoltà con contenuti generati via JavaScript
-- **Autenticazione**: Non supporta siti che richiedono login
+### Current Limitations
+- **HTML Parsing**: Simplified parsing of search results
+- **API Rate Limits**: Search engines may throttle requests
+- **Dynamic Content**: Difficulty with JavaScript-generated content
+- **Authentication**: No support for login-required sites
 
-### Sviluppi Futuri
-- Integrazione con API ufficiali dei motori di ricerca
-- Supporto per contenuti JavaScript dinamici
-- Cache intelligente dei risultati
-- Supporto per più tipi di contenuto (PDF, immagini, etc.)
+### Future Work
+- Integration with official search engine APIs
+- Support for dynamic JavaScript content
+- Intelligent result caching
+- Support for more content types (PDF, images, etc.)
 
 ## Troubleshooting
 
-### Problemi Comuni
+### Common Issues
 
-**1. Ricerche web non funzionano**
-- Verifica la connettività internet
-- Controlla le impostazioni firewall
-- Verifica la configurazione del webscraper
+**1. Web searches not working**
+- Check internet connectivity
+- Verify firewall settings
+- Check webscraper configuration
 
-**2. Risposte non arricchite**
-- Controlla la soglia di confidenza
-- Verifica i log per errori di ricerca
-- Controlla se il servizio è disponibile
+**2. Responses not enhanced**
+- Check the confidence threshold
+- Review logs for search errors
+- Check if the service is available
 
-**3. Performance lente**
-- Riduci il numero massimo di risultati
-- Aumenta i timeout se necessario
-- Verifica la velocità di connessione
+**3. Slow performance**
+- Reduce maximum number of results
+- Increase timeouts if needed
+- Check connection speed
 
-### Debug Avanzato
+### Advanced Debug
 ```javascript
-// Abilita debug dettagliato
+// Enable detailed debug
 const webConfig = config.getWebScraperConfig();
-console.log('Configurazione webscraper:', webConfig);
+console.log('Webscraper configuration:', webConfig);
 
-// Test connettività
+// Test connectivity
 const testResult = await webScraper.searchWeb('test', 'google', 1);
-console.log('Test connettività:', testResult);
+console.log('Connectivity test:', testResult);
 ```
 
-## Contributi
+## Contributing
 
-Per contribuire al miglioramento del webscraper:
+To contribute to the webscraper:
 
-1. Segui le linee guida di codifica del progetto
-2. Aggiungi test per nuove funzionalità
-3. Documenta le modifiche
-4. Considera l'impatto sulle performance
-5. Rispetta le politiche dei siti web target
+1. Follow the project coding guidelines
+2. Add tests for new features
+3. Document changes
+4. Consider performance impact
+5. Respect target website policies
 
-## Licenza
+## License
 
-Questo modulo è parte del progetto Termina e segue la stessa licenza del progetto principale.
+This module is part of the Termina project and follows the same license as the main project.
 

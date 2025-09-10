@@ -1,163 +1,151 @@
-# AI Agent Iterativo - Guida Utente
+# AI Agent (Iterative) — User Guide
 
-## Nuove Funzionalità
+## What’s new
 
-L'AI Agent integrato in TermInA ora supporta **esecuzione automatica e iterazione** sui comandi, andando oltre il semplice suggerimento di comandi.
+The built-in AI Agent now supports automatic execution and iteration on tasks, going beyond simple suggestions.
 
-## Comandi Disponibili
+## Commands
 
-### Modalità Suggerimento (comportamento precedente)
+### Suggestion mode (previous behavior)
 ```bash
-ai "crea una cartella chiamata test"
-ask "mostra lo spazio disco disponibile"
+ai "create a folder named test"
+ask "show available disk space"
 ```
 
-### Modalità Esecuzione Automatica (nuova!)
+
 ```bash
-execute "crea una cartella chiamata test"
-run "mostra lo spazio disco disponibile"
+execute "create a folder named test"
+run "show available disk space"
 ```
 
-## Come Funziona l'Iterazione
+## How iteration works
 
-Quando usi `execute` o `run`, l'AI Agent:
+When you use `execute` or `run`, the agent will:
 
-1. **Analizza** la richiesta per determinare il comando necessario
-2. **Esegue** automaticamente il comando
-3. **Verifica** se il risultato soddisfa la richiesta originale
-4. **Itera** fino a un massimo di 5 tentativi se il risultato non è soddisfacente
-5. **Propone soluzioni alternative** in caso di errori
+1) Analyze the request to determine the command(s)
+2) Execute the command(s)
+3) Verify whether the outcome meets the original goal
+4) Iterate up to 5 attempts if needed
+5) Try alternative approaches on errors
 
-## Esempi Pratici
+## Practical examples
 
-### Esempio 1: Creazione Directory
+### Example 1: Create a directory
 ```bash
-execute "crea una directory per i miei progetti Python"
+execute "create a directory for my Python projects"
+```
+The agent will:
+- Suggest: `mkdir python_projects`
+- Run it
+- Verify the directory exists
+- Confirm success or try an alternative
+
+### Example 2: System monitoring
+```bash
+run "check how much free disk space I have and whether I should clean up"
+```
+The agent will:
+- Run: `df -h`
+- Analyze usage
+- If needed, run `du -sh *` to find large folders/files
+- Provide recommendations
+
+### Example 3: Process management
+```bash
+execute "find and kill Chrome processes using too much memory"
+```
+The agent will:
+- Run: `ps aux | grep -i chrome`
+- Analyze memory usage
+- Kill the problematic PIDs
+- Verify they’re gone
+
+## Why iteration helps
+
+### ✅ Automatic error recovery
+```bash
+execute "install python"
+```
+- Try: `apt-get install -y python3` (Linux) or `brew install python@3` (macOS)
+- If it fails: fetch download instructions from the official site
+
+### ✅ Result verification
+```bash
+run "create a backup of the documents folder"
+```
+- Execute backup command
+- Verify backup exists
+- Check file integrity
+- Confirm success
+
+### ✅ Uses context
+```bash
+execute "find the largest file in my home directory"
+```
+- Attempt 1: `find ~ -type f -printf '%s %p\n' | sort -nr | head -1`
+- If slow: `du -ah ~ | sort -rh | head -20`
+
+## Safety and control
+
+### Transparent history
+Each run shows:
+- ✅ Executed command
+- 💭 AI reasoning
+- 📤 Result
+- 🔄 Iterations
+
+### Safety limits
+- Max 5 iterations
+- Potentially dangerous commands require confirmation
+- Full logs retained
+
+## When to use
+
+### Power users
+```bash
+execute "optimize system performance"
+execute "set up a Node.js dev environment"
+execute "clean temporary files"
 ```
 
-L'AI Agent:
-- Suggerisce: `mkdir python_projects`
-- Esegue il comando
-- Verifica che la directory sia stata creata
-- Conferma il successo o prova alternative
-
-### Esempio 2: Monitoraggio Sistema
+### Learning
 ```bash
-run "controlla quanto spazio ho sul disco e dimmi se devo liberare spazio"
+ai "how can I monitor CPU usage?"
+ai "what are the most useful git commands?"
 ```
 
-L'AI Agent:
-- Esegue: `df -h`
-- Analizza l'output per determinare l'utilizzo
-- Se necessario, suggerisce ed esegue comandi aggiuntivi come `du -sh *` per identificare file grandi
-- Fornisce raccomandazioni finali
+## Advanced scenarios
 
-### Esempio 3: Gestione Processi
+### Full system diagnosis
 ```bash
-execute "trova e termina tutti i processi Chrome che usano troppa memoria"
+execute "run a full system health check and highlight issues"
 ```
 
-L'AI Agent:
-- Prima esegue: `ps aux | grep -i chrome`
-- Analizza l'utilizzo memoria
-- Identifica processi problematici
-- Esegue `kill` sui PID appropriati
-- Verifica che i processi siano stati terminati
-
-## Vantaggi dell'Iterazione
-
-### ✅ Risoluzione Automatica degli Errori
-Se un comando fallisce, l'AI prova approcci alternativi:
+### Dev environment setup
 ```bash
-execute "installa Python"
-```
-- Prova: `brew install python3`
-- Se fallisce: `curl https://www.python.org/downloads/ | grep latest`
-- Se necessario: guida all'installazione manuale
-
-### ✅ Verifica dei Risultati
-L'AI non si ferma all'esecuzione, ma verifica che l'obiettivo sia raggiunto:
-```bash
-run "crea un backup della cartella documenti"
-```
-- Esegue il comando di backup
-- Verifica che il backup sia stato creato
-- Controlla l'integrità dei file
-- Conferma il successo
-
-### ✅ Apprendimento dal Contesto
-Ogni iterazione tiene conto dei tentativi precedenti:
-```bash
-execute "trova il file più grande nella home directory"
-```
-- Tentativo 1: `find ~ -type f -exec ls -la {} \; | sort -k5 -rn | head -1`
-- Se troppo lento: `find ~ -type f -exec du -h {} \; | sort -rh | head -10`
-- Se ancora problematico: `du -ah ~ | sort -rh | head -20`
-
-## Controllo e Sicurezza
-
-### Cronologia Trasparente
-Ogni esecuzione mostra:
-- ✅ Comando eseguito
-- 💭 Ragionamento dell'AI
-- 📤 Risultato ottenuto
-- 🔄 Numero di iterazioni
-
-### Limiti di Sicurezza
-- Massimo 5 iterazioni per evitare loop infiniti
-- Comandi potenzialmente pericolosi richiedono conferma
-- Log completo di tutte le operazioni
-
-## Modalità di Utilizzo
-
-### Per Utenti Esperti
-Usa `execute` quando vuoi che l'AI gestisca completamente il task:
-```bash
-execute "ottimizza le performance del sistema"
-execute "configura un ambiente di sviluppo Node.js"
-execute "pulisci i file temporanei"
+run "configure a Python venv for machine learning"
 ```
 
-### Per Apprendimento
-Usa `ai` per vedere i comandi e imparare:
+### Cleanup and maintenance
 ```bash
-ai "come posso monitorare l'utilizzo della CPU?"
-ai "quali sono i comandi git più utili?"
+execute "free disk space by finding duplicates and clearing caches"
 ```
 
-## Esempi Avanzati
+## Tips
 
-### Diagnosi Sistema Completa
-```bash
-execute "esegui una diagnosi completa del sistema e dimmi se ci sono problemi"
-```
+1) Be specific — the more details, the better
+2) Use context — the agent remembers the session
+3) Mix modes — use `ai` to explore and `execute` to apply
+4) Always review important changes
 
-### Setup Ambiente di Sviluppo
-```bash
-run "configura un ambiente Python con virtual environment per machine learning"
-```
+## Troubleshooting
 
-### Pulizia e Manutenzione
-```bash
-execute "libera spazio su disco trovando e rimuovendo file duplicati e cache inutili"
-```
-
-## Tips & Tricks
-
-1. **Sii specifico**: Più dettagli fornisci, migliore sarà l'esecuzione
-2. **Usa il contesto**: L'AI ricorda le operazioni precedenti nella sessione
-3. **Combina le modalità**: Usa `ai` per esplorare e `execute` per applicare
-4. **Controlla sempre**: Anche se automatico, verifica sempre i risultati importanti
-
-## Risoluzione Problemi
-
-Se l'AI Agent non funziona come aspettato:
-
-1. Verifica che la configurazione AI sia corretta nelle impostazioni
-2. Controlla che il provider AI (Gemini/LM Studio/OpenAI) sia attivo
-3. Usa `ai` invece di `execute` per vedere i comandi suggeriti
-4. Controlla i log del terminale per errori
+If it doesn’t work as expected:
+1) Check AI settings are correct
+2) Ensure your provider (Gemini/LM Studio/OpenAI/Ollama) is running and reachable
+3) Use `ai` instead of `execute` to preview commands
+4) Check terminal logs for errors
 
 ---
 
-**Nota**: Questa funzionalità è ancora in sviluppo. Feedback e suggerimenti sono benvenuti!
+Note: This feature is under active development. Feedback is welcome.
