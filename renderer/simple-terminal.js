@@ -2676,6 +2676,30 @@ AI Commands:
                     this.addAIOutput('📊 Output: ' + result.output);
                     this.addToAIConversation('ai', result.response, result.command, result.output, 'executed');
                     break;
+                case 'command': {
+                    // Backend ha identificato un comando, proponi approvazione con adattamento piattaforma
+                    const rawCmd = (result.command && typeof result.command === 'string') ? result.command : '';
+                    let adapted = this.adaptCommandToPlatform(rawCmd);
+                    // Se il comando è sospetto (es. singola parola) prova a ricostruire da intento cartella
+                    const suspiciousSingleWord = adapted && /^[A-Za-z0-9_.-]+$/.test(adapted);
+                    if (suspiciousSingleWord) {
+                        const fromIntent = this.buildFolderCreationCommandFromText(String(result.response || ''));
+                        if (fromIntent) adapted = this.adaptCommandToPlatform(fromIntent);
+                    }
+                    if (adapted) {
+                        const toRun = await this.showInlineAIApproval(adapted);
+                        if (toRun && typeof toRun === 'string' && toRun.trim()) {
+                            await this.executeApprovedCommand(toRun.trim());
+                        } else if (toRun === false || toRun === null) {
+                            this.addOutput('🛑 Esecuzione annullata');
+                        }
+                    } else {
+                        // Fallback al testo
+                        const aiText = typeof result.response === 'string' ? result.response : '';
+                        this.addAIOutput('🤖 ' + aiText);
+                    }
+                    break;
+                }
                     
                 case 'ai_response':
                 default: {
@@ -2688,7 +2712,7 @@ AI Commands:
                         const suggested = this.extractCommandFromAIResponse(aiText);
                         if (suggested) {
                             try {
-                                const toRun = await this.showInlineAIApproval(suggested);
+                                const toRun = await this.showInlineAIApproval(this.adaptCommandToPlatform(suggested));
                                 if (toRun && typeof toRun === 'string' && toRun.trim()) {
                                     await this.executeApprovedCommand(toRun.trim());
                                 } else if (toRun === false || toRun === null) {
@@ -2732,6 +2756,11 @@ AI Commands:
     extractCommandFromAIResponse(text) {
         if (!text || typeof text !== 'string') return null;
         try {
+            // 0) Rilevamento esplicito: intento di creazione cartella
+            const fromIntentEarly = this.buildFolderCreationCommandFromText(text);
+            if (fromIntentEarly) {
+                return this.adaptCommandToPlatform(fromIntentEarly);
+            }
             // Funzione di sanificazione di una riga candidata
             const sanitize = (s) => {
                 if (!s) return '';
@@ -2911,7 +2940,63 @@ AI Commands:
                 const { missing } = hasUndefinedVars(candidate, finalAssigns);
                 if (missing.length > 0) return null;
             }
-            return candidate || null;
+            // Adatta alla piattaforma corrente prima di restituire
+            // Se il candidato è assente o è una singola parola sospetta (es: "python"), prova l'intento
+            if (!candidate || /^[A-Za-z0-9_.-]+$/.test(candidate)) {
+                const fromIntent = this.buildFolderCreationCommandFromText(text);
+                if (fromIntent) return this.adaptCommandToPlatform(fromIntent);
+            }
+            const adapted = candidate ? this.adaptCommandToPlatform(candidate) : null;
+            return adapted || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // Costruisce un comando mkdir da testo che richiede la creazione di una cartella (IT/EN)
+    buildFolderCreationCommandFromText(text) {
+        if (!text) return null;
+        const s = String(text).toLowerCase();
+        // Verifica parole chiave di intento
+        const intent = /(crea|creare|creami|make|create|build)\s+(una\s+)?(cartella|directory|dir|folder)/i;
+        if (!intent.test(s)) return null;
+
+        // Estrai nome della cartella: cerca tra virgolette o dopo "chiamata/named/called"
+        const nameRegexes = [
+            /(?:chiamat[ao]|di\s+nome|named|called)\s+["'“”]?([a-z0-9._\-]+)["'“”]?/i,
+            /(?:cartella|directory|folder)\s+(?:chiamat[ao]\s+)?["'“”]?([a-z0-9._\-]+)["'“”]?/i
+        ];
+        let dirName = null;
+        for (const rx of nameRegexes) {
+            const m = text.match(rx);
+            if (m && m[1]) { dirName = m[1]; break; }
+        }
+        // Fallback: prendi la prima parola tra backticks
+        if (!dirName) {
+            const tick = text.match(/`([A-Za-z0-9._\-]+)`/);
+            if (tick) dirName = tick[1];
+        }
+        if (!dirName) return null;
+
+        // Determina base path (Desktop/Downloads/Documents) se menzionati
+        const base = this.resolveBaseDirFromText(s);
+        const full = base ? `${base}/${dirName}` : `./${dirName}`;
+        return `mkdir -p ${full}`;
+    }
+
+    // Risolve una base directory semplice da keyword (IT/EN)
+    resolveBaseDirFromText(s) {
+        try {
+            const isWindows = navigator.userAgent && /Windows/i.test(navigator.userAgent);
+            const home = isWindows ? '%USERPROFILE%' : '~';
+            // Mapping keyword -> subdir
+            if (/(desktop|scrivania)/i.test(s)) return `${home}/Desktop`;
+            if (/(download|downloads|scaric)/i.test(s)) return `${home}/Downloads`;
+            if (/(documenti|documents|docs)/i.test(s)) return `${home}/Documents`;
+            if (/(musica|music)/i.test(s)) return `${home}/Music`;
+            if (/(immagini|pictures|foto|photos)/i.test(s)) return `${home}/Pictures`;
+            if (/(video|videos|movie|film)/i.test(s)) return `${home}/Videos`;
+            return null; // usa cwd
         } catch (_) {
             return null;
         }
@@ -2954,13 +3039,52 @@ AI Commands:
         try {
             const tauriApi = await this.getTauriAPI();
             if (!tauriApi || !tauriApi.invoke) throw new Error('Tauri API non disponibile');
-            this.addOutput('▶️ ' + command);
-            const output = await tauriApi.invoke('run_command', { command });
+            const adapted = this.adaptCommandToPlatform(command);
+            this.addOutput('▶️ ' + adapted);
+            const output = await tauriApi.invoke('run_command', { command: adapted });
             if (output) {
                 this.addOutput(output);
             }
         } catch (e) {
             this.addOutput('❌ Errore esecuzione: ' + (e && (e.message || e.error) || String(e)));
+        }
+    }
+
+    // Adatta un comando generato dall'AI alla piattaforma corrente (path e sintassi)
+    adaptCommandToPlatform(command) {
+        try {
+            if (!command || typeof command !== 'string') return command;
+            // Se siamo in Windows, mantieni (minime conversioni); su Unix, converti path Windows
+            const isWindows = navigator.userAgent && /Windows/i.test(navigator.userAgent);
+            let result = command;
+
+            // Normalizza quote smart
+            result = result.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+            if (!isWindows) {
+                // Variabili ambiente Windows -> Unix
+                result = result.replace(/%USERPROFILE%/gi, '~');
+                result = result.replace(/%HOMEPATH%/gi, '~');
+
+                // Pattern %USERPROFILE%\\Dir or %USERPROFILE%/Dir -> ~/Dir
+                result = result.replace(/%(?:USERPROFILE|HOMEPATH)%[\\/]+/gi, '~/');
+
+                // Converti backslash in slash per Unix (ma non dentro le opzioni)
+                // Esempio: mkdir "C:\\Users\\me\\Desktop\\test" -> mkdir "~/Desktop/test"
+                result = result.replace(/\\/g, '/');
+
+                // Aggiungi -p ai mkdir se manca
+                if (/^\s*mkdir\s+/i.test(result) && !/\s-\w*\bp\b/.test(result)) {
+                    result = result.replace(/^\s*mkdir\s+/i, 'mkdir -p ');
+                }
+            } else {
+                // Su Windows, sostituisci ~/ con %USERPROFILE%\\
+                result = result.replace(/~\//g, '%USERPROFILE%\\');
+            }
+
+            return result;
+        } catch (_) {
+            return command;
         }
     }
 
@@ -3485,8 +3609,9 @@ AI Commands:
     }
 
     executeAISuggestion(command) {
-        this.addOutput('$ ' + command);
-        this.executeCommand(command);
+    const adapted = this.adaptCommandToPlatform(command);
+    this.addOutput('$ ' + adapted);
+    this.executeCommand(adapted);
         // Rimuovi tutti i suggerimenti dopo l'esecuzione
         this.clearAISuggestions();
     }

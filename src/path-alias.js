@@ -8,13 +8,15 @@ const path = require('path');
 const canonicalDirs = {
   desktop: systemInfo.desktopDir,
   documents: systemInfo.documentsDir,
-  downloads: path.join(systemInfo.homeDir, 'Downloads'),
-  pictures: path.join(systemInfo.homeDir, 'Pictures'),
-  photos: path.join(systemInfo.homeDir, 'Pictures'),
-  images: path.join(systemInfo.homeDir, 'Pictures'),
-  music: path.join(systemInfo.homeDir, 'Music'),
-  movies: path.join(systemInfo.homeDir, 'Movies'),
-  videos: path.join(systemInfo.homeDir, 'Movies'),
+  downloads: systemInfo.downloadsDir || path.join(systemInfo.homeDir, 'Downloads'),
+  pictures: systemInfo.picturesDir || path.join(systemInfo.homeDir, 'Pictures'),
+  photos: systemInfo.picturesDir || path.join(systemInfo.homeDir, 'Pictures'),
+  images: systemInfo.picturesDir || path.join(systemInfo.homeDir, 'Pictures'),
+  music: systemInfo.musicDir || path.join(systemInfo.homeDir, 'Music'),
+  movies: systemInfo.videosDir || path.join(systemInfo.homeDir, process.platform === 'darwin' ? 'Movies' : 'Videos'),
+  videos: systemInfo.videosDir || path.join(systemInfo.homeDir, process.platform === 'darwin' ? 'Movies' : 'Videos'),
+  public: systemInfo.publicDir || path.join(systemInfo.homeDir, 'Public'),
+  templates: systemInfo.templatesDir || path.join(systemInfo.homeDir, 'Templates'),
   home: systemInfo.homeDir
 };
 
@@ -31,6 +33,7 @@ const aliasMap = {
   'download': 'downloads',
   'downloads': 'downloads',
   'scaricati': 'downloads',
+  'scaricati/Download': 'downloads',
   // Pictures / Photos
   'immagini': 'pictures',
   'immagine': 'pictures',
@@ -47,6 +50,9 @@ const aliasMap = {
   'videos': 'movies',
   'film': 'movies',
   'movies': 'movies',
+  'videi': 'movies',
+  'videoclip': 'movies',
+  'videoteca': 'movies',
   // Home
   'home': 'home',
   'cartella personale': 'home',

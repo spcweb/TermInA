@@ -8,11 +8,11 @@
 
   <details>
     <summary><strong>Version</strong></summary>
-    <p>v2.0.0 - Now powered by Tauri! 🚀</p>
+  <p>v0.2 BETA - Now powered by Tauri! 🚀</p>
   </details>
 </p>
 
-🎉 **NEW**: TermInA v2.0.0 is now powered by Tauri! Enjoy better performance, smaller bundle size, and enhanced security while maintaining the same beautiful interface.
+🎉 **NEW**: TermInA v0.2 BETA is now powered by Tauri! Enjoy better performance, smaller bundle size, and enhanced security while maintaining the same beautiful interface.
 
 ## 🚀 Quick Start
 
@@ -335,9 +335,9 @@ TermInA supports multiple AI providers with easy switching:
 
 See [Multi-AI Setup Guide](docs/MULTI_AI_SETUP.md) for complete configuration instructions.
 
-## � New Terminal Features 2.0 🆕
+## ✨ New in 0.2 BETA 🧪
 
-Termina 2.0 introduces powerful terminal enhancements for a better user experience:
+This release introduces powerful terminal enhancements for a better user experience:
 
 ### 📋 Copy & Paste
 - **Smart copy**: `Cmd+C` copies selected text or current line if nothing selected

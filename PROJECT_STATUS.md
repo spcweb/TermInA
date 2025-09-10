@@ -1,10 +1,10 @@
 # 📊 TermInA Project Status
 
-## 🎯 Current Status: **Production Ready** ✅
+## 🎯 Current Status: **Beta** 🧪
 
 ### 📈 Project Overview
 - **Project Name**: TermInA - Advanced AI-Powered Terminal
-- **Version**: 2.0.0
+- **Version**: 0.2 BETA
 - **Status**: Production Ready
 - **Last Updated**: September 2025
 - **Target Release**: Q4 2025
@@ -122,19 +122,19 @@
 
 ## 🎯 Release Roadmap
 
-### **v2.1.0** (Q1 2026)
+### **v0.3.0** (TBD)
 - Plugin system
 - Advanced themes
 - Performance optimizations
 - Bug fixes and improvements
 
-### **v2.2.0** (Q2 2026)
+### **v0.4.0** (TBD)
 - Git integration
 - SSH management
 - Advanced AI features
 - Enhanced web integration
 
-### **v3.0.0** (Q4 2026)
+### **v1.0.0** (Future)
 - Major UI redesign
 - Cloud synchronization
 - Team features

@@ -210,5 +210,5 @@ Il terminale è pronto per l'uso in produzione e risolve tutti i problemi identi
 ---
 
 **Data di completamento**: 10 Settembre 2025  
-**Versione**: 2.0.0  
+**Versione**: 0.2 BETA  
 **Stato**: ✅ Completato e testato

@@ -1,66 +1,66 @@
-# Sistema di Loader per WebScraper
+# WebScraper Loader System
 
-Documentazione del sistema di caricamento progressivo per l'integrazione webscraper con l'agente AI.
+Progressive loader UX for the webscraper + AI agent integration.
 
-## Panoramica
+## Overview
 
-Il sistema di loader fornisce feedback visivo all'utente durante le operazioni di ricerca web, mostrando lo stato di avanzamento e il tipo di elaborazione in corso.
+The loader provides clear visual feedback during web searches, showing progress and the current processing stage.
 
-## Fasi del Loader
+## Loader Phases
 
-### 1. Fase Iniziale
-**Messaggio**: `🤖 Analyzing request...`  
-**Durata**: Immediata  
-**Descrizione**: L'AI sta analizzando la richiesta per determinare se serve una ricerca web
+### 1) Initial Phase
+**Message**: `🤖 Analyzing request...`  
+**Timing**: Immediate  
+**Description**: The AI analyzes the prompt to determine if a web search is needed.
 
-### 2. Fase di Analisi Avanzata
-**Messaggio**: `🤖 Analyzing (may search web)...`  
-**Durata**: Dopo 1 secondo  
-**Descrizione**: L'AI sta ancora analizzando e potrebbe decidere di cercare online
+### 2) Extended Analysis
+**Message**: `🤖 Analyzing (may search web)...`  
+**Timing**: After 1 second  
+**Description**: The AI is still analyzing and may decide to search online.
 
-### 3. Fase di Ricerca Probabile
-**Messaggio**: `🌐 Likely searching internet...`  
-**Durata**: Dopo 3 secondi  
-**Descrizione**: L'AI sta probabilmente cercando informazioni su internet
+### 3) Likely Web Search
+**Message**: `🌐 Likely searching internet...`  
+**Timing**: After 3 seconds  
+**Description**: The AI will likely perform a web search.
 
-## Tipi di Risposta e Loader
+## Response Types and Loaders
 
 ### Web Enhanced (`web_enhanced`)
-Quando l'AI cerca effettivamente su internet:
+When the AI actually searches the web:
 
 ```
 🌐 Looking on internet...          [800ms]
 🔍 Searching for: [query]          [600ms]
 📊 Integrating results...          [400ms]
-[Risultato finale]
+[Final result]
 ```
 
-**Stili CSS**: `.web-search-loading` con animazione di spin
+**CSS**: `.web-search-loading` with spin animation
 
 ### Local Only (`local_only`)
-Quando l'AI usa solo conoscenza locale:
+When only local knowledge is used:
 
 ```
 🧠 Using local knowledge...        [500ms]
-[Risultato finale]
+[Final result]
 ```
 
-**Stili CSS**: `.ai-thinking` con animazione di pulse
+**CSS**: `.ai-thinking` with pulse animation
 
 ### Fallback (`fallback`)
-Quando la ricerca web fallisce:
+When the web search fails:
 
 ```
 🌐 Attempting to look on internet... [1000ms]
 ⚠️ Web search failed, using local knowledge... [800ms]
-[Risultato finale]
+[Final result]
 ```
 
-**Stili CSS**: `.web-search-loading` che diventa warning
+**CSS**: `.web-search-loading` transitioning to warning
 
-## Stili CSS
+## CSS Styles
 
-### Loader Base
+### Base Loader
 ```css
 .web-search-loading {
   color: var(--accent-blue);
@@ -71,7 +71,7 @@ Quando la ricerca web fallisce:
 }
 ```
 
-### Icona Spinner
+### Spinner Icon
 ```css
 .web-search-loading::before {
   content: '';
@@ -88,7 +88,7 @@ Quando la ricerca web fallisce:
 }
 ```
 
-### Animazioni
+### Animations
 ```css
 @keyframes webSearchPulse {
   0% { opacity: 0.7; }
@@ -102,9 +102,9 @@ Quando la ricerca web fallisce:
 }
 ```
 
-## Implementazione Tecnica
+## Technical Implementation
 
-### Timeout Progressivi
+### Progressive Timeouts
 ```javascript
 const progressTimeouts = [];
 
@@ -120,7 +120,7 @@ progressTimeouts.push(setTimeout(() => {
 }, 3000));
 ```
 
-### Pulizia dei Timeout
+### Timeout Cleanup
 ```javascript
 // Pulizia normale
 progressTimeouts.forEach(timeout => clearTimeout(timeout));
@@ -131,7 +131,7 @@ if (typeof progressTimeouts !== 'undefined') {
 }
 ```
 
-### Loader Progressivo per Web Enhanced
+### Progressive Loader for Web Enhanced
 ```javascript
 async showWebSearchLoader(loadingElement, searchQuery) {
     const loadingSteps = [
@@ -150,9 +150,9 @@ async showWebSearchLoader(loadingElement, searchQuery) {
 }
 ```
 
-## Esperienza Utente
+## User Experience
 
-### Scenario 1: Ricerca Web Riuscita
+### Scenario 1: Successful Web Search
 ```
 🤖 Analyzing request...
 🤖 Analyzing (may search web)...      [dopo 1s]
@@ -163,7 +163,7 @@ async showWebSearchLoader(loadingElement, searchQuery) {
 🌐 [Risposta finale con info web]
 ```
 
-### Scenario 2: Solo Conoscenza Locale
+### Scenario 2: Local Only
 ```
 🤖 Analyzing request...
 🤖 Analyzing (may search web)...      [dopo 1s]
@@ -180,10 +180,10 @@ async showWebSearchLoader(loadingElement, searchQuery) {
 🤖 [Risposta finale locale]
 ```
 
-## Configurazione
+## Configuration
 
-### Timing Configurabile
-I timing dei loader possono essere configurati modificando i timeout:
+### Configurable Timings
+Loader timings can be configured by adjusting the timeouts:
 
 ```javascript
 // Timing attuali
@@ -192,8 +192,8 @@ const WEB_LIKELY_TIMEOUT = 3000;   // 3 secondi
 const WEB_STEP_DURATION = 800;     // 800ms per step
 ```
 
-### Messaggi Personalizzabili
-I messaggi possono essere personalizzati per diverse lingue:
+### Customizable Messages
+Messages can be localized for different languages:
 
 ```javascript
 const LOADER_MESSAGES = {
@@ -214,9 +214,9 @@ const LOADER_MESSAGES = {
 };
 ```
 
-## Test e Debug
+## Testing and Debugging
 
-### Test del Loader
+### Loader Test
 ```bash
 # Test completo del loader
 node test-loader.js
@@ -226,7 +226,7 @@ node test-loader.js
 ai: Qual è il prezzo di Bitcoin?
 ```
 
-### Debug Timing
+### Timing Debug
 ```javascript
 // Abilita log per debug timing
 console.time('AI Request');
@@ -234,58 +234,58 @@ const result = await window.electronAPI.aiAgentRequestWithWeb(...);
 console.timeEnd('AI Request');
 ```
 
-### Verifica Animazioni
-- **Spinner**: Dovrebbe ruotare continuamente durante la ricerca web
-- **Pulse**: Dovrebbe pulsare durante l'analisi
-- **Transizioni**: Dovrebbero essere fluide tra i diversi stati
+### Animation Verification
+- **Spinner**: Should spin continuously during web search
+- **Pulse**: Should pulse during analysis
+- **Transitions**: Should be smooth between states
 
-## Problemi Comuni
+## Common Issues
 
-### Loader Non Visibile
-- **Causa**: Timeout troppo brevi per richieste veloci
-- **Soluzione**: Aumentare i timeout o ridurre le durate
+### Loader Not Visible
+- **Cause**: Timeouts too short for fast responses
+- **Solution**: Increase timeouts or reduce durations
 
-### Animazioni Bloccate
-- **Causa**: CSS non caricato o conflitti di stile
-- **Soluzione**: Verificare che gli stili siano caricati correttamente
+### Frozen Animations
+- **Cause**: CSS not loaded or style conflicts
+- **Solution**: Ensure styles are correctly loaded
 
-### Timeout Non Puliti
-- **Causa**: Errori durante l'esecuzione
-- **Soluzione**: Assicurarsi che tutti i timeout siano puliti nei catch
+### Uncleaned Timeouts
+- **Cause**: Errors during execution
+- **Solution**: Ensure timeouts are cleared in catch blocks
 
-## Miglioramenti Futuri
+## Future Improvements
 
-### v2.1
-- [ ] Loader basato su eventi reali dal webscraper
-- [ ] Progress bar per ricerche lunghe
-- [ ] Messaggi localizzati dinamicamente
-- [ ] Cancellazione manuale delle ricerche
+### v0.3
+- [ ] Loader driven by real events from the webscraper
+- [ ] Progress bar for long searches
+- [ ] Dynamically localized messages
+- [ ] Manual cancellation of searches
 
-### v2.2
-- [ ] Loader personalizzabili per tema
-- [ ] Statistiche di performance dei loader
-- [ ] Cache dei risultati con indicatori
-- [ ] Loader per diversi tipi di ricerca (news, prezzi, etc.)
+### v0.4
+- [ ] Theme-customizable loaders
+- [ ] Loader performance statistics
+- [ ] Result caching with indicators
+- [ ] Specialized loaders (news, prices, etc.)
 
-## Note Tecniche
+## Technical Notes
 
 ### Performance
-- I timeout sono ottimizzati per non impattare le performance
-- Le animazioni CSS sono hardware-accelerated quando possibile
-- I messaggi sono aggiornati solo se necessario
+- Timeouts are optimized to avoid performance impact
+- CSS animations are hardware-accelerated when possible
+- Messages update only when necessary
 
-### Compatibilità
-- Funziona su tutti i browser moderni
-- Compatibile con dark/light theme
-- Responsive per diverse dimensioni di finestra
+### Compatibility
+- Works on all modern browsers
+- Compatible with dark/light themes
+- Responsive across window sizes
 
-### Sicurezza
-- Nessun JavaScript inline negli elementi del loader
-- Pulizia automatica di tutti i timeout
-- Gestione sicura degli elementi DOM
+### Security
+- No inline JavaScript in loader elements
+- Automatic cleanup of all timeouts
+- Safe DOM element handling
 
 ---
 
-**Implementato in**: v2.0.0  
-**Ultima modifica**: Dicembre 2024  
-**Stato**: Stabile
+**Introduced in**: v0.2.0-beta  
+**Last Modified**: December 2024  
+**Status**: Stable

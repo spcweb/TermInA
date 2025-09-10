@@ -1,22 +1,22 @@
-# 🎉 Build Success!
+# 🎉 Build Success! (0.2 BETA)
 
 ## ✅ Generated Executable Files
 
 ### 📱 macOS
-- **File**: `dist/Termina-2.0.0-arm64.dmg` (109.6 MB)
+- **File**: `dist/Termina-0.2.0-beta-arm64.dmg` (~110 MB)
 - **Installation**: 
   1. Double-click the `.dmg` file
   2. Drag Termina to Applications folder
   3. Launch Termina from Launchpad or Applications
 
 ### 🐧 Linux
-- **File**: `dist/Termina-2.0.0-arm64.AppImage` (117.2 MB)
+- **File**: `dist/Termina-0.2.0-beta-arm64.AppImage` (~117 MB)
 - **Installation**:
-  1. Make executable: `chmod +x Termina-2.0.0-arm64.AppImage`
-  2. Run directly: `./Termina-2.0.0-arm64.AppImage`
+  1. Make executable: `chmod +x Termina-0.2.0-beta-arm64.AppImage`
+  2. Run directly: `./Termina-0.2.0-beta-arm64.AppImage`
 
 ### 🪟 Windows
-- **File**: `dist/Termina Setup 2.0.0.exe` (89.3 MB)
+- **File**: `dist/Termina Setup 0.2.0-beta.exe` (~90 MB)
 - **Installation**:
   1. Double-click the installer `.exe`
   2. Follow installation wizard
@@ -28,13 +28,13 @@
 ```bash
 npm run build:linux
 ```
-Will generate: `dist/Termina-2.0.0-arm64.AppImage`
+Will generate: `dist/Termina-0.2.0-beta-arm64.AppImage`
 
 ### 🪟 Windows (Installer)
 ```bash
 npm run build:win
 ```
-Will generate: `dist/Termina Setup 2.0.0.exe`
+Will generate: `dist/Termina Setup 0.2.0-beta.exe`
 
 ### 🌍 All Builds Together
 ```bash
@@ -85,4 +85,4 @@ For custom icons, replace these files in the `build/` folder:
 **🎯 Your app is ready for distribution!**
 
 **Last Updated**: September 2025  
-**Version**: 2.0.0
+**Version**: 0.2 BETA

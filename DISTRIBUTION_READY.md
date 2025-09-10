@@ -1,4 +1,4 @@
-# 🚀 TermInA 2.0 - Ready for Distribution!
+# 🚀 TermInA 0.2 BETA - Ready for Distribution!
 
 ## ✅ All Platform Builds Successfully Generated!
 
@@ -6,9 +6,9 @@
 
 | Platform | File | Size | Format |
 |----------|------|------|--------|
-| 🍎 **macOS** | `Termina-2.0.0-arm64.dmg` | 109.6 MB | DMG Installer |
-| 🐧 **Linux** | `Termina-2.0.0-arm64.AppImage` | 117.2 MB | Portable AppImage |
-| 🪟 **Windows** | `Termina Setup 2.0.0.exe` | 89.3 MB | NSIS Installer |
+| 🍎 **macOS** | `Termina-0.2.0-beta-arm64.dmg` | ~110 MB | DMG Installer |
+| 🐧 **Linux** | `Termina-0.2.0-beta-arm64.AppImage` | ~117 MB | Portable AppImage |
+| 🪟 **Windows** | `Termina Setup 0.2.0-beta.exe` | ~90 MB | NSIS Installer |
 
 ### 🛠️ **Build Configuration**
 
@@ -27,19 +27,19 @@ All builds are ready for:
 
 ### 🔧 **Technical Details**
 
-#### macOS (109.6 MB)
+#### macOS (~110 MB)
 - Format: DMG disk image
 - Installation: Drag & drop to Applications
 - Code signing: Prepared (requires Developer ID)
 - Icon: `build/icon.icns`
 
-#### Linux (117.2 MB)
+#### Linux (~117 MB)
 - Format: AppImage (portable)
 - Installation: Make executable and run
 - Dependencies: Self-contained
 - Icon: `build/icon.png`
 
-#### Windows (89.3 MB)
+#### Windows (~90 MB)
 - Format: NSIS installer
 - Installation: Standard Windows installer
 - Registry: Proper Windows integration
@@ -50,21 +50,21 @@ All builds are ready for:
 #### macOS
 ```bash
 # Download and install
-open Termina-2.0.0-arm64.dmg
+open Termina-0.2.0-beta-arm64.dmg
 # Drag to Applications folder
 ```
 
 #### Linux
 ```bash
 # Make executable and run
-chmod +x Termina-2.0.0-arm64.AppImage
-./Termina-2.0.0-arm64.AppImage
+chmod +x Termina-0.2.0-beta-arm64.AppImage
+./Termina-0.2.0-beta-arm64.AppImage
 ```
 
 #### Windows
 ```bash
 # Run installer
-./Termina\ Setup\ 2.0.0.exe
+./Termina\ Setup\ 0.2.0-beta.exe
 # Follow installation wizard
 ```
 
@@ -80,7 +80,7 @@ shasum -a 256 *.dmg *.AppImage *.exe > checksums.txt
 
 ### 🎉 **Success Status**
 
-**TermInA 2.0 is now fully built and ready for worldwide distribution!**
+**TermInA 0.2 BETA is now fully built and ready for worldwide distribution!**
 
 - ✅ All platforms supported
 - ✅ Custom branding with icons
@@ -91,5 +91,5 @@ shasum -a 256 *.dmg *.AppImage *.exe > checksums.txt
 ---
 
 *Built on: September 3, 2025*  
-*Version: 2.0.0*  
+*Version: 0.2 BETA*  
 *Status: Ready for Distribution 🚀*

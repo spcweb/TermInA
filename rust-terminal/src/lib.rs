@@ -13,6 +13,7 @@ pub mod pty_manager;
 pub mod session;
 pub mod sudo_handler;
 pub mod ffi;
+pub mod cmd_exec;
 
 use pty_manager::PtyManager;
 use session::TerminalSession;

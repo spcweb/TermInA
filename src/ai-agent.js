@@ -3,6 +3,7 @@ const aiManager = require('./ai-manager');
 const systemInfo = require('./system-info');
 const pathAlias = require('./path-alias');
 const webAIIntegration = require('./web-ai-integration');
+const ptyManager = require('./pty-manager');
 
 class AIAgent {
   constructor() {
@@ -10,6 +11,88 @@ class AIAgent {
     this.currentIteration = 0;
     this.executionHistory = [];
     this.isExecuting = false;
+
+    // Collega un esecutore comandi reale basato su PTY Manager
+    // Esegue in una directory sicura (HOME) e restituisce stdout/stderr consolidati
+    this.setCommandExecutor(async (command) => {
+      try {
+        if (ptyManager && typeof ptyManager.runCommand === 'function') {
+          const result = await ptyManager.runCommand(command, { cwd: systemInfo.homeDir });
+          return {
+            success: !!result.success,
+            output: result.output || result.stderr || '',
+            exitCode: typeof result.exitCode === 'number' ? result.exitCode : (result.success ? 0 : 1)
+          };
+        }
+      } catch (_) {}
+
+      // Fallback: esegui con child_process
+      const { exec } = require('child_process');
+      return await new Promise((resolve) => {
+        exec(command, { cwd: systemInfo.homeDir, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+          resolve({
+            success: !error,
+            output: (stdout || '') + ((stderr && stderr.trim()) ? `\n${stderr}` : ''),
+            exitCode: error ? (error.code || 1) : 0
+          });
+        });
+      });
+    });
+  }
+
+  // Adatta un comando generato dall'AI alla piattaforma corrente (path e sintassi)
+  adaptCommandToPlatform(command) {
+    if (!command || typeof command !== 'string') return command;
+    const isWindows = systemInfo.platform === 'win32';
+    let result = command;
+
+    // Mappa directory note a path reali
+    const dirMap = {
+      Desktop: systemInfo.desktopDir,
+      Documents: systemInfo.documentsDir,
+      Downloads: systemInfo.downloadsDir || `${systemInfo.homeDir}/Downloads`,
+      Pictures: systemInfo.picturesDir || `${systemInfo.homeDir}/Pictures`,
+      Music: systemInfo.musicDir || `${systemInfo.homeDir}/Music`,
+      Videos: systemInfo.videosDir || `${systemInfo.homeDir}/${systemInfo.platform === 'darwin' ? 'Movies' : 'Videos'}`
+    };
+
+    const quotePathIfNeeded = (p) => (p && /\s/.test(p) ? `"${p}"` : p);
+
+    if (!isWindows) {
+      // Variabili ambiente Windows -> Unix
+      result = result.replace(/%USERPROFILE%/gi, systemInfo.homeDir);
+      result = result.replace(/%HOMEPATH%/gi, systemInfo.homeDir);
+
+      // Rimpiazza prefissi Windows noti con path reali
+      for (const [name, realPathRaw] of Object.entries(dirMap)) {
+        const realPath = quotePathIfNeeded(realPathRaw);
+        // %USERPROFILE%\Desktop | %USERPROFILE%/Desktop | %HOMEPATH%\Desktop | ~ /Desktop
+        const patterns = [
+          new RegExp(`%USERPROFILE%[\\\\\/]${name}`, 'gi'),
+          new RegExp(`%HOMEPATH%[\\\\\/]${name}`, 'gi'),
+          new RegExp(`~[\\\\\/]${name}`, 'g'),
+          // Standalone Windows path fragments (\\Desktop or /Desktop) – conservative
+          new RegExp(`(?<![A-Za-z0-9_\-\.])\\${name}(?=\\|\/|\s|$)`, 'g'),
+          new RegExp(`(?<![A-Za-z0-9_\-\.])\/${name}(?=\\|\/|\s|$)`, 'g')
+        ];
+        for (const re of patterns) {
+          result = result.replace(re, realPath);
+        }
+      }
+
+      // Converti backslash in slash per Unix (dopo i rimpiazzi path)
+      result = result.replace(/\\/g, '/');
+
+      // Idempotenza su mkdir
+      if (/^\s*mkdir\s+/i.test(result) && !/\s-\w*\bp\b/.test(result)) {
+        result = result.replace(/^\s*mkdir\s+/i, 'mkdir -p ');
+      }
+    } else {
+      // Su Windows, prova a convertire eventuali ~ o $HOME
+      result = result.replace(/\$HOME|~\//g, process.env.USERPROFILE ? `${process.env.USERPROFILE}\\` : '');
+    }
+
+    return result;
   }
 
   async processRequest(prompt, terminalContext = [], autoExecute = false) {
@@ -165,30 +248,32 @@ class AIAgent {
       
       if (!autoExecute) {
         // Modalità manuale - restituisci suggerimento
+        const adapted = this.adaptCommandToPlatform(aiResponse.command);
         return {
           type: 'suggestion',
-          response: aiResponse.response,
-          command: aiResponse.command,
+          response: aiResponse.response + (adapted !== aiResponse.command ? ' [Adattato alla piattaforma]' : ''),
+          command: adapted,
           iterations: this.currentIteration,
           history: this.executionHistory
         };
       }
 
       // Modalità automatica - esegui il comando
-      const executionResult = await this.executeCommand(aiResponse.command);
+  const adaptedCommand = this.adaptCommandToPlatform(aiResponse.command);
+  const executionResult = await this.executeCommand(adaptedCommand);
       
       // Aggiungi alla cronologia
       this.executionHistory.push({
-        iteration: this.currentIteration,
-        command: aiResponse.command,
+  iteration: this.currentIteration,
+  command: adaptedCommand,
         reasoning: aiResponse.response,
         result: executionResult
       });
 
       // Analizza se il risultato è soddisfacente
       const analysisResult = await this.analyzeResult(
-        originalPrompt, 
-        aiResponse.command, 
+  originalPrompt, 
+  adaptedCommand, 
         executionResult,
         originalPrompt
       );
@@ -198,7 +283,7 @@ class AIAgent {
         return {
           type: 'success',
           response: analysisResult.explanation,
-          finalCommand: aiResponse.command,
+          finalCommand: adaptedCommand,
           finalResult: executionResult,
           iterations: this.currentIteration,
           history: this.executionHistory
@@ -234,11 +319,16 @@ class AIAgent {
         `- Tipo OS: ${systemInfo.type}\n` +
         `- Versione: ${systemInfo.release}\n` +
         `- Architettura: ${systemInfo.arch}\n` +
+        `- Shell: ${systemInfo.shell}\n` +
         `- Home directory: ${systemInfo.homeDir}\n` +
-        `- Directory Desktop reale (filesystem): ${systemInfo.desktopDir}\n` +
-        `- Directory Documenti reale: ${systemInfo.documentsDir}\n` +
-        `Nota: su macOS in lingua italiana il Finder mostra "Scrivania" ma il path reale è "Desktop". Usa sempre il path reale del filesystem.\n\n`;
-  prompt += `Mappa alias directory disponibile (solo riferimento):\n${pathAlias.buildAliasMappingList()}\n\n`;
+        `- Desktop: ${systemInfo.desktopDir}\n` +
+        `- Documenti: ${systemInfo.documentsDir}\n` +
+        `- Download: ${systemInfo.downloadsDir}\n` +
+        `- Immagini: ${systemInfo.picturesDir}\n` +
+        `- Musica: ${systemInfo.musicDir}\n` +
+        `- Video/Film: ${systemInfo.videosDir}\n` +
+        `Nota: usa sempre i path reali del filesystem, non i nomi localizzati mostrati nelle GUI.\n\n`;
+      prompt += `Mappa alias directory disponibile (solo riferimento):\n${pathAlias.buildAliasMappingList()}\n\n`;
     } catch (_) {}
     
     if (terminalContext.length > 0) {
@@ -260,7 +350,7 @@ class AIAgent {
   }
 
   async getAIDecision(contextualPrompt, originalUserPrompt = null) {
-    const decisionPrompt = `${contextualPrompt}
+  const decisionPrompt = `${contextualPrompt}
 
 Analizza la richiesta e determina se è necessario eseguire un comando o se è una richiesta informativa.
 
@@ -279,9 +369,10 @@ Se è una richiesta informativa, fornisci:
 }
 
 Considera la cronologia dei tentativi precedenti per evitare di ripetere comandi che non hanno funzionato.
-Sistema operativo: macOS (comandi Unix/bash compatibili).
-Ricorda: se l'utente chiede percorsi come "Scrivania" (mac italiano) usa il path reale ${systemInfo.desktopDir}. Evita di ricreare cartelle se esistono già: in caso esista fornisci messaggio che esiste e NON considerare l'errore critico.
-Se l'utente menziona alias di directory (es. scrivania, documenti, immagini, downloads, musica, film, fotos, immagini) mappa l'alias al path reale prima di proporre il comando. Non proporre mai un comando con alias linguistici non reali nel filesystem.
+Sistema operativo rilevato: ${systemInfo.platform}. Shell: ${systemInfo.shell}. Se non diversamente specificato, usa comandi compatibili con la shell e il sistema indicati.
+Regole path: se l'utente menziona nomi localizzati (es. "Scrivania", "Documenti"), mappa prima all'effettivo path del filesystem (es. Desktop, Documents/XDG). Evita di ricreare cartelle se esistono già: se esiste, comunica che esiste e NON considerarlo errore critico.
+Mappa sempre alias di directory (es. scrivania, documenti, immagini, downloads, musica, film, fotos, immagini) ai path reali prima di proporre il comando. Non proporre mai comandi con alias linguistici non reali nel filesystem.
+Evita comandi specifici di Windows su Linux/macOS e viceversa; preferisci comandi POSIX su sistemi Unix-like.
 Fornisci SOLO il JSON, senza testo aggiuntivo.`;
 
     const response = await aiManager.request(decisionPrompt, [], originalUserPrompt);
@@ -298,7 +389,7 @@ Fornisci SOLO il JSON, senza testo aggiuntivo.`;
     } catch (error) {
       console.error('Error parsing AI decision:', error);
       
-      // Fallback intelligente basato sul prompt originale
+  // Fallback intelligente basato sul prompt originale
       const lowerPrompt = (originalUserPrompt || '').toLowerCase();
       
       // Se la richiesta contiene parole che suggeriscono un comando, prova a generare una risposta di fallback
@@ -313,10 +404,22 @@ Fornisci SOLO il JSON, senza testo aggiuntivo.`;
           // Estrai il nome della cartella dal prompt se presente
           const nameMatch = lowerPrompt.match(/chiama[ta]?\s+(\w+)|nome\s+(\w+)|chiamata\s+(\w+)|test(\d+)/);
           const folderName = nameMatch ? (nameMatch[1] || nameMatch[2] || nameMatch[3] || nameMatch[4]) : 'test1';
-          
-          if (lowerPrompt.includes('desktop') || lowerPrompt.includes('scrivania')) {
-            fallbackCommand = `mkdir -p ~/Desktop/${folderName}`;
-            fallbackResponse = `Creo una cartella chiamata "${folderName}" sul desktop. Se la cartella esiste già, non sarà un problema.`;
+          // Rileva alias di directory nel testo e mappa al path reale
+          const detectedAliases = pathAlias.findAliasesInText(lowerPrompt);
+          let baseDir = null;
+          for (const [, key] of detectedAliases) {
+            const mapped = pathAlias.canonicalDirs[key];
+            if (mapped) { baseDir = mapped; break; }
+          }
+          if (!baseDir) {
+            // Heuristics: desktop/documenti/download
+            if (lowerPrompt.includes('desktop') || lowerPrompt.includes('scrivania')) baseDir = systemInfo.desktopDir;
+            else if (lowerPrompt.includes('documenti') || lowerPrompt.includes('documents') || lowerPrompt.includes('docs')) baseDir = systemInfo.documentsDir;
+            else if (lowerPrompt.includes('download') || lowerPrompt.includes('downloads') || lowerPrompt.includes('scaricati')) baseDir = systemInfo.downloadsDir || systemInfo.homeDir;
+          }
+          if (baseDir) {
+            fallbackCommand = `mkdir -p "${baseDir}/${folderName}"`;
+            fallbackResponse = `Creo una cartella chiamata "${folderName}" in ${baseDir}. Se esiste già, non sarà un problema.`;
           } else {
             fallbackCommand = `mkdir -p ${folderName}`;
             fallbackResponse = `Creo una cartella chiamata "${folderName}" nella directory corrente.`;

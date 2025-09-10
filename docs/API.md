@@ -1,10 +1,10 @@
-# API di Termina e Sviluppo Plugin
+# Termina API and Plugin Development
 
-Questa documentazione descrive l'architettura interna di Termina e come sviluppare estensioni.
+This documentation describes Termina's internal architecture and how to develop extensions.
 
-## 🏗️ Architettura
+## 🏗️ Architecture
 
-### Processi Electron
+### Electron Processes
 
 ```
 Main Process (main.js)
@@ -21,7 +21,7 @@ Preload (preload.js)
 └── Security Bridge
 ```
 
-### Flusso dei Dati
+### Data Flow
 
 ```mermaid
 graph TD
@@ -37,9 +37,9 @@ graph TD
     J --> I
 ```
 
-## 🔌 Sistema Plugin (Futuro)
+## 🔌 Plugin System (Planned)
 
-### Struttura Plugin
+### Plugin Structure
 
 ```javascript
 // plugin-example.js
@@ -50,7 +50,7 @@ class TerminaPlugin {
     this.version = '1.0.0';
   }
 
-  // Chiamato quando il plugin viene caricato
+  // Called when the plugin is loaded
   onLoad() {
     this.api.addCommand('example', this.handleExample.bind(this));
     this.api.addTheme('example-theme', {
@@ -59,12 +59,12 @@ class TerminaPlugin {
     });
   }
 
-  // Gestisce il comando personalizzato
+  // Handles the custom command
   async handleExample(args) {
     return `Hello from ${this.name}! Args: ${args.join(' ')}`;
   }
 
-  // Chiamato quando il plugin viene scaricato
+  // Called when the plugin is unloaded
   onUnload() {
     this.api.removeCommand('example');
     this.api.removeTheme('example-theme');
@@ -74,20 +74,20 @@ class TerminaPlugin {
 module.exports = TerminaPlugin;
 ```
 
-### API Plugin
+### Plugin API
 
 ```javascript
-// API che sarà disponibile ai plugin
+// API available to plugins
 class PluginAPI {
-  // Comandi
+  // Commands
   addCommand(name, handler) { }
   removeCommand(name) { }
   
-  // Temi
+  // Themes
   addTheme(name, theme) { }
   removeTheme(name) { }
   
-  // Eventi
+  // Events
   on(event, callback) { }
   off(event, callback) { }
   emit(event, data) { }
@@ -110,22 +110,22 @@ class PluginAPI {
 }
 ```
 
-## 🛠️ API Interna Attuale
+## 🛠️ Current Internal API
 
 ### Config Manager
 
 ```javascript
 const config = require('./src/config');
 
-// Lettura configurazione
+// Read configuration
 const theme = config.get('theme');
 const aiProvider = config.get('ai.provider');
 
-// Scrittura configurazione
+// Write configuration
 config.set('theme.background', '#000000');
 config.set('ai.provider', 'openai');
 
-// Reset configurazione
+// Reset configuration
 config.resetToDefaults();
 ```
 
@@ -134,20 +134,20 @@ config.resetToDefaults();
 ```javascript
 const aiManager = require('./src/ai-manager');
 
-// Richiesta AI
+// AI request
 const response = await aiManager.request(prompt, context);
 
-// Verifica provider
+// Check provider
 const isConfigured = aiManager.isProviderConfigured('gemini');
 
-// Lista provider
+// List providers
 const providers = aiManager.getAvailableProviders();
 ```
 
 ### Terminal Class
 
 ```javascript
-// Metodi pubblici della classe ModernTerminal
+// Public methods of ModernTerminal class
 class ModernTerminal {
   // Setup
   async init()
@@ -179,7 +179,7 @@ class ModernTerminal {
 ### Main → Renderer
 
 ```javascript
-// Eventi che il main process invia al renderer
+// Events that the main process sends to the renderer
 mainWindow.webContents.send('toggle-ai');
 mainWindow.webContents.send('clear-terminal');
 mainWindow.webContents.send('new-tab');
@@ -189,7 +189,7 @@ mainWindow.webContents.send('close-tab');
 ### Renderer → Main
 
 ```javascript
-// Eventi che il renderer invia al main process
+// Events that the renderer sends to the main process
 ipcRenderer.invoke('get-config', key);
 ipcRenderer.invoke('set-config', key, value);
 ipcRenderer.invoke('ai-request', prompt, context);
@@ -197,7 +197,7 @@ ipcRenderer.invoke('run-command', command);
 ipcRenderer.invoke('open-settings');
 ```
 
-## 🎨 Estensioni UI
+## 🎨 UI Extensions
 
 ### Custom CSS
 
@@ -220,7 +220,7 @@ I plugin potranno iniettare CSS personalizzato:
 ### Custom Components
 
 ```javascript
-// Componenti UI personalizzati
+// Custom UI components
 class CustomComponent {
   constructor(container) {
     this.container = container;
@@ -238,7 +238,7 @@ class CustomComponent {
   }
 
   handleClick() {
-    // Logica del click
+    // Click logic
   }
 
   destroy() {
@@ -249,7 +249,7 @@ class CustomComponent {
 }
 ```
 
-## 🔐 Sicurezza Plugin
+## 🔐 Plugin Security
 
 ### Sandboxing
 
@@ -299,12 +299,12 @@ class PluginSandbox {
 }
 ```
 
-## 📊 Eventi e Hooks
+## 📊 Events and Hooks
 
-### Eventi del Terminale
+### Terminal Events
 
 ```javascript
-// Eventi disponibili per i plugin
+// Events available for plugins
 api.on('terminal.ready', () => {
   console.log('Terminal is ready');
 });
@@ -322,12 +322,12 @@ api.on('theme.changed', (newTheme) => {
 });
 ```
 
-### Hooks di Modifica
+### Modification Hooks
 
 ```javascript
-// Hook per modificare comportamenti
+// Hook to modify behaviors
 api.addHook('command.before', (command) => {
-  // Modifica il comando prima dell'esecuzione
+  // Modify the command before execution
   if (command.startsWith('sudo')) {
     return `echo "Sudo not allowed in plugins" && ${command}`;
   }
@@ -335,7 +335,7 @@ api.addHook('command.before', (command) => {
 });
 
 api.addHook('ai.prompt', (prompt) => {
-  // Modifica il prompt prima di inviarlo all'AI
+  // Modify the prompt before sending it to the AI
   return `[Plugin Context] ${prompt}`;
 });
 ```
@@ -395,7 +395,7 @@ describe('Terminal Integration', () => {
 });
 ```
 
-## 📦 Package e Distribuzione
+## 📦 Packaging and Distribution
 
 ### Plugin Package Structure
 
@@ -422,8 +422,8 @@ my-plugin/
   "author": "Your Name",
   "license": "MIT",
   "termina": {
-    "minVersion": "2.0.0",
-    "maxVersion": "3.0.0"
+  "minVersion": "0.2.0-beta",
+  "maxVersion": "1.x"
   },
   "main": "index.js",
   "permissions": [
@@ -438,4 +438,4 @@ my-plugin/
 
 ---
 
-**Nota**: Il sistema plugin è in fase di progettazione e sarà implementato nella versione 2.1 di Termina.
+Note: The plugin system is in the design phase and will be introduced starting with Termina 0.3.

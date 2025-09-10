@@ -159,7 +159,7 @@ dist/
 │   └── Termina Setup.exe
 ├── linux-arm64/
 │   ├── termina
-│   └── Termina-2.0.0-arm64.AppImage
+│   └── Termina-0.2.0-beta-arm64.AppImage
 └── builder-debug.yml
 ```
 
@@ -316,4 +316,4 @@ jobs:
 ---
 
 **Last Updated**: September 2025  
-**Version**: 2.0.0
+**Version**: 0.2 BETA
