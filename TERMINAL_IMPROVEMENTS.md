@@ -2,41 +2,41 @@
 
 ## 📋 Overview
 
-Questo documento descrive le migliorie implementate per portare il terminale di TermInA a parità con il terminale di sistema, risolvendo i problemi di visibilità e funzionalità.
+This document describes the improvements implemented to bring TermInA’s terminal to parity with the system terminal, fixing visibility and functionality issues.
 
-## 🎯 Problemi Risolti
+## 🎯 Issues Fixed
 
-### 1. ❌ Problema: npm install non mostrava output
-**Causa**: Polling troppo lento (100ms) e gestione incompleta dell'output
-**Soluzione**: 
-- Polling ridotto a 16ms (~60fps) per output fluido
-- Sistema di buffer migliorato con timestamp
-- Gestione real-time dell'output
+### 1) ❌ Issue: npm install didn't show output
+**Cause**: Polling too slow (100ms) and incomplete output handling
+**Solution**: 
+- Reduced polling to 16ms (~60fps) for smooth output
+- Improved timestamped buffer
+- Real-time output handling
 
-### 2. ❌ Problema: Output dinamici non visibili
-**Causa**: Buffer limitato e gestione incompleta di stdout/stderr
-**Soluzione**:
-- Buffer circolare con timestamp per output in tempo reale
-- Gestione separata di stdout e stderr
-- Forzatura aggiornamento display
+### 2) ❌ Issue: Dynamic outputs not visible
+**Cause**: Limited buffer and incomplete stdout/stderr handling
+**Solution**:
+- Circular buffer with timestamps for real-time output
+- Separate handling for stdout and stderr
+- Forced display refresh
 
-### 3. ❌ Problema: Comandi interattivi non funzionavano
-**Causa**: Mancanza di supporto per input in tempo reale
-**Soluzione**:
-- Supporto completo per tasti di controllo (Ctrl+C, Ctrl+D, etc.)
-- Gestione frecce, F-keys, e tasti speciali
-- Input in tempo reale per comandi interattivi
+### 3) ❌ Issue: Interactive commands not working
+**Cause**: Missing support for real-time input
+**Solution**:
+- Full support for control keys (Ctrl+C, Ctrl+D, etc.)
+- Arrow keys, F-keys, and special keys handling
+- Real-time input for interactive commands
 
-### 4. ❌ Problema: Gestione errori insufficiente
-**Causa**: Errori e segnali non gestiti correttamente
-**Soluzione**:
-- Gestione specifica dei segnali di processo
-- Messaggi di errore dettagliati
-- Timeout configurabili per tipo di comando
+### 4) ❌ Issue: Insufficient error handling
+**Cause**: Errors and signals not handled properly
+**Solution**:
+- Specific handling for process signals
+- Detailed error messages
+- Configurable timeouts based on command type
 
-## 🔧 Migliorie Implementate
+## 🔧 Implemented Improvements
 
-### 1. Sistema PTY Migliorato
+### 1) Improved PTY System
 
 #### Polling Real-Time
 ```javascript
@@ -47,7 +47,7 @@ setInterval(polling, 100);
 setInterval(polling, 16);
 ```
 
-#### Buffer con Timestamp
+#### Timestamped Buffer
 ```javascript
 // Nuovo sistema di buffer
 outputBuffer: [{
@@ -57,14 +57,14 @@ outputBuffer: [{
 }]
 ```
 
-### 2. Gestione Output Migliorata
+### 2) Improved Output Handling
 
-#### Output Immediato
+#### Immediate Output
 - Nuovo endpoint `pty-get-immediate-output`
 - Polling basato su timestamp invece di indice
 - Forzatura aggiornamento display
 
-#### Comandi Supportati
+#### Supported Commands
 ```javascript
 // Lista estesa di comandi PTY
 const ptyCommands = [
@@ -82,9 +82,9 @@ const ptyCommands = [
 ];
 ```
 
-### 3. Input Interattivo Completo
+### 3) Full Interactive Input
 
-#### Tasti di Controllo
+#### Control Keys
 ```javascript
 // Supporto completo per tasti di controllo
 Ctrl+C  → \x03 (interrupt)
@@ -98,7 +98,7 @@ Ctrl+[  → \x1b (escape)
 // ... e molti altri
 ```
 
-#### Tasti Speciali
+#### Special Keys
 ```javascript
 // Supporto per tasti speciali
 Arrow Keys → \x1b[A/B/C/D
@@ -109,9 +109,9 @@ Insert     → \x1b[2~
 F1-F12     → \x1bOP/OQ/OR/OS/[15~/[17~...
 ```
 
-### 4. Gestione Errori Avanzata
+### 4) Advanced Error Handling
 
-#### Segnali di Processo
+#### Process Signals
 ```javascript
 // Gestione specifica dei segnali
 if (signal) {
@@ -126,7 +126,7 @@ if (error.code === 'ENOENT') {
 }
 ```
 
-#### Timeout Configurabili
+#### Configurable Timeouts
 ```javascript
 // Timeout basati sul tipo di comando
 let timeout = 120000; // Default 2 minuti
@@ -137,16 +137,16 @@ if (trimmed.includes('npm install') || trimmed.includes('yarn install')) {
 }
 ```
 
-## 📊 Risultati
+## 📊 Results
 
-### Prima delle Migliorie
+### Before Improvements
 - ❌ npm install: Nessun output visibile
 - ❌ Comandi interattivi: Non funzionanti
 - ❌ Tasti di controllo: Limitati
 - ❌ Gestione errori: Basica
 - ❌ Output dinamici: Perduti
 
-### Dopo le Migliorie
+### After Improvements
 - ✅ npm install: Output completo e in tempo reale
 - ✅ Comandi interattivi: Supporto completo
 - ✅ Tasti di controllo: Tutti i tasti supportati
@@ -155,21 +155,21 @@ if (trimmed.includes('npm install') || trimmed.includes('yarn install')) {
 
 ## 🧪 Testing
 
-È stato creato un script di test completo (`test-terminal-improvements.js`) che verifica:
+We created a comprehensive test script (`test-terminal-improvements.js`) that verifies:
 
 1. **npm install output visibility** - Verifica che l'output sia visibile
 2. **Interactive commands** - Testa comandi interattivi
 3. **Control signals** - Verifica gestione segnali
 4. **Long output commands** - Testa output lunghi
 
-### Eseguire i Test
+### Run the Tests
 ```bash
 node test-terminal-improvements.js
 ```
 
-## 🎯 Parità con Terminale di Sistema
+## 🎯 System Terminal Parity
 
-Il terminale di TermInA ora supporta:
+TermInA’s terminal now supports:
 
 - ✅ **Output in tempo reale** - Polling a 60fps
 - ✅ **Comandi interattivi** - Supporto completo
@@ -179,28 +179,28 @@ Il terminale di TermInA ora supporta:
 - ✅ **Timeout configurabili** - Basati sul tipo di comando
 - ✅ **Buffer robusto** - Con timestamp e gestione errori
 
-## 🚀 Prossimi Passi
+## 🚀 Next Steps
 
 1. **Test in produzione** - Verificare con comandi reali
 2. **Ottimizzazioni** - Migliorare performance se necessario
 3. **Documentazione** - Aggiornare guide utente
 4. **Feedback** - Raccogliere feedback dagli utenti
 
-## 📝 Note Tecniche
+## 📝 Technical Notes
 
-### File Modificati
+### Modified Files
 - `renderer/pty-terminal.js` - Polling e gestione output
 - `src/pty-manager.js` - Buffer e gestione sessioni
 - `main.js` - Timeout e gestione comandi
 - `preload.js` - Nuove API
 - `renderer/simple-terminal.js` - Input interattivo
 
-### Nuove API
+### New APIs
 - `ptyGetImmediateOutput` - Output in tempo reale
 - `getSessionOutputFromBuffer` - Buffer con timestamp
 - `getLastOutputTimestamp` - Timestamp ultimo output
 
-### Configurazioni
+### Configurations
 - Polling: 16ms (60fps)
 - Timeout npm/yarn: 10 minuti
 - Timeout build: 30 minuti
@@ -208,4 +208,4 @@ Il terminale di TermInA ora supporta:
 
 ---
 
-**🎉 Il terminale di TermInA ora ha parità completa con il terminale di sistema!**
+**🎉 TermInA’s terminal now has full parity with the system terminal!**

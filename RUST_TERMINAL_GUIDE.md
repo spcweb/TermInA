@@ -1,12 +1,12 @@
-# TermInA Rust Terminal - Guida all'Integrazione
+# TermInA Rust Terminal — Integration Guide
 
-## Panoramica
+## Overview
 
-TermInA è stato aggiornato per includere un'implementazione del terminale in Rust che risolve i problemi con i comandi sudo e migliora le prestazioni generali del terminale.
+TermInA includes a Rust-based terminal implementation that fixes sudo command issues and improves overall terminal performance.
 
-## Architettura
+## Architecture
 
-### Componenti Rust
+### Rust Components
 
 1. **`rust-terminal/`** - Progetto Rust principale
    - `src/lib.rs` - Libreria principale con interfaccia FFI
@@ -15,41 +15,41 @@ TermInA è stato aggiornato per includere un'implementazione del terminale in Ru
    - `src/sudo_handler.rs` - Gestione sicura dei comandi sudo
    - `src/ffi.rs` - Interfaccia C per Node.js
 
-### Componenti Node.js
+### Node.js Components
 
 1. **`src/rust-terminal-wrapper.js`** - Wrapper Node.js per la libreria Rust
 2. **`renderer/rust-terminal.js`** - Cliente frontend per il terminale Rust
 3. **Aggiornamenti in `main.js`** - Handler IPC per il terminale Rust
 4. **Aggiornamenti in `preload.js`** - API esposte al renderer
 
-## Caratteristiche Principali
+## Key Features
 
-### 1. Gestione PTY Robusta
+### 1) Robust PTY Management
 - Implementazione nativa in Rust per la gestione dei pseudo-terminali
 - Supporto per comandi interattivi
 - Gestione corretta delle sequenze ANSI
 - Ridimensionamento dinamico del terminale
 
-### 2. Supporto Sudo Sicuro
+### 2) Secure Sudo Support
 - Gestione sicura delle password
 - Filtraggio dei messaggi di password dall'output
 - Timeout configurabili per i comandi sudo
 - Supporto per comandi privilegiati
 
-### 3. Gestione Sessioni
+### 3) Session Management
 - Supporto per multiple sessioni simultanee
 - Cleanup automatico delle sessioni inattive
 - Buffer ottimizzati per l'output
 - Gestione asincrona con Tokio
 
-### 4. Interfaccia FFI
+### 4) FFI Interface
 - Compatibilità C per l'integrazione con Node.js
 - Comunicazione sicura tra processi
 - Gestione della memoria ottimizzata
 
-## Utilizzo
+## Usage
 
-### Compilazione
+### Build
 
 ```bash
 # Compila la libreria Rust
@@ -62,36 +62,36 @@ cargo build --release --lib
 # target/release/termina_terminal.dll (Windows)
 ```
 
-### Integrazione con Electron
+### Electron Integration
 
 Il sistema è già integrato in TermInA. Per utilizzarlo:
 
-1. **Avvia l'applicazione**:
+1. **Start the application**:
    ```bash
    npm start
    ```
 
-2. **Il terminale Rust è disponibile automaticamente** per:
+2. **The Rust terminal is automatically available** for:
    - Comandi interattivi
    - Comandi sudo
    - Gestione delle sessioni
 
-### API Disponibili
+### Available APIs
 
 #### Frontend (JavaScript)
 
 ```javascript
-// Crea una sessione Rust Terminal
+// Create a Rust Terminal session
 const rustTerminal = new RustTerminal(terminalInstance);
 await rustTerminal.startSession();
 
-// Invia un comando
+// Send a command
 await rustTerminal.sendCommand('ls -la');
 
-// Esegui un comando sudo
+// Run a sudo command
 await rustTerminal.executeSudoCommand('sudo apt update', 'password');
 
-// Gestisci l'output
+// Handle output
 rustTerminal.handleNewData = (data) => {
     console.log('Output ricevuto:', data);
 };
@@ -100,54 +100,54 @@ rustTerminal.handleNewData = (data) => {
 #### Backend (Node.js)
 
 ```javascript
-// Crea una sessione
+// Create a session
 const session = await rustTerminal.createSession('/path/to/cwd');
 
-// Scrive dati
+// Write data
 await rustTerminal.writeToSession(sessionId, 'echo hello\n');
 
-// Esegui comando sudo
+// Run sudo command
 await rustTerminal.executeSudoCommand(sessionId, 'sudo ls', 'password');
 
-// Ottieni output
+// Get output
 const output = rustTerminal.getSessionOutput(sessionId);
 ```
 
 #### IPC Handlers
 
 ```javascript
-// Crea sessione
+// Create session
 ipcMain.handle('rust-terminal-create-session', async (event, cwd) => {
     const session = await rustTerminal.createSession(cwd);
     return { success: true, sessionId: session.id };
 });
 
-// Scrive dati
+// Write data
 ipcMain.handle('rust-terminal-write', async (event, sessionId, data) => {
     const success = await rustTerminal.writeToSession(sessionId, data);
     return { success };
 });
 ```
 
-## Configurazione
+## Configuration
 
-### Variabili d'Ambiente
+### Environment Variables
 
 ```bash
-# Shell di default
+# Default shell
 export SHELL=/bin/zsh
 
-# Directory di lavoro di default
+# Default working directory
 export HOME=/Users/username
 
-# Timeout per comandi (secondi)
+# Command timeout (seconds)
 export TERMINA_TIMEOUT=300
 
-# Timeout per sudo (secondi)
+# Sudo timeout (seconds)
 export TERMINA_SUDO_TIMEOUT=60
 ```
 
-### Configurazione Rust
+### Rust Configuration
 
 ```rust
 let config = TerminalConfig {
@@ -162,7 +162,7 @@ let config = TerminalConfig {
 
 ## Troubleshooting
 
-### Problemi di Compilazione
+### Build Issues
 
 1. **Errore di dipendenze di sistema**:
    ```bash
@@ -176,24 +176,24 @@ let config = TerminalConfig {
    # Installa Visual Studio Build Tools
    ```
 
-2. **Errore di linking**:
+2. **Linker error**:
    ```bash
    # Verifica che le librerie di sistema siano disponibili
    cargo check --lib
    ```
 
-### Problemi Runtime
+### Runtime Issues
 
-1. **Sessioni non si creano**:
+1. **Sessions do not spawn**:
    - Verifica che la shell di default sia disponibile
    - Controlla i permessi della directory di lavoro
 
-2. **Comandi sudo falliscono**:
+2. **Sudo commands fail**:
    - Verifica che sudo sia installato e configurato
    - Controlla che la password sia corretta
    - Verifica i permessi dell'utente
 
-3. **Output non viene mostrato**:
+3. **No output displayed**:
    - Controlla che il polling sia attivo
    - Verifica che la sessione sia ancora attiva
    - Controlla i log per errori
@@ -213,37 +213,37 @@ console.log(await window.electronAPI.rustTerminalGetSessions());
 
 ## Performance
 
-### Ottimizzazioni
+### Optimizations
 
 1. **Gestione asincrona**: Utilizzo di Tokio per operazioni non bloccanti
 2. **Buffer ottimizzati**: Gestione efficiente della memoria per l'output
 3. **Cleanup automatico**: Rimozione automatica delle sessioni inattive
 4. **Polling ottimizzato**: Frequenza di polling bilanciata per performance e responsività
 
-### Metriche
+### Metrics
 
 - **Latenza**: < 50ms per comandi semplici
 - **Throughput**: > 1000 comandi/secondo
 - **Memoria**: < 10MB per sessione attiva
 - **CPU**: < 5% per sessione inattiva
 
-## Sicurezza
+## Security
 
-### Gestione Password
+### Password Handling
 
 - Le password non vengono mai loggate
 - I messaggi di password vengono filtrati dall'output
 - Timeout configurabili per prevenire hang
 - Gestione sicura della memoria con Rust
 
-### Isolamento
+### Isolation
 
 - Ogni sessione è isolata
 - Comunicazione sicura tra processi
 - Gestione degli errori robusta
 - Cleanup automatico delle risorse
 
-## Sviluppo Futuro
+## Future Development
 
 ### Roadmap
 
@@ -252,7 +252,7 @@ console.log(await window.electronAPI.rustTerminalGetSessions());
 3. **Multi-Platform**: Supporto completo per Windows, Linux, macOS
 4. **Performance**: Ottimizzazioni aggiuntive per comandi complessi
 
-### Contribuire
+### Contributing
 
 1. Fork del repository
 2. Crea un branch per la feature
@@ -260,14 +260,14 @@ console.log(await window.electronAPI.rustTerminalGetSessions());
 4. Aggiungi test
 5. Crea una pull request
 
-## Licenza
+## License
 
 MIT License - vedi il file LICENSE per i dettagli.
 
-## Supporto
+## Support
 
-Per problemi o domande:
-- Apri una issue su GitHub
-- Controlla la documentazione
-- Verifica i log per errori
-- Consulta la sezione troubleshooting
+For issues or questions:
+- Open a GitHub issue
+- Read the documentation
+- Check logs for errors
+- See the troubleshooting section

@@ -1,214 +1,214 @@
-# TermInA Rust Terminal - Implementazione Completata
+# TermInA Rust Terminal — Implementation Complete
 
-## 🎉 Riepilogo del Progetto
+## 🎉 Project Summary
 
-Il terminale TermInA è stato completamente riscritto in Rust per risolvere i problemi con i comandi sudo e migliorare le prestazioni generali. L'implementazione è stata completata con successo e tutti i test sono passati.
+The TermInA terminal was fully reimplemented in Rust to fix sudo command issues and improve overall performance. The implementation is complete and all tests pass.
 
-## ✅ Componenti Implementati
+## ✅ Implemented Components
 
-### 1. **Progetto Rust** (`rust-terminal/`)
-- ✅ **Libreria principale** (`src/lib.rs`) - Interfaccia principale del terminale
-- ✅ **Gestione PTY** (`src/pty_manager.rs`) - Gestione robusta dei pseudo-terminali
-- ✅ **Gestione sessioni** (`src/session.rs`) - Gestione delle sessioni terminale
-- ✅ **Supporto sudo** (`src/sudo_handler.rs`) - Gestione sicura dei comandi sudo
-- ✅ **Interfaccia FFI** (`src/ffi.rs`) - Interfaccia C per Node.js
-- ✅ **Build script** (`build.rs`) - Configurazione di compilazione
-- ✅ **Configurazione** (`Cargo.toml`) - Dipendenze e configurazione
+### 1) Rust Project (`rust-terminal/`)
+- ✅ Main library (`src/lib.rs`) — Primary terminal interface
+- ✅ PTY management (`src/pty_manager.rs`) — Robust PTY handling
+- ✅ Session management (`src/session.rs`) — Terminal sessions
+- ✅ Sudo support (`src/sudo_handler.rs`) — Secure sudo command handling
+- ✅ FFI interface (`src/ffi.rs`) — C interface for Node.js
+- ✅ Build script (`build.rs`) — Build configuration
+- ✅ Configuration (`Cargo.toml`) — Dependencies and setup
 
-### 2. **Wrapper Node.js** (`src/rust-terminal-wrapper.js`)
-- ✅ **Classe RustTerminalWrapper** - Interfaccia Node.js per la libreria Rust
-- ✅ **Gestione sessioni** - Creazione, gestione e cleanup delle sessioni
-- ✅ **Supporto sudo** - Esecuzione sicura dei comandi sudo
-- ✅ **Comunicazione asincrona** - Gestione asincrona dei comandi
 
-### 3. **Frontend** (`renderer/rust-terminal.js`)
-- ✅ **Classe RustTerminal** - Cliente frontend per il terminale Rust
-- ✅ **Gestione output** - Polling e gestione dell'output in tempo reale
-- ✅ **Supporto interattivo** - Gestione dei comandi interattivi
-- ✅ **Gestione password** - Rilevamento e gestione dei prompt di password
+- ✅ RustTerminalWrapper class — Node.js interface to the Rust library
+- ✅ Session management — Create, manage, and clean up sessions
+- ✅ Sudo support — Secure execution of sudo commands
+- ✅ Async communication — Asynchronous command handling
 
-### 4. **Integrazione Electron**
-- ✅ **Handler IPC** (`main.js`) - Handler per la comunicazione con il frontend
-- ✅ **API esposte** (`preload.js`) - API sicure per il renderer
-- ✅ **Supporto HTML** (`renderer/index.html`) - Integrazione nel frontend
+### 3) Frontend (`renderer/rust-terminal.js`)
+- ✅ RustTerminal class — Frontend client for the Rust terminal
+- ✅ Output handling — Real-time polling and rendering
+- ✅ Interactive support — Interactive command handling
+- ✅ Password handling — Detection and handling of password prompts
 
-### 5. **Test e Documentazione**
-- ✅ **Script di test** (`test-rust-terminal.js`) - Test completo dell'integrazione
-- ✅ **Documentazione** (`RUST_TERMINAL_GUIDE.md`) - Guida completa all'uso
-- ✅ **README Rust** (`rust-terminal/README.md`) - Documentazione del progetto Rust
+### 4) Electron Integration
+- ✅ IPC handlers (`main.js`) — Frontend communication
+- ✅ Exposed APIs (`preload.js`) — Safe renderer APIs
+- ✅ HTML support (`renderer/index.html`) — Frontend integration
 
-## 🚀 Caratteristiche Implementate
+### 5) Tests & Docs
+- ✅ Test script (`test-rust-terminal.js`) — End-to-end integration test
+- ✅ Documentation (`RUST_TERMINAL_GUIDE.md`) — Complete usage guide
+- ✅ Rust README (`rust-terminal/README.md`) — Rust project docs
 
-### **Gestione PTY Robusta**
-- Implementazione nativa in Rust per la gestione dei pseudo-terminali
-- Supporto per comandi interattivi
-- Gestione corretta delle sequenze ANSI
-- Ridimensionamento dinamico del terminale
+## 🚀 Implemented Features
 
-### **Supporto Sudo Sicuro**
-- Gestione sicura delle password
-- Filtraggio dei messaggi di password dall'output
-- Timeout configurabili per i comandi sudo
-- Supporto per comandi privilegiati
+### Robust PTY Management
+- Native Rust implementation for PTY management
+- Support for interactive commands
+- Proper ANSI sequence handling
+- Dynamic terminal resizing
 
-### **Gestione Sessioni**
-- Supporto per multiple sessioni simultanee
-- Cleanup automatico delle sessioni inattive
-- Buffer ottimizzati per l'output
-- Gestione asincrona con Tokio
+### Secure Sudo Support
+- Secure password handling
+- Password prompts filtered from output
+- Configurable sudo timeouts
+- Support for privileged commands
 
-### **Interfaccia FFI**
-- Compatibilità C per l'integrazione con Node.js
-- Comunicazione sicura tra processi
-- Gestione della memoria ottimizzata
+### Session Management
+- Multiple simultaneous sessions
+- Automatic cleanup of inactive sessions
+- Optimized output buffers
+- Asynchronous management with Tokio
 
-## 📊 Risultati dei Test
+### FFI Interface
+- C compatibility for Node.js integration
+- Safe inter-process communication
+- Optimized memory handling
+
+## 📊 Test Results
 
 ```
-🧪 Test del Terminale Rust TermInA
+🧪 TermInA Rust Terminal Tests
 =====================================
 
-✅ Compilazione Rust: OK
-✅ Build Rust: OK
-✅ Integrazione Node.js: OK
-✅ Integrazione Electron: OK
-✅ Package.json: OK
-✅ Dipendenze: OK
+✅ Rust compile: OK
+✅ Rust build: OK
+✅ Node.js integration: OK
+✅ Electron integration: OK
+✅ package.json: OK
+✅ Dependencies: OK
 
-🎉 Tutti i test completati con successo!
+🎉 All tests completed successfully!
 ```
 
-## 🔧 Come Utilizzare
+## �️ How to Use
 
-### **Avvio dell'Applicazione**
+### Start the App
 ```bash
 npm start
 ```
 
-### **Test dei Comandi Sudo**
-- Apri l'applicazione
-- Prova comandi come: `sudo ls`, `sudo apt update`, etc.
-- Il sistema gestirà automaticamente le password
+### Test Sudo Commands
+- Open the app
+- Try commands like: `sudo ls`, `sudo apt update`, etc.
+- The system will handle password prompts automatically
 
-### **API Disponibili**
+### Available APIs
 
-#### **Frontend (JavaScript)**
+#### Frontend (JavaScript)
 ```javascript
-// Crea una sessione Rust Terminal
+// Create a Rust Terminal session
 const rustTerminal = new RustTerminal(terminalInstance);
 await rustTerminal.startSession();
 
-// Invia un comando
+// Send a command
 await rustTerminal.sendCommand('ls -la');
 
-// Esegui un comando sudo
+// Run a sudo command
 await rustTerminal.executeSudoCommand('sudo apt update', 'password');
 ```
 
-#### **Backend (Node.js)**
+#### Backend (Node.js)
 ```javascript
-// Crea una sessione
+// Create a session
 const session = await rustTerminal.createSession('/path/to/cwd');
 
-// Scrive dati
+// Write data
 await rustTerminal.writeToSession(sessionId, 'echo hello\n');
 
-// Esegui comando sudo
+// Run sudo command
 await rustTerminal.executeSudoCommand(sessionId, 'sudo ls', 'password');
 ```
 
-## 🏗️ Architettura
+## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+┌──────────────────┐    ┌───────────────────┐    ┌──────────────────┐
 │   Frontend      │    │   Node.js        │    │   Rust          │
 │   (Electron)    │◄──►│   Wrapper        │◄──►│   Terminal      │
 │                 │    │                  │    │                 │
 │ - rust-terminal │    │ - rust-terminal- │    │ - pty_manager   │
 │ - UI/UX         │    │   wrapper        │    │ - session       │
 │ - IPC           │    │ - IPC handlers   │    │ - sudo_handler  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+└──────────────────┘    └───────────────────┘    └──────────────────┘
 ```
 
-## 🔒 Sicurezza
+## 🔒 Security
 
-- **Password sicure**: Le password non vengono mai loggate
-- **Filtraggio output**: I messaggi di password vengono filtrati
-- **Timeout**: Timeout configurabili per prevenire hang
-- **Isolamento**: Ogni sessione è isolata
-- **Gestione memoria**: Gestione sicura della memoria con Rust
+- Secure passwords: never logged
+- Output filtering for password prompts
+- Configurable timeouts to prevent hangs
+- Isolation: each session is sandboxed
+- Safe memory management with Rust
 
 ## ⚡ Performance
 
-- **Latenza**: < 50ms per comandi semplici
-- **Throughput**: > 1000 comandi/secondo
-- **Memoria**: < 10MB per sessione attiva
-- **CPU**: < 5% per sessione inattiva
+- Latency: < 50ms for simple commands
+- Throughput: > 1000 commands/second
+- Memory: < 10MB per active session
+- CPU: < 5% per idle session
 
-## 🛠️ Sviluppo Futuro
+## 🛠️ Future Work
 
-### **Roadmap**
-1. **FFI Diretto**: Integrazione diretta con Node.js tramite FFI
-2. **Plugin System**: Sistema di plugin per estendere le funzionalità
-3. **Multi-Platform**: Supporto completo per Windows, Linux, macOS
-4. **Performance**: Ottimizzazioni aggiuntive per comandi complessi
+### Roadmap
+1. Direct FFI: integrate directly with Node.js via FFI
+2. Plugin System: extensible plugin system
+3. Multi-Platform: full support for Windows, Linux, macOS
+4. Performance: additional optimizations for heavy commands
 
-### **Possibili Miglioramenti**
-- Integrazione diretta FFI per eliminare il wrapper Node.js
-- Supporto per più tipi di terminale
-- Gestione avanzata delle sessioni
-- Supporto per plugin personalizzati
+### Potential Improvements
+- Direct FFI integration to remove the Node.js wrapper
+- Support for additional terminal types
+- Advanced session management
+- Custom plugin support
 
-## 📁 Struttura File
+## 📁 File Structure
 
 ```
 TermInA/
-├── rust-terminal/                 # Progetto Rust
+├── rust-terminal/                 # Rust project
 │   ├── src/
-│   │   ├── lib.rs                # Libreria principale
-│   │   ├── pty_manager.rs        # Gestione PTY
-│   │   ├── session.rs            # Gestione sessioni
-│   │   ├── sudo_handler.rs       # Gestione sudo
-│   │   ├── ffi.rs                # Interfaccia FFI
-│   │   └── main.rs               # Punto di ingresso
-│   ├── Cargo.toml                # Configurazione Rust
+│   │   ├── lib.rs                # Main library
+│   │   ├── pty_manager.rs        # PTY management
+│   │   ├── session.rs            # Session management
+│   │   ├── sudo_handler.rs       # Sudo handling
+│   │   ├── ffi.rs                # FFI interface
+│   │   └── main.rs               # Entry point
+│   ├── Cargo.toml                # Rust configuration
 │   ├── build.rs                  # Build script
-│   └── README.md                 # Documentazione Rust
+│   └── README.md                 # Rust docs
 ├── src/
-│   └── rust-terminal-wrapper.js  # Wrapper Node.js
+│   └── rust-terminal-wrapper.js  # Node.js wrapper
 ├── renderer/
-│   └── rust-terminal.js          # Cliente frontend
-├── main.js                       # Handler IPC (aggiornato)
-├── preload.js                    # API esposte (aggiornato)
-├── test-rust-terminal.js         # Script di test
-├── RUST_TERMINAL_GUIDE.md        # Guida completa
-└── RUST_TERMINAL_IMPLEMENTATION.md # Questo file
+│   └── rust-terminal.js          # Frontend client
+├── main.js                       # IPC handlers (updated)
+├── preload.js                    # Exposed APIs (updated)
+├── test-rust-terminal.js         # Test script
+├── RUST_TERMINAL_GUIDE.md        # Complete guide
+└── RUST_TERMINAL_IMPLEMENTATION.md # This file
 ```
 
-## 🎯 Obiettivi Raggiunti
+## � Achieved Goals
 
-- ✅ **Risoluzione problemi sudo**: I comandi sudo ora funzionano correttamente
-- ✅ **Miglioramento prestazioni**: Gestione più efficiente dei processi
-- ✅ **Gestione robusta PTY**: Implementazione nativa in Rust
-- ✅ **Sicurezza migliorata**: Gestione sicura delle password
-- ✅ **Integrazione completa**: Sistema completamente integrato
-- ✅ **Test completi**: Tutti i test passano con successo
-- ✅ **Documentazione**: Documentazione completa e dettagliata
+- ✅ Sudo issues resolved: sudo commands work correctly
+- ✅ Performance improved: more efficient process handling
+- ✅ Robust PTY management: native Rust implementation
+- ✅ Security improved: safe password handling
+- ✅ Full integration: end-to-end integrated system
+- ✅ Extensive testing: all tests pass successfully
+- ✅ Documentation: complete and detailed
 
-## 🏆 Conclusione
+## � Conclusion
 
-L'implementazione del terminale Rust per TermInA è stata completata con successo. Il sistema ora offre:
+The Rust terminal implementation for TermInA is complete. The system now offers:
 
-- **Gestione robusta dei comandi sudo** con supporto sicuro per le password
-- **Prestazioni migliorate** grazie all'implementazione in Rust
-- **Architettura modulare** che permette future estensioni
-- **Integrazione completa** con l'ecosistema Electron esistente
-- **Documentazione completa** per sviluppatori e utenti
+- Robust handling of sudo commands with secure password support
+- Improved performance thanks to the Rust implementation
+- Modular architecture enabling future extensions
+- Full integration with the existing Electron ecosystem
+- Comprehensive documentation for developers and users
 
-Il terminale è pronto per l'uso in produzione e risolve tutti i problemi identificati con il sistema precedente.
+The terminal is production-ready and solves all previously identified issues.
 
 ---
 
-**Data di completamento**: 10 Settembre 2025  
-**Versione**: 0.2 BETA  
-**Stato**: ✅ Completato e testato
+**Completion Date**: September 10, 2025  
+**Version**: 0.2 BETA  
+**Status**: ✅ Completed and tested
