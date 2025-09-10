@@ -57,12 +57,76 @@ class SettingsManager {
     }
 
     async loadConfig() {
+        console.log('=== DEBUG: loadConfig called ===');
         try {
-            this.config = await window.electronAPI.getConfig();
-            console.log('Configuration loaded:', this.config);
+            // Prova diversi modi per accedere all'API Tauri
+            let tauriApi = null;
+            
+            // Metodo 1: window.__TAURI__
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+                console.log('✅ Found Tauri API via window.__TAURI__');
+            }
+            // Metodo 2: window.__TAURI_INTERNALS__
+            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
+            }
+            // Metodo 3: window.tauri
+            else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+                console.log('✅ Found Tauri API via window.tauri');
+            }
+            // Metodo 4: window.__TAURI__.core
+            else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+                tauriApi = window.__TAURI__.core;
+                console.log('✅ Found Tauri API via window.__TAURI__.core');
+            }
+            // Metodo 5: window.__TAURI__.api
+            else if (window.__TAURI__ && window.__TAURI__.api && window.__TAURI__.api.invoke) {
+                tauriApi = window.__TAURI__.api;
+                console.log('✅ Found Tauri API via window.__TAURI__.api');
+            }
+            // Metodo 6: import dinamico
+            else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                    console.log('✅ Found Tauri API via dynamic import');
+                } catch (importError) {
+                    console.log('❌ Could not import Tauri API:', importError);
+                }
+            }
+            
+            if (tauriApi && tauriApi.invoke) {
+                console.log('✅ Tauri API available, calling get_config');
+                this.config = await tauriApi.invoke('get_config');
+                console.log('✅ Configuration loaded:', this.config);
+            } else {
+                console.log('❌ Tauri API not available, using default config');
+                this.config = {
+                    ai: {
+                        provider: "ollama",
+                        ollama: {
+                            base_url: "http://localhost:11434",
+                            model: "gpt-oss:20b",
+                            temperature: 0.7
+                        }
+                    }
+                };
+            }
         } catch (error) {
-            console.error('Error loading configuration:', error);
-            this.config = {};
+            console.error('❌ Error loading configuration:', error);
+            this.config = {
+                ai: {
+                    provider: "ollama",
+                    ollama: {
+                        base_url: "http://localhost:11434",
+                        model: "gpt-oss:20b",
+                        temperature: 0.7
+                    }
+                }
+            };
         }
     }
 
@@ -334,7 +398,7 @@ class SettingsManager {
                 this.setValueSafely('color-foreground', this.config.theme.foreground);
                 this.setValueSafely('color-cursor', this.config.theme.cursor);
                 this.setValueSafely('color-accent', this.config.theme.accent);
-                this.setValueSafely('background-blur', this.config.theme.backgroundBlur);
+                this.setValueSafely('background-blur', this.config.theme.background_blur);
                 
                 // Aggiorna l'anteprima del tema
                 this.updateThemePreview(this.config.theme);
@@ -342,47 +406,50 @@ class SettingsManager {
 
             // Terminal
             if (this.config.terminal) {
-                this.setValueSafely('font-family', this.config.terminal.fontFamily.split(',')[0].trim());
-                this.setValueSafely('font-size', this.config.terminal.fontSize);
-                this.setValueSafely('line-height', this.config.terminal.lineHeight);
-                this.setValueSafely('cursor-style', this.config.terminal.cursorStyle);
-                this.setValueSafely('cursor-blink', this.config.terminal.cursorBlink);
-                this.setValueSafely('scrollback', this.config.terminal.scrollback);
-                this.setValueSafely('bell-sound', this.config.terminal.bellSound);
-                this.setValueSafely('auto-scroll', this.config.terminal.autoScroll);
-                this.setValueSafely('smooth-scroll', this.config.terminal.smoothScroll);
+                this.setValueSafely('font-family', this.config.terminal.font_family ? this.config.terminal.font_family.split(',')[0].trim() : 'JetBrains Mono');
+                this.setValueSafely('font-size', this.config.terminal.font_size || 14);
+                this.setValueSafely('line-height', this.config.terminal.line_height || 1.4);
+                this.setValueSafely('cursor-style', this.config.terminal.cursor_style || 'bar');
+                this.setValueSafely('cursor-blink', this.config.terminal.cursor_blink !== undefined ? this.config.terminal.cursor_blink : true);
+                this.setValueSafely('scrollback', this.config.terminal.scrollback || 10000);
+                this.setValueSafely('bell-sound', this.config.terminal.bell_sound !== undefined ? this.config.terminal.bell_sound : false);
+                this.setValueSafely('auto-scroll', this.config.terminal.auto_scroll !== undefined ? this.config.terminal.auto_scroll : true);
+                this.setValueSafely('smooth-scroll', this.config.terminal.smooth_scroll !== undefined ? this.config.terminal.smooth_scroll : true);
             }
 
             // AI
             if (this.config.ai) {
                 this.setValueSafely('ai-provider', this.config.ai.provider);
-                this.setValueSafely('ai-auto-execute', this.config.ai.autoExecute);
-                this.setValueSafely('ai-context-lines', this.config.ai.contextLines);
+                this.setValueSafely('ai-auto-execute', this.config.ai.auto_execute);
+                this.setValueSafely('ai-context-lines', this.config.ai.context_lines);
                 
                 // API Keys e configurazioni specifiche
                 if (this.config.ai.gemini) {
-                    this.setValueSafely('gemini-api-key', this.config.ai.gemini.apiKey);
+                    this.setValueSafely('gemini-api-key', this.config.ai.gemini.api_key);
                     this.setValueSafely('gemini-model', this.config.ai.gemini.model);
                     if (this.config.ai.gemini.temperature !== undefined) {
                         this.setValueSafely('gemini-temperature', this.config.ai.gemini.temperature);
                     }
-                    if (this.config.ai.gemini.maxOutputTokens !== undefined) {
-                        this.setValueSafely('gemini-max-output', this.config.ai.gemini.maxOutputTokens);
+                    if (this.config.ai.gemini.max_output_tokens !== undefined) {
+                        this.setValueSafely('gemini-max-output', this.config.ai.gemini.max_output_tokens);
                     }
                 }
                 if (this.config.ai.openai) {
-                    this.setValueSafely('openai-api-key', this.config.ai.openai.apiKey);
+                    this.setValueSafely('openai-api-key', this.config.ai.openai.api_key);
                     this.setValueSafely('openai-model', this.config.ai.openai.model);
-                }
-                if (this.config.ai.lmStudio) {
-                    this.setValueSafely('lm-studio-endpoint', this.config.ai.lmStudio.endpoint);
-                    this.setValueSafely('lm-studio-model', this.config.ai.lmStudio.model);
-                    this.setValueSafely('lm-studio-api-key', this.config.ai.lmStudio.apiKey);
+                    if (this.config.ai.openai.temperature !== undefined) {
+                        this.setValueSafely('openai-temperature', this.config.ai.openai.temperature);
+                    }
+                    if (this.config.ai.openai.max_tokens !== undefined) {
+                        this.setValueSafely('openai-max-tokens', this.config.ai.openai.max_tokens);
+                    }
                 }
                 if (this.config.ai.ollama) {
-                    this.setValueSafely('ollama-endpoint', this.config.ai.ollama.endpoint);
+                    this.setValueSafely('ollama-endpoint', this.config.ai.ollama.base_url);
                     this.setValueSafely('ollama-model', this.config.ai.ollama.model);
-                    this.setValueSafely('ollama-api-key', this.config.ai.ollama.apiKey);
+                    if (this.config.ai.ollama.temperature !== undefined) {
+                        this.setValueSafely('ollama-temperature', this.config.ai.ollama.temperature);
+                    }
                 }
                 
                 // Mostra la configurazione del provider attuale
@@ -466,7 +533,8 @@ class SettingsManager {
                 this.updateThemePreview(previewConfig.theme);
             }
             
-            window.electronAPI.sendMessage('preview-settings', previewConfig);
+            // In Tauri v2, non usiamo sendMessage per il preview
+            // Le modifiche vengono applicate automaticamente
         } catch (error) {
             console.error('Error in preview:', error);
         }
@@ -480,43 +548,39 @@ class SettingsManager {
                 foreground: this.getValueSafely('color-foreground', '#ffffff'),
                 cursor: this.getValueSafely('color-cursor', '#00d4aa'),
                 accent: this.getValueSafely('color-accent', '#00d4aa'),
-                backgroundBlur: this.getCheckedSafely('background-blur', true)
+                background_blur: this.getCheckedSafely('background-blur', true)
             },
             terminal: {
-                fontFamily: this.getValueSafely('font-family', 'JetBrains Mono'),
-                fontSize: parseInt(this.getValueSafely('font-size', '14')),
-                lineHeight: parseFloat(this.getValueSafely('line-height', '1.4')),
-                cursorStyle: this.getValueSafely('cursor-style', 'bar'),
-                cursorBlink: this.getCheckedSafely('cursor-blink', true),
-                scrollback: parseInt(this.getValueSafely('scrollback', '10000')),
-                bellSound: this.getCheckedSafely('bell-sound', false),
-                autoScroll: this.getCheckedSafely('auto-scroll', true),
-                smoothScroll: this.getCheckedSafely('smooth-scroll', true)
+                font_family: this.getValueSafely('font-family', 'JetBrains Mono'),
+                font_size: parseInt(this.getValueSafely('font-size', '14')) || 14,
+                line_height: parseFloat(this.getValueSafely('line-height', '1.4')) || 1.4,
+                cursor_style: this.getValueSafely('cursor-style', 'bar'),
+                cursor_blink: this.getCheckedSafely('cursor-blink', true),
+                scrollback: parseInt(this.getValueSafely('scrollback', '10000')) || 10000,
+                bell_sound: this.getCheckedSafely('bell-sound', false),
+                auto_scroll: this.getCheckedSafely('auto-scroll', true),
+                smooth_scroll: this.getCheckedSafely('smooth-scroll', true)
             },
             ai: {
                 provider: this.getValueSafely('ai-provider', 'gemini'),
-                autoExecute: this.getCheckedSafely('ai-auto-execute', false),
-                contextLines: parseInt(this.getValueSafely('ai-context-lines', '10')),
+                auto_execute: this.getCheckedSafely('ai-auto-execute', false),
+                context_lines: parseInt(this.getValueSafely('ai-context-lines', '10')) || 10,
                 gemini: {
-                    apiKey: this.getValueSafely('gemini-api-key', ''),
+                    api_key: this.getValueSafely('gemini-api-key', ''),
                     model: this.getValueSafely('gemini-model', 'gemini-2.5-flash'),
-                    temperature: parseFloat(this.getValueSafely('gemini-temperature', '0.7')),
-                    maxOutputTokens: parseInt(this.getValueSafely('gemini-max-output', '4096'))
+                    temperature: parseFloat(this.getValueSafely('gemini-temperature', '0.7')) || 0.7,
+                    max_output_tokens: parseInt(this.getValueSafely('gemini-max-output', '4096')) || 4096
                 },
                 openai: {
-                    apiKey: this.getValueSafely('openai-api-key', ''),
-                    model: this.getValueSafely('openai-model', 'gpt-3.5-turbo'),
-                    endpoint: 'https://api.openai.com/v1'
-                },
-                lmStudio: {
-                    endpoint: this.getValueSafely('lm-studio-endpoint', 'http://localhost:1234/v1'),
-                    model: this.getValueSafely('lm-studio-model', 'local-model'),
-                    apiKey: this.getValueSafely('lm-studio-api-key', 'lm-studio')
+                    api_key: this.getValueSafely('openai-api-key', ''),
+                    model: this.getValueSafely('openai-model', 'gpt-4o'),
+                    temperature: parseFloat(this.getValueSafely('openai-temperature', '0.7')) || 0.7,
+                    max_tokens: parseInt(this.getValueSafely('openai-max-tokens', '4096')) || 4096
                 },
                 ollama: {
-                    endpoint: this.getValueSafely('ollama-endpoint', 'http://localhost:11434'),
-                    model: this.getValueSafely('ollama-model', 'gemma3:270m'),
-                    apiKey: this.getValueSafely('ollama-api-key', '')
+                    base_url: this.getValueSafely('ollama-endpoint', 'http://localhost:11434'),
+                    model: this.getValueSafely('ollama-model', 'gpt-oss:20b'),
+                    temperature: parseFloat(this.getValueSafely('ollama-temperature', '0.7')) || 0.7
                 }
             }
         };
@@ -535,6 +599,7 @@ class SettingsManager {
     }
 
     async saveSettings() {
+        console.log('=== DEBUG: saveSettings called ===');
         const saveBtn = document.getElementById('save-btn');
         const originalText = saveBtn.innerHTML;
         
@@ -547,16 +612,60 @@ class SettingsManager {
             const formData = this.gatherFormData();
             console.log('Saving settings:', formData);
 
+            // Prova diversi modi per accedere all'API Tauri
+            let tauriApi = null;
+            
+            // Metodo 1: window.__TAURI__
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+                console.log('✅ Found Tauri API via window.__TAURI__');
+            }
+            // Metodo 2: window.__TAURI_INTERNALS__
+            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
+            }
+            // Metodo 3: window.tauri
+            else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+                console.log('✅ Found Tauri API via window.tauri');
+            }
+            // Metodo 4: import dinamico
+            else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                    console.log('✅ Found Tauri API via dynamic import');
+                } catch (importError) {
+                    console.log('❌ Could not import Tauri API:', importError);
+                }
+            }
+            
+            if (!tauriApi || !tauriApi.invoke) {
+                console.log('❌ Tauri API not available, using fallback');
+                // Fallback: salva in localStorage
+                localStorage.setItem('termina_settings', JSON.stringify(formData));
+                console.log('✅ Settings saved to localStorage');
+                saveBtn.innerHTML = '✅ Saved!';
+                saveBtn.style.background = '#4CAF50';
+                this.showNotification('Settings saved to localStorage!', 'success');
+                return;
+            }
+
+            console.log('✅ Tauri API available, calling set_config');
+            console.log('📤 Sending data to backend:', JSON.stringify(formData, null, 2));
             // Salva la configurazione
-            const success = await window.electronAPI.saveConfig(formData);
+            const success = await tauriApi.invoke('set_config', { key: 'full_config', value: formData });
+            console.log('✅ set_config result:', success);
             
             if (success) {
                 // Successo
                 saveBtn.innerHTML = '✅ Saved!';
                 saveBtn.style.background = '#4CAF50';
                 this.showNotification('Settings saved successfully!', 'success');
-                // Invia un messaggio alla finestra principale per applicare le modifiche
-                window.electronAPI.sendMessage('settings-saved', formData);
+                
+                // Notifica il terminale principale per applicare le nuove impostazioni
+                this.notifyMainWindow(formData);
                 
                 // Ripristina il pulsante dopo 2 secondi
                 setTimeout(() => {
@@ -597,7 +706,7 @@ class SettingsManager {
     async resetSettings() {
         if (confirm('Are you sure you want to reset all settings to default values?')) {
             try {
-                await window.electronAPI.resetConfig();
+                await window.__TAURI__.tauri.invoke('set_config', { key: 'reset', value: 'default' });
                 await this.loadConfig();
                 this.populateForm();
                 this.showNotification('Settings reset to default values', 'success');
@@ -608,8 +717,111 @@ class SettingsManager {
         }
     }
 
-    closeSettings() {
-        window.electronAPI.closeSettings();
+    async closeSettings() {
+        console.log('=== DEBUG: closeSettings called ===');
+        try {
+            // Prova diversi modi per accedere all'API Tauri
+            let tauriApi = null;
+            
+            // Metodo 1: window.__TAURI__
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+                console.log('✅ Found Tauri API via window.__TAURI__');
+            }
+            // Metodo 2: window.__TAURI_INTERNALS__
+            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
+            }
+            // Metodo 3: window.tauri
+            else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+                console.log('✅ Found Tauri API via window.tauri');
+            }
+            // Metodo 4: import dinamico
+            else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                    console.log('✅ Found Tauri API via dynamic import');
+                } catch (importError) {
+                    console.log('❌ Could not import Tauri API:', importError);
+                }
+            }
+            
+            if (tauriApi && tauriApi.invoke) {
+                console.log('✅ Tauri API available, trying different close methods');
+                
+                // Metodo 1: comando personalizzato
+                try {
+                    const result = await tauriApi.invoke('close_current_window');
+                    console.log('✅ close_current_window result:', result);
+                    return;
+                } catch (e) {
+                    console.log('❌ close_current_window failed:', e);
+                }
+                
+                // Metodo 2: API Tauri v2 per chiudere la finestra corrente
+                try {
+                    if (window.__TAURI__.window) {
+                        await window.__TAURI__.window.getCurrent().close();
+                        console.log('✅ window.close() successful');
+                        return;
+                    }
+                } catch (e) {
+                    console.log('❌ window.close() failed:', e);
+                }
+                
+                // Metodo 3: API alternativa
+                try {
+                    if (window.__TAURI__.core && window.__TAURI__.core.close) {
+                        await window.__TAURI__.core.close();
+                        console.log('✅ core.close() successful');
+                        return;
+                    }
+                } catch (e) {
+                    console.log('❌ core.close() failed:', e);
+                }
+            }
+            
+            console.log('❌ All Tauri methods failed, using window.close()');
+            // Fallback: chiudi la finestra del browser
+            window.close();
+        } catch (error) {
+            console.error('❌ Error closing settings window:', error);
+            // Fallback: chiudi la finestra del browser
+            window.close();
+        }
+    }
+
+    async notifyMainWindow(config) {
+        try {
+            // Prova diversi modi per accedere all'API Tauri
+            let tauriApi = null;
+            
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+            } else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+            } else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                } catch (importError) {
+                    console.log('Could not import Tauri API for notification');
+                }
+            }
+            
+            if (tauriApi && tauriApi.invoke) {
+                // Chiama un comando per notificare il terminale principale
+                await tauriApi.invoke('apply_settings', { config });
+                console.log('✅ Main window notified of settings changes');
+            }
+        } catch (error) {
+            console.error('Error notifying main window:', error);
+        }
     }
 
     showNotification(message, type = 'info') {
@@ -659,23 +871,79 @@ class SettingsManager {
         statusText.textContent = 'Testing connection...';
         
         try {
+            // Prova diversi modi per accedere all'API Tauri
+            let tauriApi = null;
+            
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+            } else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+            } else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                } catch (importError) {
+                    console.log('Could not import Tauri API for testing connection');
+                }
+            }
+            
+            if (!tauriApi || !tauriApi.invoke) {
+                throw new Error('Tauri API not available');
+            }
+            
             // Raccogli i dati di configurazione temporanei
             const testConfig = this.gatherFormData();
             
             // Usa la nuova API per testare senza cambiare la configurazione permanente
-            const testResult = await window.electronAPI.testAIConnection(provider, testConfig.ai);
+            // Allinea provider dell'oggetto di test se differente
+            const effectiveProvider = provider || testConfig.ai.provider;
+            testConfig.ai.provider = effectiveProvider;
+
+            console.log(`Calling test_ai_connection with provider: ${effectiveProvider} and config:`, testConfig.ai);
+            // Invocazione adattiva: prima snake_case, poi camelCase se necessario
+            let testResult;
+            try {
+                testResult = await tauriApi.invoke('test_ai_connection', { provider: effectiveProvider, ai_config: testConfig.ai });
+            } catch (e1) {
+                const msg = (e1 && (e1.message || e1.error || e1.toString())) || '';
+                if (/missing required key\s*aiConfig/i.test(msg) || /invalid args\s*`?aiConfig`?/i.test(msg)) {
+                    // Retry con camelCase
+                    testResult = await tauriApi.invoke('test_ai_connection', { provider: effectiveProvider, aiConfig: testConfig.ai });
+                } else {
+                    throw e1;
+                }
+            }
             
-            console.log(`AI test result for ${provider}:`, testResult);
+            // Normalizza risposta (può arrivare come stringa)
+            if (typeof testResult === 'string') {
+                try { testResult = JSON.parse(testResult); } catch { testResult = { success: false, error: testResult }; }
+            }
             
-            if (testResult.success && testResult.response && 
-                !testResult.response.includes('[AI] Errore') && 
-                !testResult.response.includes('Error')) {
+            console.log(`AI test result for ${effectiveProvider}:`, testResult);
+            
+            const responseText = (testResult && testResult.response) ? String(testResult.response) : '';
+            if ((testResult.success === true) || (responseText && !/\b(Error|Errore)\b/i.test(responseText))) {
                 statusIndicator.className = 'status-indicator status-connected';
                 statusText.textContent = '✅ Connection successful';
                 
-                this.showNotification(`${this.getProviderDisplayName(provider)} connection successful!`, 'success');
+                this.showNotification(`${this.getProviderDisplayName(effectiveProvider)} connection successful!`, 'success');
+                // Invio un evento di apply_settings soft per aggiornare il pallino subito
+                try {
+                    let tauriApi = null;
+                    if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                        tauriApi = window.__TAURI__.tauri;
+                    } else {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        tauriApi = { invoke };
+                    }
+                    if (tauriApi && tauriApi.invoke) {
+                        await tauriApi.invoke('apply_settings', { config: { ai: testConfig.ai } });
+                    }
+                } catch (_) {}
             } else {
-                throw new Error(testResult.error || 'Invalid response from AI');
+                throw new Error((testResult && (testResult.error || responseText)) || 'Invalid response from AI');
             }
             
         } catch (error) {
@@ -696,7 +964,9 @@ class SettingsManager {
         const displayNames = {
             'gemini': 'Google Gemini',
             'openai': 'OpenAI',
-            'lm-studio': 'LM Studio'
+            'lm-studio': 'LM Studio',
+            'ollama': 'Ollama',
+            'disabled': 'AI Off'
         };
         return displayNames[provider] || provider;
     }

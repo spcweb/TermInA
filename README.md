@@ -1,4 +1,4 @@
-# Electron Terminal Emulator
+# TermInA - Modern Terminal Emulator with AI Integration
 
 <p align="center">
   <img src="assets/logo.svg" alt="Termina logo" width="140" />
@@ -8,11 +8,37 @@
 
   <details>
     <summary><strong>Version</strong></summary>
-    <p>v0.2 Beta</p>
+    <p>v2.0.0 - Now powered by Tauri! 🚀</p>
   </details>
 </p>
 
-⚠️ Warning: This software is still in Beta version 0.2. Some features may be unstable.
+🎉 **NEW**: TermInA v2.0.0 is now powered by Tauri! Enjoy better performance, smaller bundle size, and enhanced security while maintaining the same beautiful interface.
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 16+ 
+- Rust 1.60+
+- npm or yarn
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/termina/termina.git
+cd termina
+
+# Run setup script (installs Rust, Tauri CLI, and dependencies)
+./setup-tauri.sh
+
+# Start development server
+npm run dev
+```
+
+### Build for Production
+```bash
+npm run build        # Build for current platform
+npm run build:all    # Build for all platforms
+```
 
 ## 📥 Download
 

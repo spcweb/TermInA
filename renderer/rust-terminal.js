@@ -27,7 +27,7 @@ class RustTerminal {
             }
 
             console.log('Rust Terminal starting new session...');
-            const result = await window.electronAPI.rustTerminalCreateSession();
+            const result = await window.__TAURI__.rustTerminalCreateSession();
             console.log('Rust Terminal create session result:', result);
             if (result.success) {
                 this.sessionId = result.sessionId;
@@ -49,7 +49,7 @@ class RustTerminal {
         try {
             if (this.sessionId && this.isActive) {
                 console.log(`Rust Terminal stopping session ${this.sessionId}`);
-                await window.electronAPI.rustTerminalKill(this.sessionId);
+                await window.__TAURI__.rustTerminalKill(this.sessionId);
                 this.stopDataPolling();
                 this.isActive = false;
                 this.sessionId = null;
@@ -75,7 +75,7 @@ class RustTerminal {
 
             try {
                 // Usa l'output immediato per una risposta più veloce
-                const result = await window.electronAPI.rustTerminalGetImmediateOutput(this.sessionId, this.lastOutputTimestamp);
+                const result = await window.__TAURI__.rustTerminalGetImmediateOutput(this.sessionId, this.lastOutputTimestamp);
                 if (result.success && result.hasNewData && result.output) {
                     const newData = result.output;
                     if (newData.length > 0) {
@@ -113,7 +113,7 @@ class RustTerminal {
         if (this.sessionId) {
             try {
                 console.log(`RustTerminal: Closing session ${this.sessionId}`);
-                await window.electronAPI.rustTerminalClose(this.sessionId);
+                await window.__TAURI__.rustTerminalClose(this.sessionId);
                 this.sessionId = null;
                 this.isActive = false;
                 console.log('RustTerminal: Session closed');
@@ -225,7 +225,7 @@ class RustTerminal {
             this.currentCommand = command;
             this.isExecuting = true;
             console.log(`Rust Terminal sending command: ${command}`);
-            const result = await window.electronAPI.rustTerminalWrite(this.sessionId, command + '\n');
+            const result = await window.__TAURI__.rustTerminalWrite(this.sessionId, command + '\n');
             console.log(`Rust Terminal command send result:`, result);
             return result.success;
         } catch (error) {
@@ -240,7 +240,7 @@ class RustTerminal {
         }
 
         try {
-            const result = await window.electronAPI.rustTerminalWrite(this.sessionId, input);
+            const result = await window.__TAURI__.rustTerminalWrite(this.sessionId, input);
             return result.success;
         } catch (error) {
             console.error('Error sending input to Rust Terminal:', error);
@@ -294,7 +294,7 @@ class RustTerminal {
         }
 
         try {
-            const result = await window.electronAPI.rustTerminalClear(this.sessionId);
+            const result = await window.__TAURI__.rustTerminalClear(this.sessionId);
             if (result.success) {
                 this.outputBuffer = '';
                 this.lastOutputIndex = 0;
@@ -313,7 +313,7 @@ class RustTerminal {
         }
 
         try {
-            const result = await window.electronAPI.rustTerminalResize(this.sessionId, cols, rows);
+            const result = await window.__TAURI__.rustTerminalResize(this.sessionId, cols, rows);
             return result.success;
         } catch (error) {
             console.error('Error resizing Rust Terminal:', error);
@@ -329,7 +329,7 @@ class RustTerminal {
 
         try {
             console.log(`Rust Terminal executing sudo command: ${command}`);
-            const result = await window.electronAPI.rustTerminalRunSudoCommand(this.sessionId, command, password);
+            const result = await window.__TAURI__.rustTerminalRunSudoCommand(this.sessionId, command, password);
             console.log(`Rust Terminal sudo command result:`, result);
             return result;
         } catch (error) {

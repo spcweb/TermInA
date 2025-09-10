@@ -2,17 +2,18 @@
   "name": "termina",
   "version": "2.0.0",
   "description": "Modern terminal emulator with AI integration - Warp-like design for macOS and Linux",
-  "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "NODE_ENV=development electron .",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+  "dev:frontend": "http-server renderer -p 3000 -c-1",
+    "build": "tauri build",
+    "build:debug": "tauri build --debug",
     "icons": "node build/generate-icons.js",
-    "build": "npm run icons && electron-builder",
-    "build:mac": "npm run icons && electron-builder --mac",
-    "build:win": "npm run icons && electron-builder --win",
-    "build:linux": "npm run icons && electron-builder --linux",
-    "build:all": "npm run icons && electron-builder --mac --win --linux",
-    "dist": "npm run icons && electron-builder --publish=never",
+    "build:mac": "tauri build --target aarch64-apple-darwin",
+    "build:win": "tauri build --target x86_64-pc-windows-msvc",
+    "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
+    "build:all": "tauri build --target aarch64-apple-darwin && tauri build --target x86_64-pc-windows-msvc && tauri build --target x86_64-unknown-linux-gnu",
+    "dist": "tauri build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -21,52 +22,20 @@
     "ai",
     "warp",
     "modern",
-    "electron"
+    "tauri",
+    "rust"
   ],
   "author": "Termina Team",
   "license": "MIT",
-  "type": "commonjs",
-  "dependencies": {
-    "@xterm/addon-fit": "^0.10.0",
-    "node-pty": "^1.0.0",
-    "playwright": "^1.55.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
-  },
+  "type": "module",
   "devDependencies": {
-    "electron": "^37.3.1",
-    "electron-builder": "^24.13.3",
-    "electron-rebuild": "^3.2.9",
+    "@tauri-apps/cli": "^2.0.0",
+    "http-server": "^14.1.1",
     "icon-gen": "^4.0.0",
     "png-to-ico": "^2.1.8",
     "sharp": "^0.33.5"
   },
-  "build": {
-    "appId": "com.termina.app",
-    "productName": "Termina",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "src/**/*",
-      "renderer/**/*",
-      "assets/**/*",
-      "node_modules/**/*"
-    ],
-    "mac": {
-      "icon": "build/icon.icns",
-      "category": "public.app-category.developer-tools",
-      "target": "dmg"
-    },
-    "linux": {
-      "icon": "build/icon.png",
-      "target": "AppImage"
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": "nsis"
-    }
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
   }
 }

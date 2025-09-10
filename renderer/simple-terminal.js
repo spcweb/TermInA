@@ -57,9 +57,240 @@ class SimpleTerminal {
         console.log('Smooth-scroll enabled:', this.smoothScrollEnabled);
         console.log('PTY mode enabled:', this.ptyModeEnabled);
         this.init();
+        this.setupSettingsListener();
+    }
+
+    // Helper function per accedere all'API Tauri in modo robusto
+    async getTauriAPI() {
+        // Debug: mostra cosa è disponibile nell'oggetto window
+        console.log('=== DEBUGGING TAURI API AVAILABILITY ===');
+        console.log('window.__TAURI__:', window.__TAURI__);
+        console.log('window.__TAURI_INTERNALS__:', window.__TAURI_INTERNALS__);
+        console.log('window.tauri:', window.tauri);
+        console.log('Available window properties:', Object.keys(window).filter(key => key.includes('tauri') || key.includes('TAURI')));
+        
+        // In Tauri v2, l'API potrebbe essere esposta diversamente
+        // Prova diversi modi per accedere all'API Tauri
+        if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+            console.log('Using window.__TAURI__.tauri');
+            return window.__TAURI__.tauri;
+        } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+            console.log('Using window.__TAURI_INTERNALS__');
+            return window.__TAURI_INTERNALS__;
+        } else if (window.tauri && window.tauri.invoke) {
+            console.log('Using window.tauri');
+            return window.tauri;
+        } else if (window.__TAURI__ && window.__TAURI__.invoke) {
+            console.log('Using window.__TAURI__');
+            return window.__TAURI__;
+        } else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+            console.log('Using window.__TAURI__.core');
+            return window.__TAURI__.core;
+        } else if (window.__TAURI__ && window.__TAURI__.api && window.__TAURI__.api.invoke) {
+            console.log('Using window.__TAURI__.api');
+            return window.__TAURI__.api;
+        }
+        
+        // Se non riesce a trovare l'API, prova l'import dinamico
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            console.log('Using dynamic import');
+            return { invoke };
+        } catch (importError) {
+            console.log('Could not import Tauri API:', importError);
+            return null;
+        }
+    }
+
+    // Helper function per eseguire comandi tramite il terminale Rust
+    async executeCommandViaRust(command) {
+        const tauriApi = await this.getTauriAPI();
+        
+        if (!tauriApi || !tauriApi.invoke) {
+            throw new Error('Tauri API not available for command execution');
+        }
+        
+        console.log('Executing command via Rust:', command);
+        const result = await tauriApi.invoke('run_command', { command });
+        console.log('Command result:', result);
+        
+        return result;
+    }
+
+    // Alternative method to execute AI commands without Tauri API
+    async executeAICommandDirect(command) {
+        try {
+            // Try to use the existing AI command through a different approach
+            const question = command.split(' ').slice(1).join(' ');
+            const isAutoExecute = command.startsWith('execute ') || command.startsWith('run ');
+            
+            console.log('Executing AI command directly:', { question, isAutoExecute });
+            
+            // Try to use Ollama directly via shell commands
+            try {
+                const ollamaCommand = `curl -X POST http://localhost:11434/api/generate -H "Content-Type: application/json" -d '{"model": "gemma3:270m", "prompt": "${question}", "stream": false}'`;
+                const result = await this.executeShellCommand(ollamaCommand);
+                
+                // Parse the JSON response from Ollama
+                try {
+                    const jsonResponse = JSON.parse(result);
+                    return jsonResponse.response || 'No response from AI';
+                } catch (parseError) {
+                    console.log('Could not parse Ollama response, returning raw result');
+                    return result;
+                }
+            } catch (ollamaError) {
+                console.log('Ollama not available, using fallback response');
+                // Fallback response when Ollama is not available
+                return `AI response for: ${question} (Auto-execute: ${isAutoExecute})\n\nNote: This is a fallback response. Ollama is not available.`;
+            }
+            
+        } catch (error) {
+            console.error('Error in executeAICommandDirect:', error);
+            throw error;
+        }
+    }
+
+    // Helper function to execute shell commands
+    async executeShellCommand(command) {
+        // In a browser environment, we can't execute shell commands directly
+        // But we can use the terminal Rust to execute them
+        try {
+            const tauriApi = await this.getTauriAPI();
+            if (tauriApi && tauriApi.invoke) {
+                console.log('Using Tauri API to execute shell command');
+                return await tauriApi.invoke('run_command', { command });
+            } else {
+                console.log('Tauri API not available, using simulated response');
+                // Simulate command execution for testing
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve('{"response": "This is a simulated AI response for testing purposes. The Tauri API is not available."}');
+                    }, 1000);
+                });
+            }
+        } catch (error) {
+            console.error('Error executing shell command:', error);
+            throw error;
+        }
+    }
+
+    setupSettingsListener() {
+        // Listener per aggiornamenti delle impostazioni dal pannello
+        if (window.__TAURI__ && window.__TAURI__.event) {
+            window.__TAURI__.event.listen('settings-updated', (event) => {
+                console.log('Settings updated event received:', event.payload);
+                this.applySettings(event.payload);
+            });
+        }
+    }
+
+    applySettings(config) {
+        console.log('Applying settings:', config);
+        
+        // Applica il tema
+        if (config.theme) {
+            this.applyTheme(config.theme);
+        }
+        
+        // Applica le impostazioni del terminale
+        if (config.terminal) {
+            this.applyTerminalSettings(config.terminal);
+        }
+        
+        // Aggiorna le impostazioni AI
+        if (config.ai) {
+            this.updateAISettings(config.ai);
+        }
+        
+        console.log('✅ Settings applied successfully');
+    }
+
+    applyTerminalSettings(terminalConfig) {
+        // Applica font family
+        if (terminalConfig.font_family) {
+            const terminal = document.getElementById('terminal');
+            if (terminal) {
+                terminal.style.fontFamily = terminalConfig.font_family;
+            }
+        }
+        
+        // Applica font size
+        if (terminalConfig.font_size) {
+            const terminal = document.getElementById('terminal');
+            if (terminal) {
+                terminal.style.fontSize = `${terminalConfig.font_size}px`;
+            }
+        }
+        
+        // Applica line height
+        if (terminalConfig.line_height) {
+            const terminal = document.getElementById('terminal');
+            if (terminal) {
+                terminal.style.lineHeight = terminalConfig.line_height;
+            }
+        }
+        
+        // Applica cursor style
+        if (terminalConfig.cursor_style) {
+            this.cursorStyle = terminalConfig.cursor_style;
+            this.updateCursorStyle();
+        }
+        
+        // Applica cursor blink
+        if (terminalConfig.cursor_blink !== undefined) {
+            if (terminalConfig.cursor_blink) {
+                this.startCursorBlink();
+            } else {
+                this.stopCursorBlink();
+            }
+        }
+        
+        // Applica auto scroll
+        if (terminalConfig.auto_scroll !== undefined) {
+            this.autoScrollEnabled = terminalConfig.auto_scroll;
+        }
+        
+        // Applica smooth scroll
+        if (terminalConfig.smooth_scroll !== undefined) {
+            this.smoothScrollEnabled = terminalConfig.smooth_scroll;
+        }
+    }
+
+    updateAISettings(aiConfig) {
+        // Salva le impostazioni AI per l'uso nei comandi
+        this.aiSettings = aiConfig;
+        console.log('AI settings updated:', this.aiSettings);
+    }
+
+    async loadSettingsFromBackend() {
+        console.log('=== LOADING SETTINGS FROM BACKEND ===');
+        try {
+            const tauriApi = await this.getTauriAPI();
+            console.log('Tauri API obtained:', tauriApi);
+            
+            if (!tauriApi || !tauriApi.invoke) {
+                console.log('Tauri API not available for loading settings');
+                return;
+            }
+            
+            if (tauriApi && tauriApi.invoke) {
+                console.log('Loading settings from backend...');
+                const config = await tauriApi.invoke('get_config');
+                console.log('Settings loaded from backend:', config);
+                
+                if (config) {
+                    this.applySettings(config);
+                    console.log('AI Settings after applying:', this.aiSettings);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading settings from backend:', error);
+        }
     }
 
     init() {
+        console.log('=== INIT METHOD CALLED ===');
         this.container = document.getElementById('terminal');
         this.createTerminalDisplay();
         this.createCursor();
@@ -71,6 +302,9 @@ class SimpleTerminal {
         this.setupContentObserver(); // Nuovo observer per auto-scroll
         this.startPeriodicAIStatusCheck(); // Controllo periodico status AI
         this.initializePTY(); // Inizializza il PTY terminal
+        
+        // Non carichiamo le impostazioni all'avvio - le caricheremo quando necessario
+        console.log('Settings will be loaded when needed (e.g., when AI is used)');
     }
 
     async initializePTY() {
@@ -202,8 +436,8 @@ class SimpleTerminal {
     showPrompt() {
         // Prompt arricchito con cwd
         if (!this.cwd) {
-            if (window.electronAPI && window.electronAPI.getCwd) {
-                window.electronAPI.getCwd().then(cwd => {
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                window.__TAURI__.tauri.invoke('get_cwd').then(cwd => {
                     this.cwd = cwd;
                     this.renderPrompt();
                 });
@@ -468,22 +702,41 @@ class SimpleTerminal {
         this.setupConfigListeners();
 
         // Listener aggiornamento cwd
-        if (window.electronAPI && window.electronAPI.onCwdChanged) {
-            window.electronAPI.onCwdChanged((cwd) => {
-                this.cwd = cwd;
-                this.renderPrompt();
-            });
-        }
+            // CWD updates are handled through events in Tauri v2
+            // This will be implemented through the backend event system
     }
 
     setupConfigListeners() {
-        // Listener per modifiche configurazione
-        if (window.electronAPI) {
-            window.electronAPI.onSettingsChanged((event, newConfig) => {
-                console.log('Ricevute nuove impostazioni:', newConfig);
-                this.applySettings(newConfig);
-            });
-        }
+        // Ascolta eventi di aggiornamento impostazioni da Tauri e aggiorna lo status AI
+        const attach = async () => {
+            try {
+                // Prefer API event se disponibile, altrimenti import dinamico
+                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+                    await window.__TAURI__.event.listen('settings-updated', (evt) => {
+                        const payload = evt && (evt.payload || evt.detail || evt);
+                        if (payload && payload.ai) {
+                            // Usa la config fornita senza sovrascriverla con get_config
+                            this.updateAIStatus(payload.ai, true);
+                        }
+                    });
+                } else {
+                    try {
+                        const { listen } = await import('@tauri-apps/api/event');
+                        await listen('settings-updated', (evt) => {
+                            const payload = evt && (evt.payload || evt.detail || evt);
+                            if (payload && payload.ai) {
+                                this.updateAIStatus(payload.ai, true);
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Event API non disponibile per settings-updated:', e);
+                    }
+                }
+            } catch (e) {
+                console.warn('Impossibile attivare listener settings-updated:', e);
+            }
+        };
+        attach();
     }
 
     applySettings(config) {
@@ -510,7 +763,7 @@ class SimpleTerminal {
         }
     }
 
-    updateAIStatus(aiConfig) {
+    updateAIStatus(aiConfig, preferProvided = false) {
         try {
             console.log('Aggiornamento status AI:', aiConfig);
             
@@ -527,61 +780,88 @@ class SimpleTerminal {
             const providerNames = {
                 'gemini': 'Gemini',
                 'openai': 'OpenAI',
-                'lm-studio': 'LM Studio'
+                'lm-studio': 'LM Studio',
+                'ollama': 'Ollama',
+                'disabled': 'AI Off'
             };
             
             const providerName = providerNames[aiConfig.provider] || aiConfig.provider;
             aiProviderNameElement.textContent = providerName;
             
             // Test della connessione AI per aggiornare lo status
-            this.testAIConnectionStatus(aiConfig, aiStatusElement, aiStatusDot);
+            this.testAIConnectionStatus(aiConfig, aiStatusElement, aiStatusDot, preferProvided);
             
         } catch (error) {
             console.error('Error updating AI status:', error);
         }
     }
 
-    async testAIConnectionStatus(aiConfig, statusElement, statusDot) {
+    async testAIConnectionStatus(aiConfig, statusElement, statusDot, preferProvided = false) {
         try {
             // Imposta status di test (giallo/pulsante)
             statusElement.classList.remove('offline');
+            statusElement.classList.remove('online');
             statusDot.style.background = 'linear-gradient(135deg, #ffa502 0%, #ff6348 100%)';
             statusDot.style.boxShadow = '0 0 12px rgba(255, 165, 2, 0.6), 0 0 4px rgba(255, 165, 2, 0.8)';
+            statusDot.style.borderColor = '#ffa502';
             
             // Test della connessione
-            if (window.electronAPI && window.electronAPI.testAIConnection) {
-                const testResult = await window.electronAPI.testAIConnection(aiConfig.provider, aiConfig);
-                
-                if (testResult.success && testResult.response && 
-                    !testResult.response.includes('[AI] Errore') && 
-                    !testResult.response.includes('Error')) {
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                // Se non forzato, recupera una config fresca dal backend per evitare mismatch
+                let effectiveAIConfig = aiConfig;
+                if (!preferProvided) {
+                    try {
+                        const fresh = await window.__TAURI__.tauri.invoke('get_config');
+                        if (fresh && fresh.ai) effectiveAIConfig = fresh.ai;
+                    } catch (_) {}
+                }
+                // Se manca il provider ma c'è ollama, preferisci ollama
+                if (!effectiveAIConfig.provider && effectiveAIConfig.ollama) {
+                    effectiveAIConfig.provider = 'ollama';
+                }
+                // Nota: il comando Rust si aspetta la chiave 'ai_config'
+                let testResult = await window.__TAURI__.tauri.invoke('test_ai_connection', { provider: effectiveAIConfig.provider, ai_config: effectiveAIConfig });
+                // Normalizza eventuale risposta stringa
+                if (typeof testResult === 'string') {
+                    try { testResult = JSON.parse(testResult); } catch (_) { testResult = { success: false, error: testResult }; }
+                }
+                const responseText = (testResult && testResult.response) ? String(testResult.response) : '';
+                if (testResult && testResult.success === true) {
                     
                     // Connesso (verde)
                     statusElement.classList.remove('offline');
+                    statusElement.classList.add('online');
                     statusDot.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
                     statusDot.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.9), 0 0 4px rgba(16, 185, 129, 1)';
+                    statusDot.style.borderColor = '#10b981';
                     console.log('AI Status: Connesso');
                     
                 } else {
                     // Disconnesso (rosso)
+                    statusElement.classList.remove('online');
                     statusElement.classList.add('offline');
                     statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
                     statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
-                    console.log('AI Status: Disconnesso - ', testResult.error || 'Risposta non valida');
+                    statusDot.style.borderColor = '#ef4444';
+                    console.log('AI Status: Disconnesso - ', (testResult && (testResult.error || responseText)) || 'Risposta non valida');
                 }
             } else {
                 // API non disponibile (rosso)
+                statusElement.classList.remove('online');
                 statusElement.classList.add('offline');
                 statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
                 statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
+                statusDot.style.borderColor = '#ef4444';
                 console.log('AI Status: API non disponibile');
             }
             
         } catch (error) {
             // Errore di connessione (rosso)
+            statusElement.classList.remove('online');
             statusElement.classList.add('offline');
             statusDot.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
             statusDot.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.9), 0 0 4px rgba(239, 68, 68, 1)';
+            statusDot.style.borderColor = '#ef4444';
             console.error('AI Status: Errore nel test di connessione:', error);
         }
     }
@@ -589,8 +869,9 @@ class SimpleTerminal {
     async refreshAIStatus() {
         try {
             console.log('Refresh manuale dello status AI');
-            if (window.electronAPI && window.electronAPI.getConfig) {
-                const config = await window.electronAPI.getConfig();
+            const tauriApi = await this.getTauriAPI();
+            if (tauriApi && tauriApi.invoke) {
+                const config = await tauriApi.invoke('get_config');
                 if (config.ai) {
                     this.updateAIStatus(config.ai);
                 }
@@ -604,8 +885,8 @@ class SimpleTerminal {
         // Controlla lo status dell'AI ogni 30 secondi
         setInterval(async () => {
             try {
-                if (window.electronAPI && window.electronAPI.getConfig) {
-                    const config = await window.electronAPI.getConfig();
+                if (window.__TAURI__ && window.__TAURI__.tauri) {
+                    const config = await window.__TAURI__.tauri.invoke('get_config');
                     if (config.ai) {
                         const aiStatusElement = document.getElementById('ai-status');
                         const aiStatusDot = document.querySelector('.ai-status-dot');
@@ -797,8 +1078,8 @@ class SimpleTerminal {
 
     async loadInitialSettings() {
         try {
-            if (window.electronAPI && window.electronAPI.getConfig) {
-                const config = await window.electronAPI.getConfig();
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                const config = await window.__TAURI__.tauri.invoke('get_config');
                 console.log('Caricamento configurazione iniziale:', config);
                 this.applySettings(config);
             }
@@ -1369,7 +1650,7 @@ class SimpleTerminal {
             });
 
             // Esegui il comando con output in tempo reale
-            const result = await window.electronAPI.runCommand(command);
+            const result = await window.__TAURI__.tauri.invoke('run_command', { command: command });
             
             // Nascondi loading indicator
             this.hideLoadingIndicator();
@@ -1419,9 +1700,9 @@ class SimpleTerminal {
             this.addOutput(`⚡ Current mode: ${this.isPTYMode ? 'PTY' : 'TRADITIONAL'}`);
             
             // Ottieni lo status del PTY Manager
-            if (window.electronAPI && window.electronAPI.ptyGetSessions) {
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
                 try {
-                    const result = await window.electronAPI.ptyGetSessions();
+                    const result = await window.__TAURI__.tauri.invoke('pty_get_sessions');
                     if (result.success) {
                         this.addOutput(`📊 Active PTY sessions: ${result.sessions.length}`);
                         result.sessions.forEach(session => {
@@ -1457,7 +1738,7 @@ class SimpleTerminal {
                     // Aspetta un po' e poi mostra il buffer
                     setTimeout(async () => {
                         try {
-                            const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                            const result = await window.__TAURI__.tauri.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 });
                             this.addOutput(`📊 PTY buffer content: ${result.output || 'empty'}`);
                         } catch (error) {
                             this.addOutput(`❌ Error getting PTY output: ${error.message}`);
@@ -1473,7 +1754,7 @@ class SimpleTerminal {
             this.addOutput('🧪 Testing direct PTY output...');
             if (this.ptyTerminal && this.ptyTerminal.isActive) {
                 try {
-                    const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                    const result = await window.__TAURI__.tauri.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 });
                     this.addOutput(`📊 Direct PTY output: "${result.output || 'empty'}"`);
                     this.addOutput(`📊 Output length: ${result.output ? result.output.length : 0} characters`);
                 } catch (error) {
@@ -1487,7 +1768,7 @@ class SimpleTerminal {
             if (this.ptyTerminal && this.ptyTerminal.isActive) {
                 try {
                     // Forza la lettura dell'output
-                    const result = await window.electronAPI.ptyGetOutput(this.ptyTerminal.sessionId, 0);
+                    const result = await window.__TAURI__.tauri.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 });
                     if (result.output && result.output.length > 0) {
                         this.addOutput('📊 PTY has output, displaying it:');
                         this.addOutput(result.output);
@@ -1504,24 +1785,24 @@ class SimpleTerminal {
             this.addOutput('🧪 Testing PTY API directly...');
             try {
                 // Test creazione sessione
-                const createResult = await window.electronAPI.ptyCreateSession();
+                const createResult = await window.__TAURI__.tauri.invoke('pty_create_session');
                 this.addOutput(`📊 Create session result: ${JSON.stringify(createResult)}`);
                 
                 if (createResult.success) {
                     const sessionId = createResult.sessionId;
                     
                     // Test invio comando
-                    const writeResult = await window.electronAPI.ptyWrite(sessionId, 'echo "API test"\r');
+                    const writeResult = await window.__TAURI__.tauri.invoke('pty_write', { session_id: sessionId, input: 'echo "API test"\r' });
                     this.addOutput(`📊 Write result: ${JSON.stringify(writeResult)}`);
                     
                     // Test lettura output dopo delay
                     setTimeout(async () => {
                         try {
-                            const outputResult = await window.electronAPI.ptyGetOutput(sessionId, 0);
+                            const outputResult = await window.__TAURI__.tauri.invoke('pty_get_output', { session_id: sessionId, offset: 0 });
                             this.addOutput(`📊 Output result: ${JSON.stringify(outputResult)}`);
                             
                             // Cleanup
-                            await window.electronAPI.ptyKill(sessionId);
+                            await window.__TAURI__.tauri.invoke('pty_kill', { session_id: sessionId });
                         } catch (error) {
                             this.addOutput(`❌ Error in delayed test: ${error.message}`);
                         }
@@ -1603,8 +1884,13 @@ class SimpleTerminal {
             // Gestione speciale per comandi sudo
             await this.handleSudoCommand(command);
         } else if (command) {
-            // Prova a eseguire il comando reale
-            await this.executeCommand(command);
+            // Esegui il comando tramite il terminale Rust
+            try {
+                const result = await this.executeCommandViaRust(command);
+                this.addOutput(result);
+            } catch (error) {
+                this.addOutput('❌ Error executing command: ' + error.message);
+            }
         }
     }
 
@@ -1614,12 +1900,12 @@ class SimpleTerminal {
         
         try {
             // Usa il sistema sudo sicuro dell'app
-            if (window.electronAPI && window.electronAPI.runSudoCommand) {
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
                 // Richiedi la password in modo sicuro
                 const password = await this.promptSecurePassword();
                 if (password) {
                     this.addOutput('🔄 Executing sudo command...');
-                    const result = await window.electronAPI.runSudoCommand(command, password);
+                    const result = await window.__TAURI__.tauri.invoke('run_sudo_command', { command: command, password: password });
                     this.addOutput(result);
                 } else {
                     this.addOutput('❌ Password not provided, command cancelled');
@@ -1919,8 +2205,8 @@ class SimpleTerminal {
                 if (needsLoading) this.hideLoadingIndicator();
                 this.addOutput(`🔄 Executing installer with interactive support...`);
                 
-                if (window.electronAPI && window.electronAPI.runInteractiveCommand) {
-                    const result = await window.electronAPI.runInteractiveCommand(command);
+                if (window.__TAURI__ && window.__TAURI__.tauri) {
+                    const result = await window.__TAURI__.tauri.invoke('run_interactive_command', { command: command });
                     this.addOutput(result);
                 } else {
                     this.addOutput('❌ Interactive command support not available');
@@ -1929,8 +2215,8 @@ class SimpleTerminal {
             }
 
             // Usa l'API per eseguire comandi reali
-            if (window.electronAPI && window.electronAPI.runCommand) {
-                const result = await window.electronAPI.runCommand(command);
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                const result = await window.__TAURI__.tauri.invoke('run_command', { command: command });
                 
                 // Nascondi loading con logica intelligente
                 if (needsLoading) {
@@ -1991,7 +2277,7 @@ class SimpleTerminal {
             
             this.addOutput('🔄 Executing sudo command...');
             console.log('Frontend: Calling runSudoCommand with:', { command, passwordLength: password ? password.length : 0 });
-            const result = await window.electronAPI.runSudoCommand(command, password);
+            const result = await window.__TAURI__.tauri.invoke('run_sudo_command', { command: command, password: password });
             console.log('Frontend: Received result:', result);
             
             // Logica intelligente per nascondere il loading
@@ -2297,8 +2583,58 @@ AI Commands:
                 }
             }, 3000));
             
-            // Usa il nuovo AI Agent con integrazione web per gestire la richiesta
-            const result = await window.electronAPI.aiAgentRequestWithWeb(question, this.getTerminalContext(), isAutoExecute);
+            // Prova prima l'API Tauri, poi usa l'approccio alternativo
+            const tauriApi = await this.getTauriAPI();
+            
+            let result;
+            if (tauriApi && tauriApi.invoke) {
+                // Usa l'API Tauri se disponibile
+                console.log('Using Tauri API for AI command');
+
+                // Garantisci di avere la config AI aggiornata dal backend
+                let effectiveAIConfig = this.aiSettings || {};
+                try {
+                    const fresh = await tauriApi.invoke('get_config');
+                    if (fresh && fresh.ai) {
+                        effectiveAIConfig = fresh.ai;
+                    } else if (!this.aiSettings || Object.keys(this.aiSettings).length === 0) {
+                        // Fallback: carica dal backend se vuoto
+                        console.log('Loading AI settings for AI command...');
+                        await this.loadSettingsFromBackend();
+                        effectiveAIConfig = this.aiSettings || {};
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch fresh config, using cached aiSettings');
+                }
+
+                // Se manca il provider ma è presente la sezione ollama, preferisci ollama
+                if (!effectiveAIConfig.provider && effectiveAIConfig.ollama) {
+                    effectiveAIConfig.provider = 'ollama';
+                }
+                console.log('AI Settings being sent:', effectiveAIConfig);
+
+                result = await tauriApi.invoke('ai_agent_with_web', { 
+                    prompt: question, 
+                    context: this.getTerminalContext(), 
+                    // Invia entrambe le varianti per compatibilità Tauri v2
+                    autoExecute: isAutoExecute,
+                    auto_execute: isAutoExecute,
+                    // Compatibilità: il comando Rust usa _ai_config; inviamo tutte le varianti
+                    aiConfig: effectiveAIConfig || null,
+                    ai_config: effectiveAIConfig || null,
+                    _ai_config: effectiveAIConfig || null
+                });
+            } else {
+                // Usa l'approccio alternativo se l'API Tauri non è disponibile
+                console.log('Tauri API not available, using alternative approach');
+                result = await this.executeAICommandDirect(command);
+                
+                // Wrappa il risultato in un formato compatibile
+                result = {
+                    type: 'ai_response',
+                    response: result
+                };
+            }
             
             // Pulisci tutti i timeout
             progressTimeouts.forEach(timeout => clearTimeout(timeout));
@@ -2334,73 +2670,37 @@ AI Commands:
                     this.addToAIConversation('ai', result.response, null, null, 'web_enhanced');
                     break;
                     
-                case 'local_only':
-                    // Mostra brevemente che l'AI ha analizzato ma non ha cercato online
-                    if (thinkingMessageElement && thinkingMessageElement.parentNode) {
-                        thinkingMessageElement.textContent = '🧠 Using local knowledge...';
-                        thinkingMessageElement.className = 'ai-thinking';
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-                    
-                    this.addAIOutput('🤖 ' + result.response);
-                    this.addAIOutput('ℹ️ Risposta basata su conoscenza locale (confidenza: ' + (result.confidence * 100).toFixed(0) + '%)');
-                    this.addAIOutput('💡 L\'AI ha fornito una risposta basata sulla sua conoscenza esistente');
-                    this.addToAIConversation('ai', result.response);
+                case 'executed':
+                    this.addAIOutput('🚀 ' + result.response);
+                    this.addAIOutput('✅ Comando eseguito: ' + result.command);
+                    this.addAIOutput('📊 Output: ' + result.output);
+                    this.addToAIConversation('ai', result.response, result.command, result.output, 'executed');
                     break;
                     
-                case 'fallback':
-                    // Mostra brevemente che l'AI ha tentato di cercare online
-                    const fallbackLoadingMessage = this.addOutput('🌐 Attempting to look on internet...');
-                    fallbackLoadingMessage.className = 'web-search-loading';
-                    
-                    // Simula un breve tentativo
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    fallbackLoadingMessage.textContent = '⚠️ Web search failed, using local knowledge...';
-                    
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                    fallbackLoadingMessage.remove();
-                    
-                    this.addAIOutput('🤖 ' + result.response);
-                    this.addAIOutput('⚠️ Ricerca web fallita, usando risposta locale');
-                    this.addAIOutput('💡 L\'AI ha tentato di cercare online ma ha dovuto usare la sua conoscenza locale');
-                    this.addToAIConversation('ai', result.response);
-                    break;
-                    
-                case 'informational':
-                    this.addAIOutput('🤖 ' + result.response);
-                    this.addToAIConversation('ai', result.response);
-                    if (result.iterations > 1) {
-                        this.addAIOutput(`ℹ️ Elaborato in ${result.iterations} iterazioni`);
+                case 'ai_response':
+                default: {
+                    const aiText = typeof result.response === 'string' ? result.response : (result && result.response ? String(result.response) : '');
+                    this.addAIOutput('🤖 ' + aiText);
+                    this.addToAIConversation('ai', aiText, null, null, 'ai_response');
+
+                    // Se NON è auto-exec, prova a estrarre un comando e chiedi conferma per l'esecuzione
+                    if (!isAutoExecute) {
+                        const suggested = this.extractCommandFromAIResponse(aiText);
+                        if (suggested) {
+                            try {
+                                const toRun = await this.showInlineAIApproval(suggested);
+                                if (toRun && typeof toRun === 'string' && toRun.trim()) {
+                                    await this.executeApprovedCommand(toRun.trim());
+                                } else if (toRun === false || toRun === null) {
+                                    this.addOutput('🛑 Esecuzione annullata');
+                                }
+                            } catch (e) {
+                                console.warn('Approval flow error:', e);
+                            }
+                        }
                     }
                     break;
-                    
-                case 'suggestion':
-                    this.addAIOutput('🤖 ' + result.response);
-                    this.addToAIConversation('ai', result.response, result.command);
-                    this.suggestCommand(result.command);
-                    break;
-                    
-                case 'success':
-                    this.addAIOutput('✅ ' + result.response);
-                    this.addAIOutput('📋 Comando finale: ' + result.finalCommand);
-                    this.addAIOutput('📤 Risultato:\n' + result.finalResult.output);
-                    this.addAIOutput(`ℹ️ Completato in ${result.iterations} iterazioni`);
-                    this.addToAIConversation('ai', result.response, result.finalCommand, result.finalResult.output);
-                    this.showExecutionHistory(result.history);
-                    break;
-                    
-                case 'max_iterations':
-                    this.addAIOutput('⚠️ ' + result.response);
-                    this.addAIOutput('📤 Ultimo risultato:\n' + result.finalResult.output);
-                    this.addAIOutput(`ℹ️ Raggiunto limite di ${result.iterations} iterazioni`);
-                    this.addToAIConversation('ai', result.response, null, result.finalResult.output);
-                    this.showExecutionHistory(result.history);
-                    break;
-                    
-                default:
-                    this.addAIOutput('❓ Tipo di risposta AI non riconosciuto: ' + result.type);
-                    this.addToAIConversation('ai', 'Errore: tipo risposta non riconosciuto');
-                    break;
+                }
             }
             
         } catch (error) {
@@ -2417,10 +2717,290 @@ AI Commands:
             }
             
             console.error('AI Agent error:', error);
-            const errorMsg = 'AI Agent Error: ' + error.message;
+            const errorText = typeof error === 'string'
+                ? error
+                : (error && (error.message || error.error || error.code))
+                    ? (error.message || error.error || String(error.code))
+                    : (function(){ try { return JSON.stringify(error); } catch { return String(error); } })();
+            const errorMsg = 'AI Agent Error: ' + (errorText || 'unknown error');
             this.addAIOutput('❌ ' + errorMsg);
             this.addToAIConversation('ai', errorMsg);
         }
+    }
+
+    // Estrae un comando shell da una risposta AI (cerca blocchi ```bash|sh|zsh o la prima riga plausibile)
+    extractCommandFromAIResponse(text) {
+        if (!text || typeof text !== 'string') return null;
+        try {
+            // Funzione di sanificazione di una riga candidata
+            const sanitize = (s) => {
+                if (!s) return '';
+                let v = String(s).trim();
+                // Rimuovi prompt e marker di lista
+                v = v.replace(/^\$\s+/, '');
+                v = v.replace(/^\s*(?:[-*•]|\d+\.)\s+/, '');
+                // Rimuovi backticks di wrapping
+                v = v.replace(/^`+|`+$/g, '');
+                // Se l'intera riga è racchiusa tra lo stesso tipo di quote, rimuovile (mantieni quote interne)
+                const wrap = v.match(/^(["'])([\s\S]*)\1$/);
+                if (wrap) {
+                    v = wrap[2];
+                }
+                // Rimuovi punteggiatura finale isolata (non rimuovere quote)
+                v = v.replace(/[\s]*[.,;:!?)]$/g, '');
+                // Collassa spazi
+                v = v.replace(/\s+/g, ' ').trim();
+                return v;
+            };
+
+            // Estrae riferimenti a variabili tipo $VAR o ${VAR}
+            const getVarRefs = (s) => {
+                const refs = new Set();
+                if (!s) return refs;
+                const re = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
+                let m;
+                while ((m = re.exec(s)) !== null) {
+                    const name = m[1] || m[2];
+                    if (name) refs.add(name);
+                }
+                return refs;
+            };
+
+            // Parsing assegnazioni (VAR=..., export VAR=...)
+            const parseAssignments = (lines) => {
+                const map = new Map();
+                const ordered = [];
+                const assignRe = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+                for (const raw of lines) {
+                    const line = String(raw || '').trim();
+                    if (!line || line.startsWith('#')) continue;
+                    const m = line.match(assignRe);
+                    if (m) {
+                        const name = m[1];
+                        let val = m[2].trim();
+                        // Mantieni virgolette come nel testo per preservare spazi
+                        ordered.push({ name, value: val, line: raw });
+                        if (!map.has(name)) map.set(name, val);
+                    }
+                }
+                return { map, ordered };
+            };
+
+            // Verifica variabili non definite (ignora alcune standard di ambiente)
+            const hasUndefinedVars = (s, assignsMap) => {
+                const builtins = new Set(['HOME','USER','PWD','PATH','SHELL','TMPDIR','TMP','LOGNAME','LANG','LC_ALL']);
+                const refs = getVarRefs(s);
+                const missing = [];
+                for (const r of refs) {
+                    if (builtins.has(r)) continue;
+                    if (!assignsMap.has(r)) missing.push(r);
+                }
+                return { missing, refs };
+            };
+
+            // Anteponi le assegnazioni necessarie per costruire un one-liner eseguibile
+            const buildComposite = (cmd, assignsOrdered, needed) => {
+                if (!needed || needed.length === 0) return cmd;
+                const parts = [];
+                for (const a of assignsOrdered) {
+                    if (needed.includes(a.name)) parts.push(`${a.name}=${a.value}`);
+                }
+                if (parts.length > 0) return parts.join('; ') + '; ' + cmd;
+                return cmd;
+            };
+
+            // Evita righe chiaramente non comando
+            const isPlausible = (s) => {
+                if (!s) return false;
+                const badStarts = /^(error:|ai agent error:|nota:|note:)/i;
+                if (badStarts.test(s)) return false;
+                if (/^\d+[.)]?$/.test(s)) return false; // solo un numero tipo "3." 
+                // Comandi consentiti (con o senza sudo)
+                const allowed = /^(?:sudo\s+)?(mkdir|ls|grep|cat|echo|touch|rm|cp|mv|du|df|uname|whoami|sysctl|sw_vers|pmset|ifconfig|ipconfig|ps|top|htop|btop|pwd|cd|chmod|chown|brew|port|apt|dnf|pacman|git|curl|wget|tar|zip|unzip|python|node|npm|pnpm|yarn|docker|kubectl)\b/;
+                return allowed.test(s);
+            };
+
+            // Cerca un blocco di codice con linguaggio shell
+            const codeBlockRegex = /```(bash|sh|zsh)?\n([\s\S]*?)```/i;
+            const m = text.match(codeBlockRegex);
+            let candidate = null;
+            if (m && m[2]) {
+                const rawLines = m[2].split(/\r?\n/);
+                const lines = rawLines.map(l => sanitize(l));
+                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawLines);
+                // Prova prima a prendere una riga plausibile che non richiede variabili non definite
+                for (const l of lines) {
+                    if (!l || l.startsWith('#') || !isPlausible(l)) continue;
+                    const { missing, refs } = hasUndefinedVars(l, assignsMap);
+                    if (missing.length === 0) {
+                        candidate = buildComposite(l, assignsOrdered, Array.from(refs));
+                        break;
+                    }
+                }
+                // Se non trovato, ma il blocco è breve, combina assegnazioni + comando plausibile
+                if (!candidate && lines.filter(Boolean).length <= 4) {
+                    const plausible = lines.find(l => isPlausible(l));
+                    if (plausible) {
+                        const { missing, refs } = hasUndefinedVars(plausible, assignsMap);
+                        if (missing.length === 0 && assignsOrdered.length > 0) {
+                            candidate = buildComposite(plausible, assignsOrdered, Array.from(refs));
+                        }
+                    }
+                }
+            }
+            // Fallback: prima riga che sembra un comando (inizia con $ o contiene spazi ed è priva di punteggio finale)
+            if (!candidate) {
+                const rawAll = text.split(/\r?\n/);
+                const lines = rawAll.map(l => sanitize(l));
+                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
+
+                let picked = null;
+                for (let l of lines) {
+                    if (!l) continue;
+                    if (l.startsWith('$ ')) l = l.replace(/^\$\s+/, '');
+                    if (!isPlausible(l)) continue;
+                    const { missing, refs } = hasUndefinedVars(l, assignsMap);
+                    if (missing.length === 0) {
+                        picked = buildComposite(l, assignsOrdered, Array.from(refs));
+                        break;
+                    }
+                }
+                candidate = picked || null;
+            }
+            // Fallback: inline code `...` che contiene un comando plausibile
+            if (!candidate) {
+                const inline = Array.from(text.matchAll(/`([^`]+)`/g)).map(m => sanitize(m[1]));
+                const rawAll = text.split(/\r?\n/);
+                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
+                let picked = null;
+                for (const snippet of inline) {
+                    if (!isPlausible(snippet)) continue;
+                    const { missing, refs } = hasUndefinedVars(snippet, assignsMap);
+                    if (missing.length === 0) {
+                        picked = buildComposite(snippet, assignsOrdered, Array.from(refs));
+                        break;
+                    }
+                }
+                candidate = picked || null;
+            }
+            // Ultimo fallback: pattern semplice tipo mkdir/ls/cat/etc.
+            if (!candidate) {
+                const simple = text.match(/\b(mkdir|ls|grep|cat|echo|touch|rm|cp|mv|du|df|uname|whoami|sysctl|sw_vers|pmset|ifconfig|ipconfig|ps|top|htop|btop|pwd|cd|chmod|chown|brew|port|apt|dnf|pacman|git|curl|wget|tar|zip|unzip|python|node|npm|pnpm|yarn|docker|kubectl)\b[^\n]*/i);
+                if (simple) {
+                    const rawAll = text.split(/\r?\n/);
+                    const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
+                    let line = sanitize(simple[0]);
+                    const { missing, refs } = hasUndefinedVars(line, assignsMap);
+                    if (missing.length === 0) {
+                        candidate = buildComposite(line, assignsOrdered, Array.from(refs));
+                    }
+                }
+            }
+            // Evita di prendere blocchi multi-comando con ```
+            if (candidate) {
+                // rimuovi backticks e prompt, preserva quote interne
+                candidate = sanitize(candidate).replace(/```/g, '').trim();
+                // Se è nel formato sh -c "..." o '...', estrai il contenuto
+                const shWrap = candidate.match(/^sh\s+-c\s+(["'])([\s\S]+)\1$/);
+                if (shWrap) {
+                    candidate = shWrap[2].trim();
+                }
+                // Ultima protezione: se rimangono variabili non definite, scarta
+                const rawAll = text.split(/\r?\n/);
+                const { map: finalAssigns } = parseAssignments(rawAll);
+                const { missing } = hasUndefinedVars(candidate, finalAssigns);
+                if (missing.length > 0) return null;
+            }
+            return candidate || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // Mostra un piccolo overlay di approvazione per eseguire il comando suggerito
+    async showAIExecutionApproval(command) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;';
+
+            const modal = document.createElement('div');
+            modal.style.cssText = 'background:#1f2430;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:12px;min-width:480px;max-width:80vw;box-shadow:0 12px 32px rgba(0,0,0,0.5);';
+            modal.innerHTML = `
+                <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08);font-weight:600;">Confermi l'esecuzione del comando?</div>
+                <div style="padding:16px 20px;">
+                    <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">Puoi modificare il comando prima di eseguirlo:</div>
+                    <textarea id="ai-cmd" rows="2" style="width:100%;margin:0;padding:12px;background:#11141a;border:1px solid rgba(255,255,255,0.12);border-radius:8px;white-space:pre-wrap;word-break:break-all;color:#e5e7eb;font-family:SF Mono,Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.4;">${this.escapeHtml(command)}</textarea>
+                    <div style="margin-top:10px;font-size:12px;color:#a0aec0;">Controlla il comando proposto dall'AI e scegli se eseguirlo.</div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">
+                    <button id="ai-copy" style="background:#374151;color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;">Copia</button>
+                    <button id="ai-cancel" style="background:#4b5563;color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;">Annulla</button>
+                    <button id="ai-run" style="background:#10b981;color:#0b1220;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600;">Esegui</button>
+                </div>
+            `;
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            const cleanup = () => { try { document.body.removeChild(overlay); } catch(_){} };
+            modal.querySelector('#ai-cancel').onclick = () => { cleanup(); resolve(null); };
+            modal.querySelector('#ai-run').onclick = () => { const val = modal.querySelector('#ai-cmd').value; cleanup(); resolve(val); };
+            modal.querySelector('#ai-copy').onclick = async () => {
+                try { await navigator.clipboard.writeText(modal.querySelector('#ai-cmd').value || command); } catch(_) {}
+            };
+        });
+    }
+
+    async executeApprovedCommand(command) {
+        try {
+            const tauriApi = await this.getTauriAPI();
+            if (!tauriApi || !tauriApi.invoke) throw new Error('Tauri API non disponibile');
+            this.addOutput('▶️ ' + command);
+            const output = await tauriApi.invoke('run_command', { command });
+            if (output) {
+                this.addOutput(output);
+            }
+        } catch (e) {
+            this.addOutput('❌ Errore esecuzione: ' + (e && (e.message || e.error) || String(e)));
+        }
+    }
+
+    escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+
+    // UI di approvazione inline dentro il terminale
+    async showInlineAIApproval(command) {
+        return new Promise((resolve) => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.03);';
+            wrap.className = 'ai-approval-inline';
+            wrap.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#a0aec0;font-size:12px;">
+                    <span>Confermi l'esecuzione del comando suggerito?</span>
+                </div>
+                <textarea rows="2" style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:#0f1218;color:#e5e7eb;font-family:SF Mono,Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.4;">${this.escapeHtml(command)}</textarea>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+                    <button data-act="copy" style="background:#374151;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">Copia</button>
+                    <button data-act="cancel" style="background:#4b5563;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">Annulla</button>
+                    <button data-act="run" style="background:#10b981;color:#0b1220;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600;">Esegui</button>
+                </div>
+            `;
+            // Append inline al terminale e scrolla
+            if (this.outputElement) {
+                this.outputElement.appendChild(wrap);
+                try { wrap.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(_){}
+            } else {
+                document.body.appendChild(wrap);
+            }
+
+            const textarea = wrap.querySelector('textarea');
+            const on = (sel, handler) => { const btn = wrap.querySelector(sel); if (btn) btn.addEventListener('click', handler); };
+            on('button[data-act="cancel"]', () => { cleanup(); resolve(null); });
+            on('button[data-act="run"]', () => { const val = textarea.value; cleanup(); resolve(val); });
+            on('button[data-act="copy"]', async () => { try { await navigator.clipboard.writeText(textarea.value); } catch(_){} });
+
+            const cleanup = () => { try { wrap.remove(); } catch(_){} };
+        });
     }
 
     getTerminalContext() {
@@ -2497,8 +3077,8 @@ AI Commands:
 
     async saveToFile(filename, content) {
         try {
-            if (window.electronAPI && window.electronAPI.saveToDownloads) {
-                const result = await window.electronAPI.saveToDownloads(filename, content);
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                const result = await window.__TAURI__.tauri.invoke('save_to_downloads', { filename: filename, content: content });
                 if (result.success) {
                     this.addOutput(`📁 File salvato in: ${result.path}`);
                 } else {
@@ -3036,12 +3616,54 @@ AI Commands:
         document.head.appendChild(style);
     }
 
-    openSettings() {
-        // Chiama l'API per aprire le impostazioni
-        if (window.electronAPI && window.electronAPI.openSettings) {
-            window.electronAPI.openSettings();
-        } else {
-            this.addOutput('⚙️ Settings panel will open soon...');
+    async openSettings() {
+        console.log('=== DEBUG: openSettings called ===');
+        
+        try {
+            // In Tauri v2, proviamo diversi approcci per accedere all'API
+            let tauriApi = null;
+            
+            // Prova window.__TAURI__
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                tauriApi = window.__TAURI__.tauri;
+                console.log('✅ Found Tauri API via window.__TAURI__');
+            }
+            // Prova window.__TAURI_INTERNALS__
+            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                tauriApi = window.__TAURI_INTERNALS__;
+                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
+            }
+            // Prova window.tauri
+            else if (window.tauri && window.tauri.invoke) {
+                tauriApi = window.tauri;
+                console.log('✅ Found Tauri API via window.tauri');
+            }
+            // Prova a importare dinamicamente
+            else {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    tauriApi = { invoke };
+                    console.log('✅ Found Tauri API via dynamic import');
+                } catch (importError) {
+                    console.log('❌ Could not import Tauri API:', importError);
+                }
+            }
+            
+            if (tauriApi && tauriApi.invoke) {
+                console.log('✅ Tauri API is available, calling open_settings command');
+                this.addOutput('🔄 Opening settings panel...');
+                
+                const result = await tauriApi.invoke('open_settings');
+                console.log('✅ open_settings command completed successfully, result:', result);
+                this.addOutput('✅ Settings panel opened successfully!');
+            } else {
+                console.log('❌ Tauri API not available');
+                console.log('Available window properties:', Object.keys(window).filter(key => key.includes('tauri') || key.includes('TAURI')));
+                this.addOutput('⚙️ Settings panel will open soon... (Tauri API not available)');
+            }
+        } catch (error) {
+            console.error('❌ Error calling open_settings:', error);
+            this.addOutput('❌ Error opening settings: ' + error.message);
         }
     }
 
@@ -3109,8 +3731,8 @@ AI Commands:
         // Metodo 1: Non-interactive
         this.addOutput('📋 Method 1: Non-interactive installation...');
         try {
-            if (window.electronAPI && window.electronAPI.runCommand) {
-                const result1 = await window.electronAPI.runCommand('curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | NONINTERACTIVE=1 bash');
+            if (window.__TAURI__ && window.__TAURI__.tauri) {
+                const result1 = await window.__TAURI__.tauri.invoke('run_command', { command: 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | NONINTERACTIVE=1 bash' });
                 
                 if (result1.includes('[Success]') || result1.includes('Installation successful')) {
                     this.addOutput('✅ Non-interactive installation succeeded!');

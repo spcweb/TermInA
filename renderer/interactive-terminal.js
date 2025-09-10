@@ -35,10 +35,9 @@ class InteractiveTerminal {
     }
 
     initializeIPC() {
-        // Ascolta per aprire il terminale interattivo
-        window.electronAPI.onOpenInteractiveTerminal((data) => {
-            this.openTerminal(data.command, data.cwd);
-        });
+        // In Tauri v2, gli eventi vengono gestiti diversamente
+        // Per ora, rimuoviamo questa funzionalità che non è supportata
+        console.log('Interactive terminal IPC initialized (Tauri v2)');
     }
 
     async openTerminal(command, cwd) {
@@ -53,7 +52,7 @@ class InteractiveTerminal {
             console.log('Container shown, setting up terminal...');
             
             // Crea una sessione PTY per il comando interattivo
-            const result = await window.electronAPI.createInteractiveSession(command, cwd);
+            const result = await window.__TAURI__.createInteractiveSession(command, cwd);
             console.log('Session creation result:', result);
             
             if (!result.success) {
@@ -67,7 +66,7 @@ class InteractiveTerminal {
                 
                 // Imposta il callback per ricevere dati in tempo reale
                 console.log(`DEBUG: Setting up callback for session ${this.currentSessionId}`);
-                const callbackResult = await window.electronAPI.setupSessionCallback(this.currentSessionId);
+                const callbackResult = await window.__TAURI__.setupSessionCallback(this.currentSessionId);
                 console.log('DEBUG: Session callback setup result:', callbackResult);
                 
                 this.setupTerminal();
@@ -241,7 +240,7 @@ class InteractiveTerminal {
         this.terminal.onData((data) => {
             console.log('Terminal input received:', data);
             if (this.currentSessionId) {
-                window.electronAPI.ptyWrite(this.currentSessionId, data);
+                window.__TAURI__.ptyWrite(this.currentSessionId, data);
             }
         });
 
@@ -253,7 +252,7 @@ class InteractiveTerminal {
                 const rows = this.terminal.rows;
                 if (cols && rows) {
                     console.log(`Sending resize to backend: ${cols}x${rows}`);
-                    window.electronAPI.ptyResize(this.currentSessionId, cols, rows);
+                    window.__TAURI__.ptyResize(this.currentSessionId, cols, rows);
                 }
             } catch (error) {
                 console.warn('Failed to send resize to backend:', error);
@@ -282,7 +281,7 @@ class InteractiveTerminal {
 
         // Imposta il listener per i dati in tempo reale
         console.log(`DEBUG: Setting up data listener for session ${this.currentSessionId}`);
-        window.electronAPI.onSessionData((data) => {
+        window.__TAURI__.onSessionData((data) => {
             console.log(`DEBUG: Received session data event:`, { sessionId: data.sessionId, currentSessionId: this.currentSessionId });
             if (data.sessionId === this.currentSessionId) {
                 console.log(`DEBUG: Writing data to terminal for session ${data.sessionId}:`, data.data.substring(0, 200) + (data.data.length > 200 ? '...' : ''));
@@ -339,7 +338,7 @@ class InteractiveTerminal {
     closeTerminal() {
         // Chiudi la sessione PTY se attiva
         if (this.currentSessionId) {
-            window.electronAPI.closeInteractiveSession(this.currentSessionId);
+            window.__TAURI__.closeInteractiveSession(this.currentSessionId);
             this.currentSessionId = null;
         }
         

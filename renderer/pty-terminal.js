@@ -22,7 +22,7 @@ class PTYTerminal {
             }
 
             console.log('PTY starting new session...');
-            const result = await window.electronAPI.ptyCreateSession();
+            const result = await window.__TAURI__.tauri.invoke('pty_create_session');
             console.log('PTY create session result:', result);
             if (result.success) {
                 this.sessionId = result.sessionId;
@@ -44,7 +44,7 @@ class PTYTerminal {
         try {
             if (this.sessionId && this.isActive) {
                 console.log(`PTY stopping session ${this.sessionId}`);
-                await window.electronAPI.ptyKill(this.sessionId);
+                await window.__TAURI__.tauri.invoke('pty_kill', { session_id: this.sessionId });
                 this.stopDataPolling();
                 this.isActive = false;
                 this.sessionId = null;
@@ -70,7 +70,7 @@ class PTYTerminal {
 
             try {
                 // Usa l'output immediato per una risposta più veloce
-                const result = await window.electronAPI.ptyGetImmediateOutput(this.sessionId, this.lastOutputTimestamp);
+                const result = await window.__TAURI__.tauri.invoke('pty_get_immediate_output', { session_id: this.sessionId, timestamp: this.lastOutputTimestamp });
                 if (result.success && result.hasNewData && result.output) {
                     const newData = result.output;
                     if (newData.length > 0) {
@@ -108,7 +108,7 @@ class PTYTerminal {
         if (this.sessionId) {
             try {
                 console.log(`PTYTerminal: Closing session ${this.sessionId}`);
-                await window.electronAPI.ptyClose(this.sessionId);
+                await window.__TAURI__.tauri.invoke('pty_close', { session_id: this.sessionId });
                 this.sessionId = null;
                 this.isActive = false;
                 console.log('PTYTerminal: Session closed');
@@ -220,7 +220,7 @@ class PTYTerminal {
             this.currentCommand = command;
             this.isExecuting = true;
             console.log(`PTY sending command: ${command}`);
-            const result = await window.electronAPI.ptyWrite(this.sessionId, command + '\n');
+            const result = await window.__TAURI__.tauri.invoke('pty_write', { session_id: this.sessionId, input: command + '\n' });
             console.log(`PTY command send result:`, result);
             return result.success;
         } catch (error) {
@@ -235,7 +235,7 @@ class PTYTerminal {
         }
 
         try {
-            const result = await window.electronAPI.ptyWrite(this.sessionId, input);
+            const result = await window.__TAURI__.tauri.invoke('pty_write', { session_id: this.sessionId, input: input });
             return result.success;
         } catch (error) {
             console.error('Error sending input to PTY:', error);
@@ -289,7 +289,7 @@ class PTYTerminal {
         }
 
         try {
-            const result = await window.electronAPI.ptyClear(this.sessionId);
+            const result = await window.__TAURI__.tauri.invoke('pty_clear', { session_id: this.sessionId });
             if (result.success) {
                 this.outputBuffer = '';
                 this.lastOutputIndex = 0;
@@ -308,7 +308,7 @@ class PTYTerminal {
         }
 
         try {
-            const result = await window.electronAPI.ptyResize(this.sessionId, cols, rows);
+            const result = await window.__TAURI__.tauri.invoke('pty_resize', { session_id: this.sessionId, cols: cols, rows: rows });
             return result.success;
         } catch (error) {
             console.error('Error resizing PTY:', error);
