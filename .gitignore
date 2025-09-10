@@ -73,3 +73,62 @@ Thumbs.db
 
 # Logs
 *.log
+
+# --- Rust / Cargo ---
+# Directory di build generate da Cargo (compilati ed eseguibili)
+**/target/
+
+# Backup temporanei generati da rustfmt
+**/*.rs.bk
+
+# File di debug/simboli (piattaforme varie)
+**/*.pdb
+**/*.dSYM/
+**/*.dylib
+**/*.dll
+**/*.so
+
+# Profili di coverage
+**/*.profraw
+**/*.gcno
+**/*.gcda
+
+# Output generati (schema o artefatti) in progetti Rust/Tauri
+src-tauri/gen/schemas/
+
+# --- Node/JS toolchains (cache e artefatti rigenerabili) ---
+# PNPM/Yarn/NPM caches
+**/.pnpm-store/
+**/.npm/
+.pnpm-debug.log*
+.npmrc.local
+
+# Yarn Berry (v2+) cache e PnP
+.pnp.*
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn/patches/
+.yarn/releases/
+
+# Tool caches comuni
+**/.cache/
+**/.vite/
+.parcel-cache/
+.turbo/
+
+# Framework output (rigenerabile)
+.next/
+.nuxt/
+
+# Test/coverage/report
+coverage/
+playwright-report/
+test-results/
+.playwright/
+.eslintcache
+.stylelintcache
+
+# TypeScript
+*.tsbuildinfo
