@@ -251,7 +251,7 @@ class AIAgent {
         const adapted = this.adaptCommandToPlatform(aiResponse.command);
         return {
           type: 'suggestion',
-          response: aiResponse.response + (adapted !== aiResponse.command ? ' [Adattato alla piattaforma]' : ''),
+          response: adapted, // Mostra solo il comando, senza spiegazioni
           command: adapted,
           iterations: this.currentIteration,
           history: this.executionHistory
@@ -354,11 +354,15 @@ class AIAgent {
 
 Analizza la richiesta e determina se è necessario eseguire un comando o se è una richiesta informativa.
 
+IMPORTANTE: 
+- Se l'utente chiede un COMANDO SPECIFICO (es. "dammi il comando per...", "come faccio a...", "crea una cartella", "mostra la RAM"), fornisci SOLO il comando senza spiegazioni
+- Se l'utente fa una DOMANDA GENERICA (es. "come stai?", "cosa fai?", "spiegami..."), fornisci una risposta informativa senza proporre comandi
+
 Se è necessario un comando, fornisci la risposta in questo formato JSON:
 {
   "requiresCommand": true,
   "command": "il comando da eseguire",
-  "response": "spiegazione di cosa fa il comando e perché lo hai scelto",
+  "response": "SOLO il comando, senza spiegazioni o ragionamenti",
   "expectedOutcome": "descrizione del risultato atteso"
 }
 
@@ -419,17 +423,17 @@ Fornisci SOLO il JSON, senza testo aggiuntivo.`;
           }
           if (baseDir) {
             fallbackCommand = `mkdir -p "${baseDir}/${folderName}"`;
-            fallbackResponse = `Creo una cartella chiamata "${folderName}" in ${baseDir}. Se esiste già, non sarà un problema.`;
+            fallbackResponse = fallbackCommand; // Solo il comando, senza spiegazioni
           } else {
             fallbackCommand = `mkdir -p ${folderName}`;
-            fallbackResponse = `Creo una cartella chiamata "${folderName}" nella directory corrente.`;
+            fallbackResponse = fallbackCommand; // Solo il comando, senza spiegazioni
           }
         } else if (lowerPrompt.includes('file')) {
           fallbackCommand = 'touch test.txt';
-          fallbackResponse = 'Creo un file di test nella directory corrente.';
+          fallbackResponse = fallbackCommand; // Solo il comando, senza spiegazioni
         } else if (lowerPrompt.includes('elenca') || lowerPrompt.includes('mostra')) {
           fallbackCommand = 'ls -la';
-          fallbackResponse = 'Elencherò tutti i file e le cartelle nella directory corrente.';
+          fallbackResponse = fallbackCommand; // Solo il comando, senza spiegazioni
         }
         
         if (fallbackCommand) {
