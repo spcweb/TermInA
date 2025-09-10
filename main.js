@@ -23,13 +23,18 @@ process.on('unhandledRejection', (reason, promise) => {
 const aiManager = require('./src/ai-manager');
 const aiAgent = require('./src/ai-agent');
 const ptyManager = require('./src/pty-manager');
+const rustTerminal = require('./src/rust-terminal-wrapper');
 const webScraper = require('./src/webscraper-playwright');
 const webAIIntegration = require('./src/web-ai-integration');
+const AIContextManager = require('./src/ai-context-manager');
 
 let mainWindow;
 let settingsWindow;
 let currentWorkingDirectory = require('os').homedir();
 let previousWorkingDirectory = currentWorkingDirectory;
+
+// Inizializza il gestore del context AI
+const aiContextManager = new AIContextManager();
 
 function resolvePath(inputPath) {
   const os = require('os');
@@ -102,22 +107,43 @@ ipcMain.handle('ai-request', async (event, prompt, context = []) => {
 // Nuovo handler per AI Agent con iterazione
 ipcMain.handle('ai-agent-request', async (event, prompt, context = [], autoExecute = false) => {
   try {
+    // Aggiungi il messaggio dell'utente al context
+    aiContextManager.addMessage(prompt, true);
+    
+    // Ottieni il context completo per l'AI
+    const fullContext = aiContextManager.getContextForRequest(prompt);
+    
     // Configura l'esecutore di comandi per l'AI Agent
     aiAgent.setCommandExecutor(async (command) => {
       return new Promise((resolve) => {
   exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
-          resolve({
+          const result = {
             success: !error,
             output: error ? error.message : (stderr || stdout || ''),
             exitCode: error ? error.code || 1 : 0,
             stdout: stdout || '',
             stderr: stderr || ''
-          });
+          };
+          
+          // Aggiungi il comando alla cronologia del context AI
+          aiContextManager.addCommand(command, result.output, result.exitCode);
+          
+          resolve(result);
         });
       });
     });
 
-    return await aiAgent.processRequest(prompt, context, autoExecute);
+    // Aggiungi il context formattato al prompt
+    const contextFormatted = aiContextManager.formatContextForAI(fullContext);
+    const enhancedPrompt = `${contextFormatted}\n\n=== RICHIESTA UTENTE ===\n${prompt}`;
+
+    // Log per debug
+    console.log('AI Context Manager: Context formattato per AI:');
+    console.log('Context length:', contextFormatted.length);
+    console.log('Recent commands:', fullContext.commandHistory.recentCommands.length);
+    console.log('Last command:', fullContext.commandHistory.lastCommand ? fullContext.commandHistory.lastCommand.command : 'Nessuno');
+
+    return await aiAgent.processRequest(enhancedPrompt, context, autoExecute);
   } catch (error) {
     console.error('Errore AI Agent:', error);
     return {
@@ -387,19 +413,70 @@ Recommendation: Use "sudo ${command}" for secure password input.`);
     }
 
   exec(command, { encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: currentWorkingDirectory }, (error, stdout, stderr) => {
+      let result;
+      let exitCode = 0;
+      
       if (error) {
-        resolve(`[Error] ${error.message}`);
+        result = `[Error] ${error.message}`;
+        exitCode = error.code || 1;
       } else if (stderr) {
-        resolve(`[Stderr] ${stderr}`);
+        result = `[Stderr] ${stderr}`;
+        exitCode = 1;
       } else {
-        resolve(stdout);
+        result = stdout;
+        exitCode = 0;
       }
+
+      // Aggiungi il comando alla cronologia del context AI
+      aiContextManager.addCommand(command, result, exitCode);
+      
+      resolve(result);
     });
   });
 });
 
 // IPC per ottenere cwd corrente
 ipcMain.handle('get-cwd', async () => currentWorkingDirectory);
+
+// IPC per ottenere il context AI
+ipcMain.handle('get-ai-context', async (event, limit = 10) => {
+  try {
+    return aiContextManager.getFullContext();
+  } catch (error) {
+    console.error('Errore nel recupero del context AI:', error);
+    return { error: error.message };
+  }
+});
+
+// IPC per ottenere la cronologia dei comandi
+ipcMain.handle('get-command-history', async (event, limit = 20) => {
+  try {
+    return aiContextManager.commandHistory.getRecentHistory(limit);
+  } catch (error) {
+    console.error('Errore nel recupero della cronologia:', error);
+    return { error: error.message };
+  }
+});
+
+// IPC per cercare nella cronologia
+ipcMain.handle('search-command-history', async (event, query, limit = 10) => {
+  try {
+    return aiContextManager.commandHistory.searchCommands(query, limit);
+  } catch (error) {
+    console.error('Errore nella ricerca della cronologia:', error);
+    return { error: error.message };
+  }
+});
+
+// IPC per ottenere statistiche della cronologia
+ipcMain.handle('get-history-statistics', async () => {
+  try {
+    return aiContextManager.commandHistory.getStatistics();
+  } catch (error) {
+    console.error('Errore nel recupero delle statistiche:', error);
+    return { error: error.message };
+  }
+});
 
 // ===== NUOVO SISTEMA PTY =====
 
@@ -412,6 +489,150 @@ ipcMain.handle('pty-create-session', async (event) => {
     return { success: true, sessionId: session.id };
   } catch (error) {
     console.error('Error creating PTY session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ===== SISTEMA TERMINALE RUST =====
+
+// Crea una nuova sessione Rust Terminal
+ipcMain.handle('rust-terminal-create-session', async (event, cwd) => {
+  try {
+    console.log('Main: Creating new Rust Terminal session...');
+    const session = await rustTerminal.createSession(cwd);
+    console.log(`Main: Rust Terminal session created: ${session.id}`);
+    return { success: true, sessionId: session.id };
+  } catch (error) {
+    console.error('Error creating Rust Terminal session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Invia dati a una sessione Rust Terminal
+ipcMain.handle('rust-terminal-write', async (event, sessionId, data) => {
+  try {
+    console.log(`Main: Writing to Rust Terminal session ${sessionId}:`, data.substring(0, 100) + (data.length > 100 ? '...' : ''));
+    const success = await rustTerminal.writeToSession(sessionId, data);
+    console.log(`Main: Rust Terminal write result:`, success);
+    return { success };
+  } catch (error) {
+    console.error('Error writing to Rust Terminal:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ridimensiona una sessione Rust Terminal
+ipcMain.handle('rust-terminal-resize', async (event, sessionId, cols, rows) => {
+  try {
+    const success = await rustTerminal.resizeSession(sessionId, cols, rows);
+    return { success };
+  } catch (error) {
+    console.error('Error resizing Rust Terminal:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Uccidi una sessione Rust Terminal
+ipcMain.handle('rust-terminal-kill', async (event, sessionId) => {
+  try {
+    const success = await rustTerminal.killSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error killing Rust Terminal:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Chiudi una sessione Rust Terminal
+ipcMain.handle('rust-terminal-close', async (event, sessionId) => {
+  try {
+    const success = await rustTerminal.closeSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error closing Rust Terminal:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Pulisce una sessione Rust Terminal
+ipcMain.handle('rust-terminal-clear', async (event, sessionId) => {
+  try {
+    const success = await rustTerminal.clearSession(sessionId);
+    return { success };
+  } catch (error) {
+    console.error('Error clearing Rust Terminal:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ottieni l'output di una sessione Rust Terminal
+ipcMain.handle('rust-terminal-get-output', async (event, sessionId, fromIndex) => {
+  try {
+    const output = rustTerminal.getSessionOutput(sessionId, fromIndex);
+    return { success: true, output };
+  } catch (error) {
+    console.error('Error getting Rust Terminal output:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ottieni l'output immediato di una sessione Rust Terminal
+ipcMain.handle('rust-terminal-get-immediate-output', async (event, sessionId, fromTimestamp) => {
+  try {
+    const session = rustTerminal.getSession(sessionId);
+    if (session && session.isActive) {
+      const output = rustTerminal.getSessionOutputFromBuffer(sessionId, fromTimestamp);
+      const lastTimestamp = rustTerminal.getLastOutputTimestamp(sessionId);
+      console.log(`Main: rust-terminal-get-immediate-output for session ${sessionId}, fromTimestamp: ${fromTimestamp}, output length: ${output.length}`);
+      return { 
+        success: true, 
+        output, 
+        hasNewData: output.length > 0,
+        lastTimestamp: lastTimestamp
+      };
+    }
+    console.log(`Main: rust-terminal-get-immediate-output for session ${sessionId} - session not found or inactive`);
+    return { success: false, output: '', hasNewData: false, lastTimestamp: 0 };
+  } catch (error) {
+    console.error('Error getting immediate Rust Terminal output:', error);
+    return { success: false, error: error.message, output: '', hasNewData: false, lastTimestamp: 0 };
+  }
+});
+
+// Esegui un comando sudo con Rust Terminal
+ipcMain.handle('rust-terminal-run-sudo-command', async (event, sessionId, command, password) => {
+  try {
+    const result = await rustTerminal.executeSudoCommand(sessionId, command, password);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Error running Rust Terminal sudo command:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      output: '',
+      exitCode: 1
+    };
+  }
+});
+
+// Ottieni lista delle sessioni attive Rust Terminal
+ipcMain.handle('rust-terminal-get-sessions', async (event) => {
+  try {
+    const sessions = rustTerminal.getActiveSessions();
+    return { success: true, sessions };
+  } catch (error) {
+    console.error('Error getting Rust Terminal sessions:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Ottieni lo stato del Rust Terminal
+ipcMain.handle('rust-terminal-get-status', async (event) => {
+  try {
+    const status = rustTerminal.getStatus();
+    return { success: true, status };
+  } catch (error) {
+    console.error('Error getting Rust Terminal status:', error);
     return { success: false, error: error.message };
   }
 });
@@ -853,10 +1074,13 @@ ipcMain.handle('run-sudo-command', async (event, command, password) => {
         .filter(line => !line.includes('Password:') && !line.includes('Sorry, try again'))
         .join('\n')
         .trim();
+      
+      let result;
+      let exitCode = code;
         
       if (code === 0) {
         if (isInteractiveInstaller && actualCommand.includes('install.sh')) {
-          resolve(`✅ Homebrew installation completed successfully!
+          result = `✅ Homebrew installation completed successfully!
 
 📦 Installation output:
 ${output}
@@ -866,13 +1090,13 @@ ${output}
 2. Try: brew --version
 3. Install packages with: brew install <package-name>
 
-${filteredError ? `⚠️ Additional notes:\n${filteredError}` : ''}`);
+${filteredError ? `⚠️ Additional notes:\n${filteredError}` : ''}`;
         } else {
-          resolve(output || '[Success] Sudo command executed successfully');
+          result = output || '[Success] Sudo command executed successfully';
         }
       } else {
         if (isInteractiveInstaller) {
-          resolve(`❌ Homebrew installation failed (exit code ${code})
+          result = `❌ Homebrew installation failed (exit code ${code})
 
 📤 Installation output:
 ${output}
@@ -884,16 +1108,26 @@ ${filteredError}
 1. Check your internet connection
 2. Ensure you have Administrator privileges
 3. Try running in a regular Terminal.app
-4. Check Homebrew's troubleshooting guide`);
+4. Check Homebrew's troubleshooting guide`;
         } else {
-          resolve(`[Error] Sudo command failed with code ${code}\n${filteredError}`);
+          result = `[Error] Sudo command failed with code ${code}\n${filteredError}`;
         }
       }
+
+      // Aggiungi il comando sudo alla cronologia del context AI
+      aiContextManager.addCommand(command, result, exitCode);
+      
+      resolve(result);
     });
 
     sudoProcess.on('error', (err) => {
       console.error(`Sudo process error: ${err.message}`);
-      resolve(`[Error] ${err.message}`);
+      const errorResult = `[Error] ${err.message}`;
+      
+      // Aggiungi anche gli errori del processo alla cronologia
+      aiContextManager.addCommand(command, errorResult, 1);
+      
+      resolve(errorResult);
     });
 
     // Timeout appropriato basato sul tipo di comando
@@ -1415,5 +1649,21 @@ function createMenu() {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
+  // Salva il context AI prima di chiudere
+  try {
+    aiContextManager.closeSession();
+  } catch (error) {
+    console.error('Errore nel salvataggio del context AI:', error);
+  }
+  
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  // Salva il context AI prima di chiudere
+  try {
+    aiContextManager.closeSession();
+  } catch (error) {
+    console.error('Errore nel salvataggio del context AI:', error);
+  }
 });

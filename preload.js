@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAIProviders: () => ipcRenderer.invoke('get-ai-providers'),
   testAIConnection: (provider, config) => ipcRenderer.invoke('test-ai-connection', provider, config),
   
+  // AI Context operations
+  getAIContext: (limit) => ipcRenderer.invoke('get-ai-context', limit),
+  getCommandHistory: (limit) => ipcRenderer.invoke('get-command-history', limit),
+  searchCommandHistory: (query, limit) => ipcRenderer.invoke('search-command-history', query, limit),
+  getHistoryStatistics: () => ipcRenderer.invoke('get-history-statistics'),
+  
   // Web integration operations
   webSearch: (query, searchEngine, maxResults) => ipcRenderer.invoke('web-search', query, searchEngine, maxResults),
   getWebSearchStats: () => ipcRenderer.invoke('get-web-search-stats'),
@@ -41,6 +47,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ptyGetImmediateOutput: (sessionId, fromTimestamp) => ipcRenderer.invoke('pty-get-immediate-output', sessionId, fromTimestamp),
   ptyRunCommand: (command, options) => ipcRenderer.invoke('pty-run-command', command, options),
   ptyGetSessions: () => ipcRenderer.invoke('pty-get-sessions'),
+  
+  // Rust Terminal operations
+  rustTerminalCreateSession: (cwd) => ipcRenderer.invoke('rust-terminal-create-session', cwd),
+  rustTerminalWrite: (sessionId, data) => ipcRenderer.invoke('rust-terminal-write', sessionId, data),
+  rustTerminalResize: (sessionId, cols, rows) => ipcRenderer.invoke('rust-terminal-resize', sessionId, cols, rows),
+  rustTerminalKill: (sessionId) => ipcRenderer.invoke('rust-terminal-kill', sessionId),
+  rustTerminalClose: (sessionId) => ipcRenderer.invoke('rust-terminal-close', sessionId),
+  rustTerminalClear: (sessionId) => ipcRenderer.invoke('rust-terminal-clear', sessionId),
+  rustTerminalGetOutput: (sessionId, fromIndex) => ipcRenderer.invoke('rust-terminal-get-output', sessionId, fromIndex),
+  rustTerminalGetImmediateOutput: (sessionId, fromTimestamp) => ipcRenderer.invoke('rust-terminal-get-immediate-output', sessionId, fromTimestamp),
+  rustTerminalRunSudoCommand: (sessionId, command, password) => ipcRenderer.invoke('rust-terminal-run-sudo-command', sessionId, command, password),
+  rustTerminalGetSessions: () => ipcRenderer.invoke('rust-terminal-get-sessions'),
+  rustTerminalGetStatus: () => ipcRenderer.invoke('rust-terminal-get-status'),
   
   // Interactive Terminal operations
   createInteractiveSession: (command, cwd) => ipcRenderer.invoke('create-interactive-session', command, cwd),

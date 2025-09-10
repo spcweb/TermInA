@@ -1,0 +1,56 @@
+[package]
+name = "termina_terminal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "termina_terminal"
+crate-type = ["cdylib", "staticlib"]
+
+[[bin]]
+name = "termina_terminal"
+path = "src/main.rs"
+
+[dependencies]
+# PTY e gestione terminale
+nix = "0.28"
+libc = "0.2"
+
+# Gestione processi e I/O
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serializzazione per comunicazione con Electron
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Gestione errori
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Gestione password e sicurezza
+rpassword = "7.3"
+
+# FFI per interfaccia con Node.js
+libloading = "0.8"
+
+# Utilità
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Dipendenze specifiche per macOS
+core-foundation = "0.9"
+security-framework = "2.9"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Dipendenze specifiche per Linux
+dbus = "0.9"
+
+[build-dependencies]
+cc = "1.0"
