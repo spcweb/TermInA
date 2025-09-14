@@ -131,9 +131,12 @@ kbd { background:#222; padding:2px 6px; border-radius:4px; font-size:11px; line-
     background-color: var(--terminal-cursor);
     font-weight: bold;
     font-size: var(--terminal-font-size);
-    display: inline;
+    display: inline-block;
     position: relative;
     animation: cursor-blink 1s infinite;
+    vertical-align: middle;
+    height: 1.2em;
+    line-height: 1.2em;
     
     /* Default style: bar */
     width: 2px;
@@ -151,26 +154,58 @@ kbd { background:#222; padding:2px 6px; border-radius:4px; font-size:11px; line-
     border-right: none;
     border-top: none;
     border-bottom: none;
+    height: 1.2em;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .terminal-cursor.cursor-block {
     width: 1ch;
     min-width: 1ch;
+    height: 1.2em;
     background-color: var(--terminal-cursor);
     color: var(--terminal-bg);
     border: none;
     text-align: center;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1.2em;
+    font-weight: bold;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.terminal-cursor.cursor-block:empty {
+    background-color: var(--terminal-cursor);
+}
+
+.terminal-cursor.cursor-block:not(:empty) {
+    background-color: var(--terminal-cursor);
+    color: var(--terminal-bg);
 }
 
 .terminal-cursor.cursor-underline {
-    width: 1ch;
-    min-width: 1ch;
-    border-bottom: 2px solid var(--terminal-cursor);
+    width: 1.5ch;
+    min-width: 1.5ch;
+    height: 1.2em;
     background-color: transparent;
-    border-left: none;
-    border-right: none;
-    border-top: none;
+    border: none;
     text-align: center;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1.2em;
+    position: relative;
+}
+
+.terminal-cursor.cursor-underline::after {
+    content: '';
+    position: absolute;
+    bottom: 1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--terminal-cursor);
+    box-shadow: 0 0 0 0.5px var(--terminal-cursor);
 }
 
 @keyframes cursor-blink {

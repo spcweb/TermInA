@@ -32,3 +32,4 @@ dirs = "5.0"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 env_logger = "0.10"
+termina_terminal = { path = "../rust-terminal" }

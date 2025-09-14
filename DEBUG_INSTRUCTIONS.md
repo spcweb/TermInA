@@ -1,100 +1,94 @@
-# 🔍 PTY Debug Instructions
+# Istruzioni per il Debug delle Impostazioni
 
-## 🎯 Identified Problem
-The PTY receives the command but produces no output. The buffer is always empty (`output length: 0`).
+## Problema
+Le impostazioni non si applicano al terminale principale, anche se non ci sono errori in console.
 
-## 🧪 Tests to Run
+## Test da Eseguire
 
-### 1. PTY Detection Test
-```
-test-pty-detection
-```
-This shows whether commands are detected as PTY.
-
-### 2. Direct API Test
-```
-test-pty-api
-```
-This tests PTY APIs directly without the wrapper.
-
-### 3. Real Command Test
-```
-npm install --dry-run lodash
-```
-This should show all debug logs.
-
-## 📊 Logs to Look For
-
-### DevTools Console (F12)
-
-#### 1. Detection
-- `SimpleTerminal: shouldUsePTY(npm install --dry-run lodash) = true`
-
-#### 2. Execution
-- `SimpleTerminal: Using PTY execution`
-- `SimpleTerminal: executeWithPTY called with command: npm install --dry-run lodash`
-- `SimpleTerminal: Showing loading indicator for PTY command: npm install --dry-run lodash`
-- `SimpleTerminal: PTY mode enabled, isActive: true/false`
-
-#### 3. Session
-- `SimpleTerminal: Starting PTY session...` (if not active)
-- `SimpleTerminal: PTY session started successfully`
-
-#### 4. Command Send
-- `SimpleTerminal: Sending command to PTY: npm install --dry-run lodash`
-- `PTY sending command: npm install --dry-run lodash`
-- `PTY command send result: true/false`
-- `SimpleTerminal: PTY sendCommand result: true/false`
-
-#### 5. Data Flow
-- `PTY Manager writing to session X: npm install --dry-run lodash\r`
-- `PTY Manager received data for session X:`
-- `PTY polling got new data:`
-
-## 🚨 Possible Issues
-
-### 1. Command Not Detected as PTY
-If you see `shouldUsePTY = false`, the command is not detected as PTY.
-
-### 2. PTY Session Not Active
-If you see `isActive: false`, the PTY session is not active.
-
-### 3. Command Not Sent
-If you don't see `PTY sending command:`, the command is not being sent.
-
-### 4. PTY Not Receiving Data
-If you don't see `PTY Manager received data:`, the PTY is not receiving output from the command.
-
-## 🔧 Quick Fixes
-
-### Fix 1: Force PTY Mode
-If the command isn't detected as PTY, add manually:
-```javascript
-// In shouldUsePTY, add:
-if (command.includes('npm install')) return true;
-```
-
-### Fix 2: Verify node-pty
-If the PTY doesn't receive data, it may be a node-pty issue:
+### 1. Avvia l'Applicazione
 ```bash
-npm rebuild node-pty
+cd /home/simone/TermInA
+npm run tauri dev
 ```
 
-### Fix 3: Use Fallback
-If node-pty doesn't work, the system should automatically fallback.
+### 2. Apri la Console del Browser
+- Premi `F12` per aprire gli strumenti di sviluppo
+- Vai alla tab "Console"
 
-## 📝 Next Step
+### 3. Controlla i Log di Inizializzazione
+Dovresti vedere questi messaggi:
+```
+🔧 Setting up settings listener...
+🔧 window.__TAURI__: true
+🔧 window.__TAURI__.event: true
+🔧 window.__TAURI__.event.listen: true
+✅ Tauri event API available, setting up listener
+✅ Settings listener setup complete
+🧪 Testing applySettings method...
+🧪 this.applySettings exists: true
+🧪 Testing with dummy config...
+🎨 APPLYING SETTINGS - START
+✅ APPLYING SETTINGS - COMPLETED SUCCESSFULLY
+```
 
-1. **Run the tests** in order
-2. **Copy the logs** from DevTools console
-3. **Identify where the flow stalls**
-4. **Apply the appropriate fix**
+### 4. Test Manuale delle Impostazioni
+Nella console del browser, esegui:
+```javascript
+// Test del metodo applySettings
+testSettings()
 
-## 🎯 Expected Result
+// Simula un evento di aggiornamento impostazioni
+simulateSettingsEvent()
+```
 
-After the fix, you should see:
-- ✅ Command detected as PTY
-- ✅ Active PTY session
-- ✅ Command sent to PTY
-- ✅ Output received from PTY
-- ✅ Output displayed in the terminal
+### 5. Test del Pannello di Controllo
+1. Apri il pannello di controllo (⌘,)
+2. Cambia il tema da "Warp Dark" a "Warp Light"
+3. Cambia il font da "JetBrains Mono" a "Arial"
+4. Cambia la dimensione del font da 14 a 20
+5. Clicca "Save"
+6. Controlla la console per i messaggi:
+   - `Settings applied successfully`
+   - `🎯 Settings updated event received:`
+   - `🎨 APPLYING SETTINGS - START`
+
+## Cosa Cercare
+
+### ✅ Se Funziona
+- I messaggi di debug appaiono nella console
+- Il test manuale funziona (`simulateSettingsEvent()`)
+- Le impostazioni si applicano visivamente al terminale
+- L'evento `settings-updated` viene ricevuto
+
+### ❌ Se Non Funziona
+- **API Tauri non disponibile**: `window.__TAURI__.event: false`
+- **Metodo applySettings non trovato**: `this.applySettings exists: false`
+- **Evento non ricevuto**: Nessun messaggio `🎯 Settings updated event received`
+- **Errore nell'applicazione**: Messaggi di errore nella console
+
+## Possibili Problemi
+
+### 1. API Tauri Non Disponibile
+Se `window.__TAURI__.event` è `false`, il problema è nella configurazione di Tauri.
+
+### 2. Metodo applySettings Non Trovato
+Se `this.applySettings exists: false`, c'è un problema con la definizione del metodo.
+
+### 3. Evento Non Ricevuto
+Se l'evento `settings-updated` non viene ricevuto, il problema è nella comunicazione tra pannello e terminale.
+
+### 4. Applicazione Non Funziona
+Se l'evento viene ricevuto ma le impostazioni non si applicano, il problema è nel metodo `applySettings`.
+
+## Prossimi Passi
+
+1. **Esegui i test** seguendo le istruzioni sopra
+2. **Riporta i risultati** della console
+3. **Identifica il punto di fallimento** basandoti sui messaggi di debug
+4. **Applica la correzione** appropriata
+
+## Funzioni di Test Disponibili
+
+- `testSettings()` - Testa il metodo applySettings
+- `simulateSettingsEvent()` - Simula un aggiornamento delle impostazioni
+- `terminal` - Riferimento globale al terminale principale

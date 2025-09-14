@@ -3,6 +3,7 @@ use tokio::sync::Mutex;
 use tauri::Manager;
 use tauri::WebviewWindowBuilder;
 use tauri::Emitter; // Added for emit method
+use std::process::Stdio;
 
 mod ai_manager;
 mod pty_manager;
@@ -36,6 +37,7 @@ async fn get_cwd(state: tauri::State<'_, AppState>) -> Result<String, String> {
     Ok(cwd.clone())
 }
 
+// Back-compat: esegue un comando singolo e ritorna l'output (non interattivo)
 #[tauri::command]
 async fn run_command(
     command: String,
@@ -43,21 +45,22 @@ async fn run_command(
 ) -> Result<String, String> {
     let pty_manager = state.pty_manager.lock().await;
     let cwd = state.current_working_directory.lock().await;
-    
-    // Execute command using PTY manager
-    match pty_manager.run_command(&command, &cwd).await {
-        Ok(output) => {
-            // Add to command history
-            let mut history = state.command_history.lock().await;
-            history.add_command(&command, &output, 0);
-            Ok(output)
-        }
-        Err(e) => {
-            let mut history = state.command_history.lock().await;
-            history.add_command(&command, &e.to_string(), 1);
-            Err(e.to_string())
-        }
-    }
+    let output = pty_manager.run_command_simple(&command, &cwd).await.map_err(|e| e.to_string())?;
+    let mut history = state.command_history.lock().await;
+    history.add_command(&command, &output, 0);
+    Ok(output)
+}
+
+// Nuovo: invia un comando in una sessione PTY interattiva
+#[tauri::command]
+async fn pty_run_command(
+    session_id: String,
+    command: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    let mut pty_manager = state.pty_manager.lock().await;
+    pty_manager.run_command(&session_id, &command).await.map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -89,7 +92,7 @@ async fn ai_agent_request(
         let cwd = cwd_clone.clone();
         Box::pin(async move {
             let pty = pty_manager.lock().await;
-            pty.run_command(&command, &cwd).await
+            pty.run_command_simple(&command, &cwd).await
         })
     });
     
@@ -149,7 +152,7 @@ async fn ai_agent_with_web(
         let cwd = cwd_clone.clone();
         Box::pin(async move {
             let pty = pty_manager.lock().await;
-            pty.run_command(&command, &cwd).await
+            pty.run_command_simple(&command, &cwd).await
         })
     });
     
@@ -327,11 +330,12 @@ async fn pty_create_session(
 #[tauri::command]
 async fn pty_write(
     session_id: String,
-    data: String,
+    input: String,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let mut pty_manager = state.pty_manager.lock().await;
-    pty_manager.write_to_session(&session_id, &data).await.map_err(|e| e.to_string())
+    pty_manager.write_to_session(&session_id, &input).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"success": true}))
 }
 
 #[tauri::command]
@@ -340,18 +344,85 @@ async fn pty_resize(
     cols: u16,
     rows: u16,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let mut pty_manager = state.pty_manager.lock().await;
-    pty_manager.resize_session(&session_id, cols, rows).await.map_err(|e| e.to_string())
+    pty_manager.resize_session(&session_id, cols, rows).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"success": true}))
 }
 
 #[tauri::command]
 async fn pty_close(
     session_id: String,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let mut pty_manager = state.pty_manager.lock().await;
-    pty_manager.close_session(&session_id).await.map_err(|e| e.to_string())
+    pty_manager.close_session(&session_id).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"success": true}))
+}
+
+// Incremental output fetch for PTY sessions
+#[tauri::command]
+async fn pty_get_immediate_output(
+    session_id: String,
+    timestamp: Option<u64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let mut pty_manager = state.pty_manager.lock().await;
+    let (output, last_ts, has_new) = pty_manager
+        .get_immediate_output(&session_id, timestamp)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "success": true,
+        "output": output,
+        "lastTimestamp": last_ts,
+        "hasNewData": has_new
+    }))
+}
+
+// Clear PTY session buffer
+#[tauri::command]
+async fn pty_clear(
+    session_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let mut pty_manager = state.pty_manager.lock().await;
+    pty_manager
+        .clear_session_buffer(&session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"success": true}))
+}
+
+// Esegue un comando con sudo usando password fornita (non interattivo)
+#[tauri::command]
+async fn run_sudo_command(
+    command: String,
+    password: String,
+    _state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let mut child = tokio::process::Command::new("sudo")
+        .args(["-S", "-p", "", "sh", "-c", &command])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        use tokio::io::AsyncWriteExt;
+        stdin
+            .write_all(format!("{}\n", password).as_bytes())
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let output = child.wait_with_output().await.map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let combined = if stderr.is_empty() { stdout.clone() } else { format!("{}\n{}", stdout, stderr) };
+    if output.status.success() { Ok(combined) } else { Ok(format!("[exit {}]\n{}", output.status.code().unwrap_or(-1), combined)) }
 }
 
 #[tauri::command]
@@ -403,12 +474,26 @@ async fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String
 async fn apply_settings(config: serde_json::Value, app: tauri::AppHandle) -> Result<(), String> {
     log::info!("apply_settings command called");
     
-    // Invia un evento alla finestra principale per applicare le nuove impostazioni
-    if let Some(main_window) = app.get_webview_window("main") {
-        main_window.emit("settings-updated", &config).map_err(|e| e.to_string())?;
-        log::info!("Settings update event sent to main window");
-    } else {
-        log::warn!("Main window not found, cannot apply settings");
+    // Invia un evento a tutte le finestre per applicare le nuove impostazioni
+    let windows = app.webview_windows();
+    let mut event_sent = false;
+    
+    for (label, window) in windows {
+        log::info!("Sending settings-updated event to window: {}", label);
+        match window.emit("settings-updated", &config) {
+            Ok(_) => {
+                log::info!("Settings update event sent to window: {}", label);
+                event_sent = true;
+            }
+            Err(e) => {
+                log::warn!("Failed to send settings-updated event to window {}: {}", label, e);
+            }
+        }
+    }
+    
+    if !event_sent {
+        log::warn!("No windows found to send settings-updated event");
+        return Err("No windows available to apply settings".to_string());
     }
     
     Ok(())
@@ -503,6 +588,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_cwd,
             run_command,
+            pty_run_command,
             ai_request,
             ai_agent_request,
             ai_agent_with_web,
@@ -514,6 +600,8 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_close,
+            pty_get_immediate_output,
+            pty_clear,
             rust_terminal_create_session,
             rust_terminal_write,
             rust_terminal_resize,
@@ -522,6 +610,7 @@ pub fn run() {
             close_current_window,
             apply_settings,
             test_ai_connection,
+            run_sudo_command,
         ])
         .setup(|app| {
             // Initialize configuration

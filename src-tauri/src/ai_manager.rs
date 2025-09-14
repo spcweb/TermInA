@@ -640,6 +640,44 @@ impl AIManager {
                     return Err(anyhow::anyhow!("Ollama configuration not found"));
                 }
             }
+            "lm-studio" => {
+                if let Some(lm_studio_config) = ai_config.get("lmStudio") {
+                    if let Some(endpoint) = lm_studio_config.get("endpoint").and_then(|v| v.as_str()) {
+                        let test_request = serde_json::json!({
+                            "model": lm_studio_config.get("model").and_then(|v| v.as_str()).unwrap_or("local-model"),
+                            "messages": [{"role": "user", "content": prompt}],
+                            "max_tokens": 50
+                        });
+                        
+                        let client = reqwest::Client::new();
+                        let response = client
+                            .post(&format!("{}/chat/completions", endpoint))
+                            .header("Authorization", format!("Bearer {}", lm_studio_config.get("apiKey").and_then(|v| v.as_str()).unwrap_or("lm-studio")))
+                            .json(&test_request)
+                            .send()
+                            .await?;
+                        
+                        if response.status().is_success() {
+                            let result: serde_json::Value = response.json().await?;
+                            if let Some(choices) = result.get("choices") {
+                                if let Some(choice) = choices.get(0) {
+                                    if let Some(message) = choice.get("message") {
+                                        if let Some(content) = message.get("content") {
+                                            return Ok(content.as_str().unwrap_or("Connection successful").to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        return Err(anyhow::anyhow!("Invalid response from LM Studio API"));
+                    } else {
+                        return Err(anyhow::anyhow!("LM Studio endpoint not found"));
+                    }
+                } else {
+                    return Err(anyhow::anyhow!("LM Studio configuration not found"));
+                }
+            }
             _ => {
                 return Err(anyhow::anyhow!("Unsupported provider: {}", provider));
             }

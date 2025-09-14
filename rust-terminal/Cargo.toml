@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "termina_terminal"
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["rlib", "cdylib", "staticlib"]
 
 [[bin]]
 name = "termina_terminal"
@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # PTY e gestione terminale
-nix = "0.28"
+nix = { version = "0.28", features = ["term", "process", "fs", "signal"] }
 libc = "0.2"
 
 # Gestione processi e I/O
@@ -42,6 +42,7 @@ libloading = "0.8"
 # Utilità
 uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
+crossbeam-channel = "0.5"
 
 # Esecuzione comandi stile shell script in Rust
 cmd_lib = "1.3"

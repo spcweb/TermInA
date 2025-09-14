@@ -1,981 +1,468 @@
-// Settings Panel JavaScript
-console.log('=== SETTINGS PANEL LOADED ===');
-
+// Settings Manager semplificato per TermInA
 class SettingsManager {
     constructor() {
         this.config = null;
-        this.sections = ['general', 'appearance', 'terminal', 'ai', 'shortcuts'];
-        this.currentSection = 'general';
+    this.invoke = null;
+    this.invokeTries = 0;
+    this.maxInvokeTries = 6; // ~ (100+200+400+800+1600+3200)ms = ~6s
         this.init();
     }
 
-    getPredefinedThemes() {
+    async init() {
+        console.log('Settings Manager initialized');
+        await this.loadConfig();
+        this.setupEventListeners();
+        this.setupSettingsListener();
+        this.populateForm();
+    }
+
+    async loadConfig() {
+        console.log('Loading config...');
+        try {
+            if (!this.invoke) this.invoke = await this.getInvoke();
+            if (this.invoke) {
+                this.config = await this.invoke('get_config');
+                console.log('Config loaded:', this.config);
+            } else {
+                if (this.invokeTries < this.maxInvokeTries) {
+                    const delay = 100 * Math.pow(2, this.invokeTries); // backoff
+                    this.invokeTries++;
+                    setTimeout(() => this.loadConfig(), delay);
+                    return;
+                }
+                console.warn('Tauri API not available, using default config dopo retry');
+                this.config = this.getDefaultConfig();
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+            this.config = this.getDefaultConfig();
+        }
+    }
+
+    getDefaultConfig() {
         return {
-            'warp-dark': {
-                name: 'warp-dark',
-                background: '#1e2124',
-                foreground: '#ffffff',
-                cursor: '#00d4aa',
-                accent: '#00d4aa',
-                backgroundBlur: true
+            theme: {
+                name: 'dark',
+                background: '#1e1e1e',
+                foreground: '#ffffff'
             },
-            'warp-light': {
-                name: 'warp-light',
-                background: '#f8f9fa',
-                foreground: '#212529',
-                cursor: '#0066cc',
-                accent: '#0066cc',
-                backgroundBlur: true
-            },
-            'terminal-classic': {
-                name: 'terminal-classic',
-                background: '#000000',
-                foreground: '#00ff00',
-                cursor: '#00ff00',
-                accent: '#00ff41',
-                backgroundBlur: false
-            },
-            'cyberpunk': {
-                name: 'cyberpunk',
-                background: '#0f0f23',
-                foreground: '#ff00ff',
-                cursor: '#00ffff',
-                accent: '#ff2d92',
-                backgroundBlur: true
+            ai: {
+                provider: 'ollama',
+                model: 'llama3.2',
+                enabled: true
             }
         };
     }
 
-    async init() {
-        console.log('Initializing settings panel...');
-        await this.loadConfig();
-        this.setupEventListeners();
-        this.setupNavigation();
-        this.populateAvailableFonts();
-        this.populateForm();
-        this.showSection('general');
-    }
-
-    async loadConfig() {
-        console.log('=== DEBUG: loadConfig called ===');
-        try {
-            // Prova diversi modi per accedere all'API Tauri
-            let tauriApi = null;
-            
-            // Metodo 1: window.__TAURI__
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                tauriApi = window.__TAURI__.tauri;
-                console.log('✅ Found Tauri API via window.__TAURI__');
-            }
-            // Metodo 2: window.__TAURI_INTERNALS__
-            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                tauriApi = window.__TAURI_INTERNALS__;
-                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
-            }
-            // Metodo 3: window.tauri
-            else if (window.tauri && window.tauri.invoke) {
-                tauriApi = window.tauri;
-                console.log('✅ Found Tauri API via window.tauri');
-            }
-            // Metodo 4: window.__TAURI__.core
-            else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
-                tauriApi = window.__TAURI__.core;
-                console.log('✅ Found Tauri API via window.__TAURI__.core');
-            }
-            // Metodo 5: window.__TAURI__.api
-            else if (window.__TAURI__ && window.__TAURI__.api && window.__TAURI__.api.invoke) {
-                tauriApi = window.__TAURI__.api;
-                console.log('✅ Found Tauri API via window.__TAURI__.api');
-            }
-            // Metodo 6: import dinamico
-            else {
-                try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    tauriApi = { invoke };
-                    console.log('✅ Found Tauri API via dynamic import');
-                } catch (importError) {
-                    console.log('❌ Could not import Tauri API:', importError);
-                }
-            }
-            
-            if (tauriApi && tauriApi.invoke) {
-                console.log('✅ Tauri API available, calling get_config');
-                this.config = await tauriApi.invoke('get_config');
-                console.log('✅ Configuration loaded:', this.config);
-            } else {
-                console.log('❌ Tauri API not available, using default config');
-                this.config = {
-                    ai: {
-                        provider: "ollama",
-                        ollama: {
-                            base_url: "http://localhost:11434",
-                            model: "gpt-oss:20b",
-                            temperature: 0.7
-                        }
-                    }
-                };
-            }
-        } catch (error) {
-            console.error('❌ Error loading configuration:', error);
-            this.config = {
-                ai: {
-                    provider: "ollama",
-                    ollama: {
-                        base_url: "http://localhost:11434",
-                        model: "gpt-oss:20b",
-                        temperature: 0.7
-                    }
-                }
-            };
-        }
-    }
-
     setupEventListeners() {
-        // Pulsanti header
-        document.getElementById('save-btn').addEventListener('click', () => this.saveSettings());
-        document.getElementById('reset-btn').addEventListener('click', () => this.resetSettings());
-        document.getElementById('close-btn').addEventListener('click', () => this.closeSettings());
-
-        // Range sliders - aggiorna display valore
-        document.querySelectorAll('input[type="range"]').forEach(range => {
-            const valueDisplay = range.nextElementSibling;
-            if (valueDisplay && valueDisplay.classList.contains('range-value')) {
-                const updateValue = () => {
-                    valueDisplay.textContent = range.value + (range.id === 'font-size' ? 'px' : '');
-                };
-                range.addEventListener('input', updateValue);
-                updateValue(); // Imposta valore iniziale
-            }
-        });
-
-        // Color inputs - applica cambiamenti in tempo reale per preview
-        document.querySelectorAll('input[type="color"]').forEach(input => {
-            input.addEventListener('input', () => this.previewChanges());
-        });
-
-        // Theme selector - applica tema predefinito quando selezionato
-        document.getElementById('theme-name').addEventListener('change', (e) => {
-            this.applyPredefinedTheme(e.target.value);
-            this.previewChanges();
-        });
-
-        // Font family - applica cambiamenti in tempo reale
-        document.getElementById('font-family').addEventListener('change', () => this.previewChanges());
-        
-        // AI Provider selector - mostra/nasconde sezioni configurazione
-        document.getElementById('ai-provider').addEventListener('change', (e) => {
-            this.showAIProviderConfig(e.target.value);
-            this.previewChanges();
-        });
-        
-        // Aggiungi event listeners per tutti gli input AI
-        document.querySelectorAll('#ai input, #ai select').forEach(input => {
-            input.addEventListener('change', () => this.previewChanges());
-        });
-        
-        // Font size - applica cambiamenti in tempo reale
-        document.getElementById('font-size').addEventListener('input', () => this.previewChanges());
-        
-        // Pulsante refresh font
-        document.getElementById('refresh-fonts-btn').addEventListener('click', () => {
-            console.log('Reloading font list...');
-            this.populateAvailableFonts();
-            // Ri-applica la selezione corrente
-            if (this.config && this.config.terminal && this.config.terminal.fontFamily) {
-                this.setValueSafely('font-family', this.config.terminal.fontFamily);
-            }
-        });
-    }
-
-    applyPredefinedTheme(themeName) {
-        console.log('Applying predefined theme:', themeName);
-        const predefinedThemes = this.getPredefinedThemes();
-        const theme = predefinedThemes[themeName];
-        
-        if (!theme) {
-            console.warn('Tema non trovato:', themeName);
-            return;
+        // Save button (HTML usa id="save-btn")
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveSettings());
+            console.log('[settings] save button listener attached');
+        } else {
+            console.warn('[settings] save button not found');
         }
 
-        // Applica i colori del tema ai controlli del pannello
-        this.setValueSafely('color-background', theme.background);
-        this.setValueSafely('color-foreground', theme.foreground);
-        this.setValueSafely('color-cursor', theme.cursor);
-        this.setValueSafely('color-accent', theme.accent);
-        this.setValueSafely('background-blur', theme.backgroundBlur);
-        
-        // Aggiorna l'anteprima del tema
-        this.updateThemePreview(theme);
-        
-        console.log('Theme applied:', theme);
-    }
+        // Reset button (HTML usa id="reset-btn")
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => this.resetSettings());
+            console.log('[settings] reset button listener attached');
+        } else {
+            console.warn('[settings] reset button not found');
+        }
 
-    updateThemePreview(theme) {
-        const preview = document.getElementById('theme-preview');
-        if (!preview) return;
+        // Close button (HTML usa id="close-btn")
+        const closeBtn = document.getElementById('close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeSettings());
+            console.log('[settings] close button listener attached');
+        } else {
+            console.warn('[settings] close button not found');
+        }
 
-        // Applica i colori all'anteprima
-        preview.style.backgroundColor = theme.background;
-        preview.style.color = theme.foreground;
-        
-        const prompt = preview.querySelector('.preview-prompt');
-        const cursor = preview.querySelector('.preview-cursor');
-        
-        if (prompt) prompt.style.color = theme.accent;
-        if (cursor) cursor.style.color = theme.cursor;
-        
-        const text = preview.querySelector('.preview-text');
-        const output = preview.querySelector('.preview-output');
-        
-        if (text) text.style.color = theme.foreground;
-        if (output) output.style.color = theme.foreground;
-    }
-
-    setupNavigation() {
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = link.dataset.section;
-                this.showSection(section);
+        // Navigazione tab
+        const navLinks = document.querySelectorAll('.nav-link');
+        if (navLinks.length) {
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const section = link.getAttribute('data-section');
+                    if (!section) return;
+                    this.activateSection(section, link);
+                });
             });
-        });
+            console.log('[settings] navigation listeners attached');
+        } else {
+            console.warn('[settings] no nav links found');
+        }
+
+        // Theme preview functionality
+        this.setupThemePreview();
+        this.setupThemePresets();
     }
 
-    showSection(sectionName) {
-        // Aggiorna navigazione
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-        });
-        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
+    activateSection(sectionId, linkEl) {
+        const sections = document.querySelectorAll('.settings-section');
+        sections.forEach(s => s.classList.remove('active'));
+        const target = document.getElementById(sectionId);
+        if (target) target.classList.add('active');
 
-        // Mostra sezione
-        document.querySelectorAll('.settings-section').forEach(section => {
-            section.style.display = 'none';
-        });
-        document.getElementById(sectionName).style.display = 'block';
+        const links = document.querySelectorAll('.nav-link');
+        links.forEach(l => l.classList.remove('active'));
+        if (linkEl) linkEl.classList.add('active');
 
-        this.currentSection = sectionName;
-        
-        // Se stiamo mostrando la sezione AI, configura il provider corrente
-        if (sectionName === 'ai' && this.config && this.config.ai) {
-            this.showAIProviderConfig(this.config.ai.provider);
+        // Aggiorna hash URL (non ricarica)
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + sectionId);
         }
     }
-
-    showAIProviderConfig(provider) {
-        // Nasconde tutte le sezioni di configurazione provider
-        document.querySelectorAll('.provider-config').forEach(section => {
-            section.style.display = 'none';
-        });
-
-        // Mostra la sezione appropriata
-        const configSection = document.getElementById(`${provider}-config`);
-        if (configSection) {
-            configSection.style.display = 'block';
-        }
-        
-        console.log(`Showing AI provider config for: ${provider}`);
-    }
-
-    populateAvailableFonts() {
-        const fontSelect = document.getElementById('font-family');
-        if (!fontSelect) return;
-
-        // Lista di font monospaced da testare
-        const candidateFonts = [
-            // Font molto comuni su macOS
-            { name: 'SF Mono', family: 'SF Mono' },
-            { name: 'Monaco', family: 'Monaco' },
-            { name: 'Menlo', family: 'Menlo' },
-            
-            // Font di sviluppo popolari (potrebbero essere installati)
-            { name: 'JetBrains Mono', family: 'JetBrains Mono' },
-            { name: 'Fira Code', family: 'Fira Code' },
-            { name: 'Source Code Pro', family: 'Source Code Pro' },
-            { name: 'Hack', family: 'Hack' },
-            { name: 'Inconsolata', family: 'Inconsolata' },
-            { name: 'Roboto Mono', family: 'Roboto Mono' },
-            
-            // Font di sistema
-            { name: 'Consolas', family: 'Consolas' },
-            { name: 'Courier New', family: 'Courier New' },
-            { name: 'Andale Mono', family: 'Andale Mono' },
-            
-            // Font generici come fallback
-            { name: 'monospace (sistema)', family: 'monospace' }
-        ];
-
-        // Pulisce le opzioni esistenti
-        fontSelect.innerHTML = '';
-
-        // Testa ogni font e lo aggiunge se disponibile
-        const availableFonts = [];
-        candidateFonts.forEach(font => {
-            if (this.isFontAvailable(font.family)) {
-                availableFonts.push(font);
-                const option = document.createElement('option');
-                option.value = font.family;
-                option.textContent = font.name;
-                fontSelect.appendChild(option);
-            }
-        });
-
-        console.log('Available fonts found:', availableFonts.map(f => f.name));
-    }
-
-    isFontAvailable(fontName) {
-        // Crea un elemento di test per verificare se il font è disponibile
-        const testElement = document.createElement('span');
-        testElement.style.fontFamily = fontName;
-        testElement.style.fontSize = '16px';
-        testElement.style.position = 'absolute';
-        testElement.style.visibility = 'hidden';
-        testElement.style.top = '-1000px';
-        testElement.textContent = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        
-        document.body.appendChild(testElement);
-        
-        // Misuriamo la larghezza con font di fallback
-        const fallbackElement = document.createElement('span');
-        fallbackElement.style.fontFamily = 'monospace';
-        fallbackElement.style.fontSize = '16px';
-        fallbackElement.style.position = 'absolute';
-        fallbackElement.style.visibility = 'hidden';
-        fallbackElement.style.top = '-1000px';
-        fallbackElement.textContent = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        
-        document.body.appendChild(fallbackElement);
-        
-        const testWidth = testElement.offsetWidth;
-        const fallbackWidth = fallbackElement.offsetWidth;
-        
-        // Pulisci gli elementi di test
-        document.body.removeChild(testElement);
-        document.body.removeChild(fallbackElement);
-        
-        // Se le larghezze sono diverse, il font è disponibile
-        // Se sono uguali, il browser ha usato il fallback
-        const isAvailable = testWidth !== fallbackWidth || fontName === 'monospace';
-        
-        // Alcuni font potrebbero avere la stessa larghezza ma essere disponibili
-        // Facciamo un test aggiuntivo con Canvas per alcuni font importanti
-        if (!isAvailable && (fontName.includes('SF Mono') || fontName.includes('Monaco') || fontName.includes('Menlo'))) {
-            return this.isFontAvailableCanvas(fontName);
-        }
-        
-        return isAvailable;
-    }
-
-    isFontAvailableCanvas(fontName) {
-        // Test più accurato usando Canvas
-        try {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            
-            // Testa il font con il fallback
-            context.font = '16px monospace';
-            const fallbackWidth = context.measureText('abcdefghijklmnopqrstuvwxyz').width;
-            
-            // Testa il font richiesto
-            context.font = `16px "${fontName}", monospace`;
-            const testWidth = context.measureText('abcdefghijklmnopqrstuvwxyz').width;
-            
-            return testWidth !== fallbackWidth;
-        } catch (error) {
-            console.warn('Error in canvas test for font:', fontName, error);
-            return false;
-        }
-    }
-
     populateForm() {
         if (!this.config) return;
-
-        try {
-            // Theme/Appearance
-            if (this.config.theme) {
-                this.setValueSafely('theme-name', this.config.theme.name);
-                this.setValueSafely('color-background', this.config.theme.background);
-                this.setValueSafely('color-foreground', this.config.theme.foreground);
-                this.setValueSafely('color-cursor', this.config.theme.cursor);
-                this.setValueSafely('color-accent', this.config.theme.accent);
-                this.setValueSafely('background-blur', this.config.theme.background_blur);
-                
-                // Aggiorna l'anteprima del tema
-                this.updateThemePreview(this.config.theme);
+        const cfg = this.config;
+        // Theme
+        if (cfg.theme) {
+            this.setValueSafely('theme-name', cfg.theme.name);
+            this.setValueSafely('color-background', cfg.theme.background);
+            this.setValueSafely('color-foreground', cfg.theme.foreground);
+            this.setValueSafely('color-cursor', cfg.theme.cursor);
+            this.setValueSafely('color-accent', cfg.theme.accent);
+            this.setValueSafely('background-blur', cfg.theme.background_blur);
+        }
+        // Terminal
+        if (cfg.terminal) {
+            this.setValueSafely('font-family', cfg.terminal.font_family);
+            this.setValueSafely('font-size', cfg.terminal.font_size);
+            this.setValueSafely('line-height', cfg.terminal.line_height);
+            this.setValueSafely('cursor-style', cfg.terminal.cursor_style);
+            this.setValueSafely('cursor-blink', cfg.terminal.cursor_blink);
+            this.setValueSafely('scrollback', cfg.terminal.scrollback);
+            this.setValueSafely('bell-sound', cfg.terminal.bell_sound);
+            this.setValueSafely('auto-scroll', cfg.terminal.auto_scroll);
+            this.setValueSafely('smooth-scroll', cfg.terminal.smooth_scroll);
+        }
+        // AI
+        if (cfg.ai) {
+            this.setValueSafely('ai-provider', cfg.ai.provider);
+            this.setValueSafely('ai-auto-execute', cfg.ai.auto_execute);
+            this.setValueSafely('ai-context-lines', cfg.ai.context_lines);
+            // Gemini
+            if (cfg.ai.gemini) {
+                this.setValueSafely('gemini-api-key', cfg.ai.gemini.api_key);
+                this.setValueSafely('gemini-model', cfg.ai.gemini.model);
+                this.setValueSafely('gemini-temperature', cfg.ai.gemini.temperature);
+                this.setValueSafely('gemini-max-output', cfg.ai.gemini.max_output_tokens);
             }
-
-            // Terminal
-            if (this.config.terminal) {
-                this.setValueSafely('font-family', this.config.terminal.font_family ? this.config.terminal.font_family.split(',')[0].trim() : 'JetBrains Mono');
-                this.setValueSafely('font-size', this.config.terminal.font_size || 14);
-                this.setValueSafely('line-height', this.config.terminal.line_height || 1.4);
-                this.setValueSafely('cursor-style', this.config.terminal.cursor_style || 'bar');
-                this.setValueSafely('cursor-blink', this.config.terminal.cursor_blink !== undefined ? this.config.terminal.cursor_blink : true);
-                this.setValueSafely('scrollback', this.config.terminal.scrollback || 10000);
-                this.setValueSafely('bell-sound', this.config.terminal.bell_sound !== undefined ? this.config.terminal.bell_sound : false);
-                this.setValueSafely('auto-scroll', this.config.terminal.auto_scroll !== undefined ? this.config.terminal.auto_scroll : true);
-                this.setValueSafely('smooth-scroll', this.config.terminal.smooth_scroll !== undefined ? this.config.terminal.smooth_scroll : true);
+            // OpenAI
+            if (cfg.ai.openai) {
+                this.setValueSafely('openai-api-key', cfg.ai.openai.api_key);
+                this.setValueSafely('openai-model', cfg.ai.openai.model);
             }
-
-            // AI
-            if (this.config.ai) {
-                this.setValueSafely('ai-provider', this.config.ai.provider);
-                this.setValueSafely('ai-auto-execute', this.config.ai.auto_execute);
-                this.setValueSafely('ai-context-lines', this.config.ai.context_lines);
-                
-                // API Keys e configurazioni specifiche
-                if (this.config.ai.gemini) {
-                    this.setValueSafely('gemini-api-key', this.config.ai.gemini.api_key);
-                    this.setValueSafely('gemini-model', this.config.ai.gemini.model);
-                    if (this.config.ai.gemini.temperature !== undefined) {
-                        this.setValueSafely('gemini-temperature', this.config.ai.gemini.temperature);
-                    }
-                    if (this.config.ai.gemini.max_output_tokens !== undefined) {
-                        this.setValueSafely('gemini-max-output', this.config.ai.gemini.max_output_tokens);
-                    }
-                }
-                if (this.config.ai.openai) {
-                    this.setValueSafely('openai-api-key', this.config.ai.openai.api_key);
-                    this.setValueSafely('openai-model', this.config.ai.openai.model);
-                    if (this.config.ai.openai.temperature !== undefined) {
-                        this.setValueSafely('openai-temperature', this.config.ai.openai.temperature);
-                    }
-                    if (this.config.ai.openai.max_tokens !== undefined) {
-                        this.setValueSafely('openai-max-tokens', this.config.ai.openai.max_tokens);
-                    }
-                }
-                if (this.config.ai.ollama) {
-                    this.setValueSafely('ollama-endpoint', this.config.ai.ollama.base_url);
-                    this.setValueSafely('ollama-model', this.config.ai.ollama.model);
-                    if (this.config.ai.ollama.temperature !== undefined) {
-                        this.setValueSafely('ollama-temperature', this.config.ai.ollama.temperature);
-                    }
-                }
-                
-                // Mostra la configurazione del provider attuale
-                this.showAIProviderConfig(this.config.ai.provider);
+            // Ollama
+            if (cfg.ai.ollama) {
+                this.setValueSafely('ollama-endpoint', cfg.ai.ollama.base_url);
+                this.setValueSafely('ollama-model', cfg.ai.ollama.model);
             }
-
-            // Aggiorna i display dei range
-            this.updateRangeDisplays();
-
-        } catch (error) {
-            console.error('Error populating form:', error);
         }
     }
 
-    setValueSafely(elementId, value) {
-        const element = document.getElementById(elementId);
+    setValueSafely(id, value) {
+        const element = document.getElementById(id);
         if (element) {
             if (element.type === 'checkbox') {
                 element.checked = Boolean(value);
-            } else if (elementId === 'font-family') {
-                // Gestione speciale per font family
-                this.setFontFamilySafely(element, value);
             } else {
-                element.value = value;
+                element.value = String(value || '');
             }
         }
     }
 
-    setFontFamilySafely(selectElement, fontValue) {
-        if (!fontValue) return;
-
-        // Estrae il primo font dalla stringa (potrebbe essere "Font Name, fallback")
-        const primaryFont = fontValue.split(',')[0].trim().replace(/['"]/g, '');
-        
-        // Cerca una corrispondenza esatta
-        let found = false;
-        for (let option of selectElement.options) {
-            if (option.value === primaryFont || option.value.includes(primaryFont)) {
-                selectElement.value = option.value;
-                found = true;
-                break;
-            }
+    async saveSettings() {
+        if (this._saving) {
+            console.log('[settings] save ignored (already in progress)');
+            return;
+        }
+        this._saving = true;
+        console.log('Saving settings...');
+        const saveBtn = document.getElementById('save-btn');
+        const originalLabel = saveBtn ? saveBtn.innerHTML : null;
+        if (saveBtn) {
+            saveBtn.innerHTML = '💾 Saving...';
+            saveBtn.disabled = true;
         }
 
-        // Se non trova una corrispondenza esatta, cerca per nome simile
-        if (!found) {
-            for (let option of selectElement.options) {
-                if (option.textContent.toLowerCase().includes(primaryFont.toLowerCase()) ||
-                    primaryFont.toLowerCase().includes(option.textContent.toLowerCase())) {
-                    selectElement.value = option.value;
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        // Se ancora non trova nulla, usa il primo font disponibile
-        if (!found && selectElement.options.length > 0) {
-            selectElement.value = selectElement.options[0].value;
-            console.warn(`Font "${primaryFont}" non trovato, uso fallback: ${selectElement.options[0].value}`);
-        }
-    }
-
-    updateRangeDisplays() {
-        document.querySelectorAll('input[type="range"]').forEach(range => {
-            const valueDisplay = range.nextElementSibling;
-            if (valueDisplay && valueDisplay.classList.contains('range-value')) {
-                valueDisplay.textContent = range.value + (range.id === 'font-size' ? 'px' : '');
-            }
-        });
-    }
-
-    previewChanges() {
-        // Questo metodo può essere usato per applicare cambiamenti in tempo reale
-        // Invia un messaggio alla finestra principale per aggiornare l'anteprima
         try {
-            const previewConfig = this.gatherFormData();
-            
-            // Aggiorna l'anteprima locale nel pannello
-            if (previewConfig.theme) {
-                this.updateThemePreview(previewConfig.theme);
+            const fullConfig = this.gatherFormData();
+            if (!this.invoke) this.invoke = await this.getInvoke();
+            if (this.invoke) {
+                await this.invoke('set_config', { key: 'full_config', value: fullConfig });
+                try { 
+                    await this.invoke('apply_settings', { config: fullConfig }); 
+                    console.log('Settings applied successfully');
+                } catch (e) { 
+                    console.error('Failed to apply settings:', e);
+                    this.showNotification('Settings saved but failed to apply: ' + e.message, 'warning');
+                    return; // Non mostrare il messaggio di successo se l'applicazione fallisce
+                }
+                console.log('Settings saved successfully');
+                this.showNotification('Settings saved and applied successfully!', 'success');
+            } else {
+                console.warn('Tauri API not available, settings not saved');
+                this.showNotification('Settings not saved - API not available', 'warning');
             }
-            
-            // In Tauri v2, non usiamo sendMessage per il preview
-            // Le modifiche vengono applicate automaticamente
         } catch (error) {
-            console.error('Error in preview:', error);
+            console.error('Error saving settings:', error);
+            this.showNotification('Error saving settings: ' + error.message, 'error');
+        } finally {
+            if (saveBtn) {
+                saveBtn.innerHTML = originalLabel || '💾 Save';
+                setTimeout(() => { saveBtn.disabled = false; }, 150); // piccolo debounce
+            }
+            this._saving = false;
         }
     }
 
     gatherFormData() {
-        const formData = {
-            theme: {
-                name: this.getValueSafely('theme-name', 'warp-dark'),
-                background: this.getValueSafely('color-background', '#1e2124'),
-                foreground: this.getValueSafely('color-foreground', '#ffffff'),
-                cursor: this.getValueSafely('color-cursor', '#00d4aa'),
-                accent: this.getValueSafely('color-accent', '#00d4aa'),
-                background_blur: this.getCheckedSafely('background-blur', true)
-            },
-            terminal: {
-                font_family: this.getValueSafely('font-family', 'JetBrains Mono'),
-                font_size: parseInt(this.getValueSafely('font-size', '14')) || 14,
-                line_height: parseFloat(this.getValueSafely('line-height', '1.4')) || 1.4,
-                cursor_style: this.getValueSafely('cursor-style', 'bar'),
-                cursor_blink: this.getCheckedSafely('cursor-blink', true),
-                scrollback: parseInt(this.getValueSafely('scrollback', '10000')) || 10000,
-                bell_sound: this.getCheckedSafely('bell-sound', false),
-                auto_scroll: this.getCheckedSafely('auto-scroll', true),
-                smooth_scroll: this.getCheckedSafely('smooth-scroll', true)
-            },
-            ai: {
-                provider: this.getValueSafely('ai-provider', 'gemini'),
-                auto_execute: this.getCheckedSafely('ai-auto-execute', false),
-                context_lines: parseInt(this.getValueSafely('ai-context-lines', '10')) || 10,
-                gemini: {
-                    api_key: this.getValueSafely('gemini-api-key', ''),
-                    model: this.getValueSafely('gemini-model', 'gemini-2.5-flash'),
-                    temperature: parseFloat(this.getValueSafely('gemini-temperature', '0.7')) || 0.7,
-                    max_output_tokens: parseInt(this.getValueSafely('gemini-max-output', '4096')) || 4096
-                },
-                openai: {
-                    api_key: this.getValueSafely('openai-api-key', ''),
-                    model: this.getValueSafely('openai-model', 'gpt-4o'),
-                    temperature: parseFloat(this.getValueSafely('openai-temperature', '0.7')) || 0.7,
-                    max_tokens: parseInt(this.getValueSafely('openai-max-tokens', '4096')) || 4096
-                },
-                ollama: {
-                    base_url: this.getValueSafely('ollama-endpoint', 'http://localhost:11434'),
-                    model: this.getValueSafely('ollama-model', 'gpt-oss:20b'),
-                    temperature: parseFloat(this.getValueSafely('ollama-temperature', '0.7')) || 0.7
-                }
-            }
-        };
+        const base = this.config || this.getDefaultConfig();
+        const get = id => document.getElementById(id);
+        const val = id => get(id)?.value;
+        const checked = id => !!get(id)?.checked;
+        const num = id => { const v = val(id); return v !== undefined ? Number(v) : undefined; };
+        const float = id => { const v = val(id); return v !== undefined ? parseFloat(v) : undefined; };
 
-        return formData;
-    }
+        const theme = { ...base.theme };
+        theme.name = val('theme-name') || theme.name;
+        theme.background = val('color-background') || theme.background;
+        theme.foreground = val('color-foreground') || theme.foreground;
+        theme.cursor = val('color-cursor') || theme.cursor;
+        theme.accent = val('color-accent') || theme.accent;
+        theme.background_blur = checked('background-blur');
 
-    getValueSafely(elementId, defaultValue = '') {
-        const element = document.getElementById(elementId);
-        return element ? element.value : defaultValue;
-    }
+        const terminal = { ...base.terminal };
+        terminal.font_family = val('font-family') || terminal.font_family;
+        terminal.font_size = num('font-size') || terminal.font_size;
+        terminal.line_height = parseFloat(val('line-height') || terminal.line_height);
+        terminal.cursor_style = val('cursor-style') || terminal.cursor_style;
+        terminal.cursor_blink = checked('cursor-blink');
+        terminal.scrollback = num('scrollback') || terminal.scrollback;
+        terminal.bell_sound = checked('bell-sound');
+        terminal.auto_scroll = checked('auto-scroll');
+        terminal.smooth_scroll = checked('smooth-scroll');
 
-    getCheckedSafely(elementId, defaultValue = false) {
-        const element = document.getElementById(elementId);
-        return element ? element.checked : defaultValue;
-    }
-
-    async saveSettings() {
-        console.log('=== DEBUG: saveSettings called ===');
-        const saveBtn = document.getElementById('save-btn');
-        const originalText = saveBtn.innerHTML;
-        
-        try {
-            // Mostra stato "saving"
-            saveBtn.innerHTML = '💾 Saving...';
-            saveBtn.disabled = true;
-            saveBtn.style.background = '#2196F3';
-            
-            const formData = this.gatherFormData();
-            console.log('Saving settings:', formData);
-
-            // Prova diversi modi per accedere all'API Tauri
-            let tauriApi = null;
-            
-            // Metodo 1: window.__TAURI__
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                tauriApi = window.__TAURI__.tauri;
-                console.log('✅ Found Tauri API via window.__TAURI__');
-            }
-            // Metodo 2: window.__TAURI_INTERNALS__
-            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                tauriApi = window.__TAURI_INTERNALS__;
-                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
-            }
-            // Metodo 3: window.tauri
-            else if (window.tauri && window.tauri.invoke) {
-                tauriApi = window.tauri;
-                console.log('✅ Found Tauri API via window.tauri');
-            }
-            // Metodo 4: import dinamico
-            else {
-                try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    tauriApi = { invoke };
-                    console.log('✅ Found Tauri API via dynamic import');
-                } catch (importError) {
-                    console.log('❌ Could not import Tauri API:', importError);
-                }
-            }
-            
-            if (!tauriApi || !tauriApi.invoke) {
-                console.log('❌ Tauri API not available, using fallback');
-                // Fallback: salva in localStorage
-                localStorage.setItem('termina_settings', JSON.stringify(formData));
-                console.log('✅ Settings saved to localStorage');
-                saveBtn.innerHTML = '✅ Saved!';
-                saveBtn.style.background = '#4CAF50';
-                this.showNotification('Settings saved to localStorage!', 'success');
-                return;
-            }
-
-            console.log('✅ Tauri API available, calling set_config');
-            console.log('📤 Sending data to backend:', JSON.stringify(formData, null, 2));
-            // Salva la configurazione
-            const success = await tauriApi.invoke('set_config', { key: 'full_config', value: formData });
-            console.log('✅ set_config result:', success);
-            
-            if (success) {
-                // Successo
-                saveBtn.innerHTML = '✅ Saved!';
-                saveBtn.style.background = '#4CAF50';
-                this.showNotification('Settings saved successfully!', 'success');
-                
-                // Notifica il terminale principale per applicare le nuove impostazioni
-                this.notifyMainWindow(formData);
-                
-                // Ripristina il pulsante dopo 2 secondi
-                setTimeout(() => {
-                    saveBtn.innerHTML = originalText;
-                    saveBtn.disabled = false;
-                    saveBtn.style.background = '';
-                }, 2000);
-            } else {
-                // Errore di salvataggio
-                saveBtn.innerHTML = '❌ Error';
-                saveBtn.style.background = '#f44336';
-                this.showNotification('Error saving settings', 'error');
-                
-                // Ripristina il pulsante dopo 2 secondi
-                setTimeout(() => {
-                    saveBtn.innerHTML = originalText;
-                    saveBtn.disabled = false;
-                    saveBtn.style.background = '';
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Error saving:', error);
-            
-            // Errore di connessione/API
-            saveBtn.innerHTML = '❌ Error';
-            saveBtn.style.background = '#f44336';
-            this.showNotification('Error saving settings', 'error');
-            
-            // Ripristina il pulsante dopo 2 secondi
-            setTimeout(() => {
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
-                saveBtn.style.background = '';
-            }, 2000);
+        const ai = { ...base.ai };
+        ai.provider = val('ai-provider') || ai.provider;
+        ai.auto_execute = checked('ai-auto-execute');
+        ai.context_lines = num('ai-context-lines') || ai.context_lines;
+        // Gemini
+        if (ai.gemini) {
+            ai.gemini.api_key = val('gemini-api-key') || ai.gemini.api_key;
+            ai.gemini.model = val('gemini-model') || ai.gemini.model;
+            const t = float('gemini-temperature'); if (!isNaN(t)) ai.gemini.temperature = t;
+            const mo = num('gemini-max-output'); if (mo) ai.gemini.max_output_tokens = mo;
         }
+        // OpenAI
+        if (ai.openai) {
+            ai.openai.api_key = val('openai-api-key') || ai.openai.api_key;
+            ai.openai.model = val('openai-model') || ai.openai.model;
+        }
+        // Ollama
+        if (ai.ollama) {
+            ai.ollama.base_url = val('ollama-endpoint') || ai.ollama.base_url;
+            ai.ollama.model = val('ollama-model') || ai.ollama.model;
+        }
+
+        return {
+            auto_save: base.auto_save,
+            show_welcome: base.show_welcome,
+            theme,
+            terminal,
+            ai,
+        };
     }
 
     async resetSettings() {
         if (confirm('Are you sure you want to reset all settings to default values?')) {
             try {
-                await window.__TAURI__.tauri.invoke('set_config', { key: 'reset', value: 'default' });
-                await this.loadConfig();
-                this.populateForm();
-                this.showNotification('Settings reset to default values', 'success');
+                if (!this.invoke) this.invoke = await this.getInvoke();
+                if (this.invoke) {
+                    await this.invoke('set_config', { key: 'reset', value: 'default' });
+                    await this.loadConfig();
+                    this.populateForm();
+                    this.showNotification('Settings reset to default values', 'success');
+                } else {
+                    this.config = this.getDefaultConfig();
+                    this.populateForm();
+                    this.showNotification('Settings reset to default values (local only)', 'success');
+                }
             } catch (error) {
-                console.error('Error in reset:', error);
-                this.showNotification('Error resetting settings', 'error');
+                console.error('Error resetting settings:', error);
+                this.showNotification('Error resetting settings: ' + error.message, 'error');
             }
         }
     }
 
     async closeSettings() {
-        console.log('=== DEBUG: closeSettings called ===');
+        console.log('Closing settings...');
         try {
-            // Prova diversi modi per accedere all'API Tauri
-            let tauriApi = null;
-            
-            // Metodo 1: window.__TAURI__
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                tauriApi = window.__TAURI__.tauri;
-                console.log('✅ Found Tauri API via window.__TAURI__');
-            }
-            // Metodo 2: window.__TAURI_INTERNALS__
-            else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                tauriApi = window.__TAURI_INTERNALS__;
-                console.log('✅ Found Tauri API via window.__TAURI_INTERNALS__');
-            }
-            // Metodo 3: window.tauri
-            else if (window.tauri && window.tauri.invoke) {
-                tauriApi = window.tauri;
-                console.log('✅ Found Tauri API via window.tauri');
-            }
-            // Metodo 4: import dinamico
-            else {
+            // Prova via comando custom se disponibile
+            if (!this.invoke) this.invoke = await this.getInvoke();
+            if (this.invoke) {
                 try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    tauriApi = { invoke };
-                    console.log('✅ Found Tauri API via dynamic import');
-                } catch (importError) {
-                    console.log('❌ Could not import Tauri API:', importError);
-                }
-            }
-            
-            if (tauriApi && tauriApi.invoke) {
-                console.log('✅ Tauri API available, trying different close methods');
-                
-                // Metodo 1: comando personalizzato
-                try {
-                    const result = await tauriApi.invoke('close_current_window');
-                    console.log('✅ close_current_window result:', result);
+                    await this.invoke('close_current_window');
                     return;
                 } catch (e) {
-                    console.log('❌ close_current_window failed:', e);
-                }
-                
-                // Metodo 2: API Tauri v2 per chiudere la finestra corrente
-                try {
-                    if (window.__TAURI__.window) {
-                        await window.__TAURI__.window.getCurrent().close();
-                        console.log('✅ window.close() successful');
-                        return;
-                    }
-                } catch (e) {
-                    console.log('❌ window.close() failed:', e);
-                }
-                
-                // Metodo 3: API alternativa
-                try {
-                    if (window.__TAURI__.core && window.__TAURI__.core.close) {
-                        await window.__TAURI__.core.close();
-                        console.log('✅ core.close() successful');
-                        return;
-                    }
-                } catch (e) {
-                    console.log('❌ core.close() failed:', e);
+                    console.warn('close_current_window invoke fallito, provo API window diretta:', e);
                 }
             }
-            
-            console.log('❌ All Tauri methods failed, using window.close()');
-            // Fallback: chiudi la finestra del browser
+            // Fallback: API modulo @tauri-apps/api/window (v2)
+            if (window.__TAURI__?.window?.getCurrent) {
+                await window.__TAURI__.window.getCurrent().close();
+                return;
+            }
+            try {
+                const winMod = await import('@tauri-apps/api/window');
+                if (winMod?.getCurrent) {
+                    await winMod.getCurrent().close();
+                    return;
+                }
+            } catch (e) { console.warn('Dynamic import window module failed:', e); }
             window.close();
         } catch (error) {
-            console.error('❌ Error closing settings window:', error);
-            // Fallback: chiudi la finestra del browser
+            console.error('Error closing settings:', error);
             window.close();
         }
     }
 
-    async notifyMainWindow(config) {
+    async getInvoke() {
         try {
-            // Prova diversi modi per accedere all'API Tauri
-            let tauriApi = null;
-            
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                tauriApi = window.__TAURI__.tauri;
-            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                tauriApi = window.__TAURI_INTERNALS__;
-            } else if (window.tauri && window.tauri.invoke) {
-                tauriApi = window.tauri;
-            } else {
-                try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    tauriApi = { invoke };
-                } catch (importError) {
-                    console.log('Could not import Tauri API for notification');
-                }
+            if (window.__TAURI__?.invoke) return window.__TAURI__.invoke.bind(window.__TAURI__);
+            if (window.__TAURI__?.core?.invoke) return window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
+            if (typeof window.getTauriInvoke === 'function') {
+                const h = window.getTauriInvoke();
+                if (h) return h;
             }
-            
-            if (tauriApi && tauriApi.invoke) {
-                // Chiama un comando per notificare il terminale principale
-                await tauriApi.invoke('apply_settings', { config });
-                console.log('✅ Main window notified of settings changes');
-            }
-        } catch (error) {
-            console.error('Error notifying main window:', error);
+            if (window.tauri?.invoke) return window.tauri.invoke.bind(window.tauri);
+            try {
+                const core = await import('@tauri-apps/api/core');
+                if (core?.invoke) return core.invoke;
+            } catch (_) {}
+        } catch (e) {
+            console.warn('Settings invoke detection error:', e);
         }
+        return null;
+    }
+    showBackendBanner(available, msg) {
+        // Backend banner removed as requested
+        // This method is kept for compatibility but does nothing
+        return;
+    }
+
+    setupSettingsListener() {
+        // Listener per verificare che l'evento settings-updated venga ricevuto
+        // Temporaneamente disabilitato a causa di problemi di capability
+        console.log('Settings listener setup skipped due to capability restrictions');
+        /*
+        if (window.__TAURI__ && window.__TAURI__.event) {
+            window.__TAURI__.event.listen('settings-updated', (event) => {
+                console.log('Settings updated event received in settings panel:', event.payload);
+                // Mostra una notifica di conferma
+                this.showNotification('Settings applied to main terminal!', 'success');
+            });
+        }
+        */
     }
 
     showNotification(message, type = 'info') {
-        // Crea una notifica temporanea
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 24px;
-            border-radius: 6px;
-            color: white;
-            font-weight: 500;
-            z-index: 1000;
-            transition: all 0.3s ease;
-            ${type === 'success' ? 'background: #4CAF50;' : ''}
-            ${type === 'error' ? 'background: #f44336;' : ''}
-            ${type === 'info' ? 'background: #2196F3;' : ''}
-        `;
-
-        document.body.appendChild(notification);
-
-        // Rimuovi dopo 1.5 secondi
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateX(100%)';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 1000);
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        // Qui potresti aggiungere una notifica visiva se necessario
     }
 
-    async testAIConnection(provider) {
-        console.log(`Testing AI connection for provider: ${provider}`);
+    setupThemePreview() {
+        // Theme preview functionality
+        const themeSelect = document.getElementById('theme-name');
+        const colorInputs = ['color-background', 'color-foreground', 'color-cursor', 'color-accent'];
         
-        const statusElement = document.getElementById(`${provider}-status`);
-        const statusIndicator = statusElement.querySelector('.status-indicator');
-        const statusText = statusElement.querySelector('span');
-        
-        // Mostra stato di test
-        statusElement.style.display = 'flex';
-        statusIndicator.className = 'status-indicator status-unknown';
-        statusText.textContent = 'Testing connection...';
-        
-        try {
-            // Prova diversi modi per accedere all'API Tauri
-            let tauriApi = null;
-            
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                tauriApi = window.__TAURI__.tauri;
-            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                tauriApi = window.__TAURI_INTERNALS__;
-            } else if (window.tauri && window.tauri.invoke) {
-                tauriApi = window.tauri;
-            } else {
-                try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    tauriApi = { invoke };
-                } catch (importError) {
-                    console.log('Could not import Tauri API for testing connection');
-                }
-            }
-            
-            if (!tauriApi || !tauriApi.invoke) {
-                throw new Error('Tauri API not available');
-            }
-            
-            // Raccogli i dati di configurazione temporanei
-            const testConfig = this.gatherFormData();
-            
-            // Usa la nuova API per testare senza cambiare la configurazione permanente
-            // Allinea provider dell'oggetto di test se differente
-            const effectiveProvider = provider || testConfig.ai.provider;
-            testConfig.ai.provider = effectiveProvider;
-
-            console.log(`Calling test_ai_connection with provider: ${effectiveProvider} and config:`, testConfig.ai);
-            // Invocazione adattiva: prima snake_case, poi camelCase se necessario
-            let testResult;
-            try {
-                testResult = await tauriApi.invoke('test_ai_connection', { provider: effectiveProvider, ai_config: testConfig.ai });
-            } catch (e1) {
-                const msg = (e1 && (e1.message || e1.error || e1.toString())) || '';
-                if (/missing required key\s*aiConfig/i.test(msg) || /invalid args\s*`?aiConfig`?/i.test(msg)) {
-                    // Retry con camelCase
-                    testResult = await tauriApi.invoke('test_ai_connection', { provider: effectiveProvider, aiConfig: testConfig.ai });
-                } else {
-                    throw e1;
-                }
-            }
-            
-            // Normalizza risposta (può arrivare come stringa)
-            if (typeof testResult === 'string') {
-                try { testResult = JSON.parse(testResult); } catch { testResult = { success: false, error: testResult }; }
-            }
-            
-            console.log(`AI test result for ${effectiveProvider}:`, testResult);
-            
-            const responseText = (testResult && testResult.response) ? String(testResult.response) : '';
-            if ((testResult.success === true) || (responseText && !/\b(Error|Errore)\b/i.test(responseText))) {
-                statusIndicator.className = 'status-indicator status-connected';
-                statusText.textContent = '✅ Connection successful';
-                
-                this.showNotification(`${this.getProviderDisplayName(effectiveProvider)} connection successful!`, 'success');
-                // Invio un evento di apply_settings soft per aggiornare il pallino subito
-                try {
-                    let tauriApi = null;
-                    if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                        tauriApi = window.__TAURI__.tauri;
-                    } else {
-                        const { invoke } = await import('@tauri-apps/api/core');
-                        tauriApi = { invoke };
-                    }
-                    if (tauriApi && tauriApi.invoke) {
-                        await tauriApi.invoke('apply_settings', { config: { ai: testConfig.ai } });
-                    }
-                } catch (_) {}
-            } else {
-                throw new Error((testResult && (testResult.error || responseText)) || 'Invalid response from AI');
-            }
-            
-        } catch (error) {
-            console.error(`AI connection test failed for ${provider}:`, error);
-            statusIndicator.className = 'status-indicator status-disconnected';
-            statusText.textContent = '❌ Connection failed';
-            
-            this.showNotification(`${this.getProviderDisplayName(provider)} connection failed: ${error.message}`, 'error');
+        if (themeSelect) {
+            themeSelect.addEventListener('change', () => this.updateThemePreview());
         }
         
-        // Nascondi lo stato dopo 5 secondi
-        setTimeout(() => {
-            statusElement.style.display = 'none';
-        }, 5000);
+        colorInputs.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('input', () => this.updateThemePreview());
+            }
+        });
     }
 
-    getProviderDisplayName(provider) {
-        const displayNames = {
-            'gemini': 'Google Gemini',
-            'openai': 'OpenAI',
-            'lm-studio': 'LM Studio',
-            'ollama': 'Ollama',
-            'disabled': 'AI Off'
+    updateThemePreview() {
+        const preview = document.getElementById('theme-preview');
+        if (!preview) return;
+
+        const bgColor = document.getElementById('color-background')?.value || '#1e2124';
+        const fgColor = document.getElementById('color-foreground')?.value || '#ffffff';
+        const cursorColor = document.getElementById('color-cursor')?.value || '#00d4aa';
+        const accentColor = document.getElementById('color-accent')?.value || '#00d4aa';
+
+        preview.style.backgroundColor = bgColor;
+        preview.style.color = fgColor;
+        
+        const prompt = preview.querySelector('.preview-prompt');
+        const cursor = preview.querySelector('.preview-cursor');
+        if (prompt) prompt.style.color = accentColor;
+        if (cursor) cursor.style.color = cursorColor;
+    }
+
+    setupThemePresets() {
+        const themeSelect = document.getElementById('theme-name');
+        if (!themeSelect) return;
+
+        themeSelect.addEventListener('change', (e) => {
+            const themeName = e.target.value;
+            this.applyThemePreset(themeName);
+        });
+    }
+
+    applyThemePreset(themeName) {
+        const presets = {
+            'warp-dark': {
+                background: '#1e2124',
+                foreground: '#ffffff',
+                cursor: '#00d4aa',
+                accent: '#00d4aa'
+            },
+            'warp-light': {
+                background: '#ffffff',
+                foreground: '#1e2124',
+                cursor: '#007acc',
+                accent: '#007acc'
+            },
+            'terminal-classic': {
+                background: '#000000',
+                foreground: '#00ff00',
+                cursor: '#00ff00',
+                accent: '#00ff00'
+            },
+            'cyberpunk': {
+                background: '#0d1117',
+                foreground: '#ff0080',
+                cursor: '#00ffff',
+                accent: '#ff0080'
+            }
         };
-        return displayNames[provider] || provider;
+
+        const preset = presets[themeName];
+        if (preset) {
+            document.getElementById('color-background').value = preset.background;
+            document.getElementById('color-foreground').value = preset.foreground;
+            document.getElementById('color-cursor').value = preset.cursor;
+            document.getElementById('color-accent').value = preset.accent;
+            this.updateThemePreview();
+        }
     }
 }
 
-// Rendi SettingsManager disponibile globalmente per i pulsanti onclick
-let settingsManager;
-
 // Inizializza quando il DOM è pronto
 document.addEventListener('DOMContentLoaded', () => {
-    settingsManager = new SettingsManager();
+    window.settingsManager = new SettingsManager();
 });

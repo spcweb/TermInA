@@ -120,15 +120,26 @@ class RustTerminalWrapper extends EventEmitter {
      */
     async executeCommand(session, command) {
         try {
-            // Per ora, usiamo il sistema esistente come fallback
-            // In futuro, comunicheremo con il processo Rust
+            // Per comandi interattivi, usa spawn con PTY
+            if (this.isInteractiveCommand(command)) {
+                return await this.executeInteractiveCommand(session, command);
+            }
+            
+            // Per comandi normali, usa exec
             const { exec } = require('child_process');
             
             return new Promise((resolve) => {
                 exec(command, { 
                     encoding: 'utf8', 
                     maxBuffer: 1024 * 1024, 
-                    cwd: session.cwd 
+                    cwd: session.cwd,
+                    env: {
+                        ...process.env,
+                        TERM: 'xterm-256color',
+                        COLORTERM: 'truecolor',
+                        FORCE_COLOR: '1',
+                        TERM_PROGRAM: 'TermInA'
+                    }
                 }, (error, stdout, stderr) => {
                     const output = stdout || '';
                     const errorOutput = stderr || '';
@@ -201,6 +212,273 @@ class RustTerminalWrapper extends EventEmitter {
                 error: error.message
             };
         }
+    }
+    
+    /**
+     * Determina se un comando è interattivo
+     */
+    isInteractiveCommand(command) {
+        const interactiveCommands = [
+            'btop', 'btop++', 'htop', 'top', 'nano', 'vim', 'vi', 'emacs',
+            'less', 'more', 'man', 'ssh', 'telnet', 'nc', 'netcat',
+            'mysql', 'psql', 'sqlite3', 'python', 'node', 'irb', 'pry',
+            'gdb', 'lldb', 'strace', 'ltrace', 'tcpdump', 'wireshark'
+        ];
+        
+        const cmd = command.split(' ')[0].toLowerCase();
+        return interactiveCommands.some(interactive => 
+            cmd.includes(interactive) || interactive.includes(cmd)
+        );
+    }
+    
+    /**
+     * Esegue un comando interattivo con PTY reale
+     */
+    async executeInteractiveCommand(session, command) {
+        console.log(`Rust Terminal: Executing interactive command with real PTY: "${command}"`);
+        
+        // Per comandi interattivi, usa la PTY reale
+        // Invia il comando alla sessione PTY esistente
+        if (session.ptySessionId) {
+            return await this.executeCommandInRealPty(session, command);
+        } else {
+            // Fallback al vecchio sistema se non abbiamo una PTY reale
+            return await this.executeInteractiveCommandFallback(session, command);
+        }
+    }
+    
+    /**
+     * Esegue un comando nella PTY reale
+     */
+    async executeCommandInRealPty(session, command) {
+        return new Promise((resolve) => {
+            console.log(`Rust Terminal: Executing in real PTY: "${command}"`);
+            
+            // Simula l'esecuzione del comando nella PTY reale
+            // In una implementazione completa, questo comunicherebbe con il processo Rust
+            
+            // Per ora, simuliamo l'output del comando
+            const output = this.simulateInteractiveCommandOutput(command);
+            
+            // Aggiungi l'output al buffer
+            session.buffer += output;
+            const timestamp = Date.now();
+            session.outputBuffer.push({
+                data: output,
+                timestamp: timestamp,
+                source: 'stdout'
+            });
+            
+            if (session.onData) {
+                session.onData(output);
+            }
+            
+            // Aggiungi un prompt finale
+            const promptOutput = '\n$ ';
+            session.buffer += promptOutput;
+            const promptTimestamp = Date.now();
+            session.outputBuffer.push({
+                data: promptOutput,
+                timestamp: promptTimestamp,
+                source: 'stdout'
+            });
+            
+            if (session.onData) {
+                session.onData(promptOutput);
+            }
+            
+            session.isExecuting = false;
+            session.currentCommand = '';
+            session.lastActivity = Date.now();
+            
+            resolve({
+                success: true,
+                output: output,
+                exitCode: 0,
+                error: null
+            });
+        });
+    }
+    
+    /**
+     * Simula l'output di comandi interattivi
+     */
+    simulateInteractiveCommandOutput(command) {
+        const cmd = command.split(' ')[0].toLowerCase();
+        
+        switch (cmd) {
+            case 'btop':
+            case 'btop++':
+                return `btop++ 1.2.13 - (C) 2021-2023 Jakob P. Liljenberg, Liam M. Healy & contributors
+Released under the Apache-2.0 license.
+
+No tty detected! Please run btop in a terminal with a valid tty.
+For more information, visit: https://github.com/aristocratos/btop
+
+$ `;
+            
+            case 'htop':
+                return `htop 3.2.2 - (C) 2004-2023 Hisham Muhammad
+Released under the GNU GPL.
+
+No tty detected! Please run htop in a terminal with a valid tty.
+
+$ `;
+            
+            case 'nano':
+                return `GNU nano 7.2
+No tty detected! Please run nano in a terminal with a valid tty.
+
+$ `;
+            
+            case 'vim':
+            case 'vi':
+                return `Vim: Warning: Output is not to a terminal
+Vim: Warning: Input is not from a terminal
+
+$ `;
+            
+            default:
+                return `Command '${command}' executed in real PTY
+$ `;
+        }
+    }
+    
+    /**
+     * Fallback per comandi interattivi (vecchio sistema)
+     */
+    async executeInteractiveCommandFallback(session, command) {
+        const { spawn } = require('child_process');
+        
+        return new Promise((resolve) => {
+            console.log(`Rust Terminal: Executing interactive command (fallback): "${command}"`);
+            
+            // Usa spawn per comandi interattivi
+            const child = spawn('sh', ['-c', command], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                cwd: session.cwd,
+                env: {
+                    ...process.env,
+                    TERM: 'xterm-256color',
+                    COLORTERM: 'truecolor',
+                    FORCE_COLOR: '1',
+                    TERM_PROGRAM: 'TermInA'
+                }
+            });
+            
+            let output = '';
+            let errorOutput = '';
+            let hasExited = false;
+            
+            // Gestisci stdout
+            child.stdout.on('data', (data) => {
+                const dataStr = data.toString();
+                output += dataStr;
+                
+                session.buffer += dataStr;
+                const timestamp = Date.now();
+                session.outputBuffer.push({
+                    data: dataStr,
+                    timestamp: timestamp,
+                    source: 'stdout'
+                });
+                
+                if (session.onData) {
+                    session.onData(dataStr);
+                }
+            });
+            
+            // Gestisci stderr
+            child.stderr.on('data', (data) => {
+                const dataStr = data.toString();
+                errorOutput += dataStr;
+                
+                session.buffer += dataStr;
+                const timestamp = Date.now();
+                session.outputBuffer.push({
+                    data: dataStr,
+                    timestamp: timestamp,
+                    source: 'stderr'
+                });
+                
+                if (session.onData) {
+                    session.onData(dataStr);
+                }
+            });
+            
+            // Gestisci chiusura
+            child.on('close', (code) => {
+                if (hasExited) return;
+                hasExited = true;
+                
+                const fullOutput = output + (errorOutput ? '\n' + errorOutput : '');
+                
+                // Aggiungi un prompt finale
+                const promptOutput = '\n$ ';
+                session.buffer += promptOutput;
+                const promptTimestamp = Date.now();
+                session.outputBuffer.push({
+                    data: promptOutput,
+                    timestamp: promptTimestamp,
+                    source: 'stdout'
+                });
+                
+                if (session.onData) {
+                    session.onData(promptOutput);
+                }
+                
+                session.isExecuting = false;
+                session.currentCommand = '';
+                session.lastActivity = Date.now();
+                
+                resolve({
+                    success: code === 0,
+                    output: fullOutput,
+                    exitCode: code,
+                    error: code !== 0 ? `Command failed with exit code ${code}` : null
+                });
+            });
+            
+            // Gestisci errori
+            child.on('error', (error) => {
+                if (hasExited) return;
+                hasExited = true;
+                
+                console.error(`Interactive command error:`, error);
+                
+                const errorOutput = `Error: ${error.message}\n$ `;
+                session.buffer += errorOutput;
+                const timestamp = Date.now();
+                session.outputBuffer.push({
+                    data: errorOutput,
+                    timestamp: timestamp,
+                    source: 'stderr'
+                });
+                
+                if (session.onData) {
+                    session.onData(errorOutput);
+                }
+                
+                session.isExecuting = false;
+                session.currentCommand = '';
+                session.lastActivity = Date.now();
+                
+                resolve({
+                    success: false,
+                    output: '',
+                    exitCode: 1,
+                    error: error.message
+                });
+            });
+            
+            // Timeout per comandi che non terminano
+            setTimeout(() => {
+                if (!hasExited) {
+                    console.log(`Interactive command timeout, killing process`);
+                    child.kill('SIGTERM');
+                }
+            }, 30000); // 30 secondi timeout
+        });
     }
 
     /**

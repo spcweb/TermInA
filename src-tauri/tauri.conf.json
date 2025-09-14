@@ -5,12 +5,10 @@
   "identifier": "com.termina.app",
   "build": {
     "beforeDevCommand": "npm run dev:frontend",
-    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Termina",
@@ -26,7 +24,8 @@
     "security": {
       "csp": null,
       "dangerousDisableAssetCspModification": true
-    }
+  },
+  "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

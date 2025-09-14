@@ -40,6 +40,7 @@ pub struct TerminalSession {
     current_command: Arc<Mutex<String>>,
     last_activity: Arc<Mutex<u64>>,
     pid: Arc<Mutex<Option<u32>>>,
+    pty_type: Arc<Mutex<String>>,
 }
 
 impl TerminalSession {
@@ -60,6 +61,7 @@ impl TerminalSession {
             current_command: Arc::new(Mutex::new(String::new())),
             last_activity: Arc::new(Mutex::new(Self::current_timestamp())),
             pid: Arc::new(Mutex::new(None)),
+            pty_type: Arc::new(Mutex::new("standard".to_string())),
         };
 
         // Avvia il thread per leggere l'output
@@ -171,6 +173,16 @@ impl TerminalSession {
     /// Ottiene l'ultima attività
     pub fn get_last_activity(&self) -> u64 {
         *self.last_activity.lock().unwrap()
+    }
+    
+    /// Imposta il tipo di PTY
+    pub fn set_pty_type(&mut self, pty_type: &str) {
+        *self.pty_type.lock().unwrap() = pty_type.to_string();
+    }
+    
+    /// Ottiene il tipo di PTY
+    pub fn get_pty_type(&self) -> String {
+        self.pty_type.lock().unwrap().clone()
     }
 
     /// Avvia il thread per leggere l'output

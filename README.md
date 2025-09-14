@@ -487,6 +487,42 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Web scraping may be limited by search engine rate limits
 - Some websites may block automated requests
 
+### Troubleshooting: "Tauri API not available"
+
+If you see messages like:
+
+```
+❌ Error executing command: Tauri API not available for command execution
+⚙️ Settings panel will open soon... (Tauri API not available)
+```
+
+It means the frontend is running in a plain browser context (or without the Tauri backend initialized). Core features (real command execution, PTY, settings persistence, sudo) require the Tauri runtime.
+
+Fix:
+1. Install dependencies and build native layer:
+  ```bash
+  npm install
+  ```
+2. Start with Tauri (development mode):
+  ```bash
+  npm run tauri dev
+  ```
+3. If Rust toolchain is missing, run:
+  ```bash
+  ./setup-tauri.sh
+  ```
+4. Ensure no ad‑blocker strips injected preload scripts.
+
+Fallback Mode:
+- Basic UI will load.
+- Commands like `ls`, `cd`, `pwd` are simulated.
+- AI responses are placeholder text.
+
+To verify detection, open DevTools console and check there is no spam of repeated detection errors. If still failing:
+- Clear cache / hard reload.
+- Remove duplicate copies of old build assets.
+- Confirm `preload.js` is referenced in the Tauri config.
+
 ## 🗺️ Roadmap
 
 ### v2.1 (Next Release)

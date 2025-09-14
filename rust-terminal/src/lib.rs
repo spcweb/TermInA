@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 pub mod pty_manager;
+pub mod real_pty;
 pub mod session;
 pub mod sudo_handler;
 pub mod ffi;
