@@ -46,6 +46,13 @@ class SimpleTerminal {
         this.isExecuting = false;
         this.api = null; // Cache per l'API Tauri
     this.cursorBlinkEnabled = true;
+        this.aiInsightOverlay = null;
+        this.aiInsightElements = {
+            panel: null,
+            title: null,
+            results: null,
+            answer: null,
+        };
         this.ptyCommands = [
             'vim', 'vi', 'nano', 'emacs',           // Editor
             'htop', 'top', 'watch',                 // Monitor in tempo reale
@@ -123,6 +130,15 @@ class SimpleTerminal {
         }
 
         throw new Error('Tauri API initialization function not found or invoke missing');
+    }
+
+    async getTauriAPI() {
+        try {
+            return await this._getApi();
+        } catch (error) {
+            console.warn('⚠️ getTauriAPI fallback:', error);
+            return null;
+        }
     }
 
     // Helper function per eseguire comandi tramite il terminale Rust
@@ -539,6 +555,7 @@ class SimpleTerminal {
         this.setupBackendAvailabilityCheck();
         
         this.setupContentObserver(); // Nuovo observer per auto-scroll
+    this.setupAIInsightOverlay();
         this.initializeAIStatusManager(); // Inizializza il manager status AI
         this.initializePTY(); // Inizializza il PTY terminal
         
@@ -909,6 +926,113 @@ class SimpleTerminal {
         });
         
         console.log('Auto-scroll MutationObserver initialized');
+    }
+
+    setupAIInsightOverlay() {
+        this.aiInsightOverlay = document.getElementById('ai-insight-overlay') || null;
+        if (!this.aiInsightOverlay) {
+            console.warn('AI insight overlay not found in DOM. Falling back to terminal rendering.');
+            return;
+        }
+
+        this.aiInsightElements.panel = this.aiInsightOverlay.querySelector('.ai-insight-panel');
+        this.aiInsightElements.title = this.aiInsightOverlay.querySelector('.ai-insight-title');
+        this.aiInsightElements.results = this.aiInsightOverlay.querySelector('.ai-insight-results');
+        this.aiInsightElements.answer = this.aiInsightOverlay.querySelector('.ai-insight-answer');
+
+        const closeBtn = document.getElementById('ai-insight-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeAIInsightOverlay());
+        }
+
+        this.aiInsightOverlay.addEventListener('click', (event) => {
+            if (event.target === this.aiInsightOverlay) {
+                this.closeAIInsightOverlay();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.aiInsightOverlay?.classList.contains('visible')) {
+                this.closeAIInsightOverlay();
+            }
+        });
+    }
+
+    openAIInsightOverlay() {
+        if (!this.aiInsightOverlay) {
+            return;
+        }
+
+        this.aiInsightOverlay.style.display = 'flex';
+        requestAnimationFrame(() => {
+            this.aiInsightOverlay.classList.add('visible');
+        });
+    }
+
+    closeAIInsightOverlay() {
+        if (!this.aiInsightOverlay) {
+            return;
+        }
+
+        this.aiInsightOverlay.classList.remove('visible');
+        setTimeout(() => {
+            if (!this.aiInsightOverlay.classList.contains('visible')) {
+                this.aiInsightOverlay.style.display = 'none';
+            }
+        }, 200);
+    }
+
+    renderAIInsightSearchResults(searchResponse = {}) {
+        if (!this.aiInsightOverlay) {
+            return;
+        }
+
+        const { query = '', searchEngine = 'Web' } = searchResponse;
+
+        if (this.aiInsightElements.title) {
+            this.aiInsightElements.title.textContent = query
+                ? `Assistente AI · "${query}"`
+                : 'Assistente AI';
+        }
+
+        if (this.aiInsightElements.results) {
+            this.aiInsightElements.results.innerHTML = `
+                <div class="ai-web-search">
+                    ${this.buildWebSearchResultsHTML(searchResponse)}
+                </div>
+            `;
+        }
+
+        if (this.aiInsightElements.answer) {
+            this.aiInsightElements.answer.innerHTML = `
+                <div class="ai-insight-status">
+                    <span class="spinner"></span>
+                    Sto analizzando i risultati da ${this.escapeHtml(searchEngine)}...
+                </div>
+            `;
+        }
+
+        this.openAIInsightOverlay();
+    }
+
+    updateAIInsightAnswer(text, metadata = {}) {
+        if (!this.aiInsightOverlay || !this.aiInsightElements.answer) {
+            return;
+        }
+
+        const normalized = typeof text === 'string' ? text.trim() : '';
+        const safeHtml = normalized
+            ? this.escapeHtml(normalized).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')
+            : '<em>Nessuna risposta fornita dall\'assistente.</em>';
+
+        this.aiInsightElements.answer.innerHTML = `
+            <div class="ai-insight-response"><p>${safeHtml}</p></div>
+            <div class="source-note">Fonti: risultati numerati nella colonna a sinistra.</div>
+        `;
+
+        if (!this.aiInsightOverlay.classList.contains('visible')) {
+            this.openAIInsightOverlay();
+        }
     }
 
     setupEventListeners() {
@@ -2406,7 +2530,7 @@ class SimpleTerminal {
             const match = trimmed.match(/^(ai|ask|execute|run)\s+/i);
             const keyword = match ? match[1].toLowerCase() : 'ai';
             const question = match ? trimmed.slice(match[0].length).trim() : trimmed;
-            const expectCommand = keyword !== 'ask';
+            const expectCommand = ['execute', 'run'].includes(keyword);
 
             if (!question) {
                 this.addAIOutput('⚠️ Specifica una richiesta per l\'assistente AI.');
@@ -2450,6 +2574,11 @@ class SimpleTerminal {
                 thinkingLine,
                 expectCommand,
                 originalQuestion: question,
+                contextLines,
+                systemInfo,
+                cwd: currentCwd,
+                directorySnapshots,
+                webSearchDepth: 0,
             });
         } catch (mainError) {
             console.error('processAICommand error:', mainError);
@@ -2524,6 +2653,29 @@ class SimpleTerminal {
         if (json) {
             const mode = (json.mode || json.type || '').toString().toLowerCase();
             const summary = json.summary || json.explanation || json.response || json.text || json.message || '';
+            if (mode === 'web_search') {
+                const queryCandidate = json.searchQuery
+                    || json.query
+                    || json.term
+                    || json.keyword
+                    || options.originalQuestion
+                    || '';
+
+                const maxResults = Number.isFinite(Number(json.maxResults))
+                    ? Number(json.maxResults)
+                    : Number.isFinite(Number(json.max_results))
+                        ? Number(json.max_results)
+                        : 5;
+
+                return {
+                    type: 'web_search',
+                    query: queryCandidate.toString(),
+                    reason: json.reason || summary || 'Necessaria una ricerca online per completare la risposta.',
+                    searchEngine: (json.searchEngine || json.engine || 'duckduckgo').toString(),
+                    maxResults: Math.min(Math.max(3, maxResults || 5), 10),
+                    expectCommand,
+                };
+            }
             const commands = [];
 
             if (Array.isArray(json.commands)) {
@@ -2733,10 +2885,11 @@ class SimpleTerminal {
                 .join('\n')}`
             : '';
 
-        const exampleJson = `{"mode":"suggestion","summary":"Sposta 1.png nelle Immagini","commands":[{"command":"mkdir -p ~/Pictures && mv ~/Desktop/1.png ~/Pictures/1.png","explanation":"Crea la cartella se manca e sposta il file","notes":"Usa && per creare la cartella solo se assente","danger":false,"cwd":"~"}]}`;
+        const exampleCommandJson = `{"mode":"suggestion","summary":"Sposta 1.png nelle Immagini","commands":[{"command":"mkdir -p ~/Pictures && mv ~/Desktop/1.png ~/Pictures/1.png","explanation":"Crea la cartella se manca e sposta il file","notes":"Usa && per creare la cartella solo se assente","danger":false,"cwd":"~"}]}`;
+        const exampleWebSearchJson = `{"mode":"web_search","searchQuery":"previsioni meteo Reggio Emilia domani","reason":"La richiesta riguarda meteo aggiornato quindi serve una ricerca online","searchEngine":"duckduckgo","maxResults":5}`;
 
         const guidance = expectCommand
-            ? `L'utente desidera un comando pronto all'uso per rispondere a: "${question}".\n\nRestituisci SOLO JSON valido (senza testo aggiuntivo) seguendo queste regole:\n- Usa il campo "mode" con valore "suggestion" quando fornisci comandi.\n- Popola SEMPRE "commands" come array (anche con un solo elemento).\n- Ogni comando deve essere già pronto: combina passaggi multipli con "&&" nell'ordine corretto.\n- Includi "notes" con prerequisiti o avvertenze brevi.\n- Imposta "danger" a true se il comando può causare perdita di dati o modifiche di sistema.\n- Usa percorsi reali dai dati forniti (es. ${systemInfo.picturesDir || '~/Pictures'}).\n- Se una cartella potrebbe mancare, inserisci nel comando la creazione idempotente (es. mkdir -p).\n- Se non è possibile fornire un comando, restituisci JSON con "mode": "informational" e un campo "text" che spiega il motivo.\n- Non usare backtick o formattazioni Markdown.\n- Esempio di risposta valida: ${exampleJson}`
+            ? `Analizza con attenzione la richiesta dell'utente: "${question}". Restituisci SOLO JSON valido (nessun testo extra, nessun markdown) seguendo queste regole in ordine di priorità:\n1. Se la richiesta è un saluto, una conversazione o comunque non richiede comandi (es. "ciao", "raccontami"), rispondi con {"mode":"informational","text":"..."} fornendo una risposta discorsiva nella stessa lingua dell'utente.\n2. Se per rispondere servono informazioni aggiornate, dati in tempo reale o contenuti potenzialmente sconosciuti (meteo, notizie, prezzi, eventi attuali, guide specifiche recenti, ecc.), restituisci ${exampleWebSearchJson} adattando query, motivo, motore e maxResults in base al contesto.\n3. Solo quando la richiesta richiede esplicitamente un comando da terminale, usa "mode":"suggestion" e popola "commands" (array) con comandi completi, già pronti: concatena passaggi multipli con "&&", aggiungi "notes" con prerequisiti o avvertenze, indica "danger"=true se rischioso e specifica "cwd" quando utile.\n4. Se non puoi aiutare, fornisci un JSON con "mode":"informational" spiegando chiaramente perché.\nVincoli aggiuntivi per i comandi: usa percorsi reali forniti (es. ${systemInfo.picturesDir || '~/Pictures'}), crea directory mancanti in modo idempotente (mkdir -p) e non aggiungere testo fuori dal JSON.\nEsempio comando valido: ${exampleCommandJson}`
             : `Domanda dell'utente: "${question}". Rispondi in modo conciso e utile per l'uso in un terminale, senza includere testo ridondante.`;
 
         const instruction = [
@@ -2880,7 +3033,20 @@ class SimpleTerminal {
         lines.forEach((line) => this.addAIOutput(line));
     }
 
-    async presentAIResult(result, { thinkingLine, expectCommand }) {
+    async presentAIResult(result, context = {}) {
+        const {
+            thinkingLine = null,
+            expectCommand = false,
+            originalQuestion = '',
+            contextLines = [],
+            systemInfo = {},
+            cwd = this.cwd || '~',
+            directorySnapshots = [],
+            webSearchDepth = 0,
+            displayTarget = null,
+            overlayMetadata = null,
+        } = context;
+
         if (!result) {
             this.updateAILineWithText(thinkingLine, '❌ Nessuna risposta dalla AI.');
             return;
@@ -2950,13 +3116,326 @@ class SimpleTerminal {
                 });
                 break;
             }
+            case 'web_search': {
+                await this.handleAIWebSearch(result, {
+                    thinkingLine,
+                    originalQuestion,
+                    contextLines,
+                    systemInfo,
+                    cwd,
+                    directorySnapshots,
+                    expectCommand,
+                    webSearchDepth,
+                });
+                break;
+            }
             case 'informational':
             default: {
                 const text = result.text || 'Nessuna risposta disponibile.';
+                if (displayTarget === 'overlay' && this.aiInsightOverlay) {
+                    if (thinkingLine) {
+                        this.updateAILineWithText(thinkingLine, '🤖 Risposta pronta nella finestra AI dedicata.');
+                    } else {
+                        this.addAIOutput('🤖 Ho preparato una risposta dettagliata nella finestra AI.');
+                    }
+                    this.updateAIInsightAnswer(text, overlayMetadata);
+                    this.aiConversation.push({ role: 'assistant', text });
+                    break;
+                }
                 this.updateAILineWithText(thinkingLine, `🤖 ${text}`);
                 this.aiConversation.push({ role: 'assistant', text });
                 break;
             }
+        }
+    }
+
+    async handleAIWebSearch(result, context = {}) {
+        const {
+            thinkingLine = null,
+            originalQuestion = '',
+            contextLines = [],
+            systemInfo = {},
+            cwd = this.cwd || '~',
+            directorySnapshots = [],
+            webSearchDepth = 0,
+        } = context;
+
+        if ((webSearchDepth || 0) >= 2) {
+            const warning = '⚠️ Limite di ricerche web consecutive raggiunto.';
+            if (thinkingLine) {
+                thinkingLine.classList.remove('web-search-loading');
+                this.updateAILineWithText(thinkingLine, warning);
+            } else {
+                this.addAIOutput(warning);
+            }
+            this.aiConversation.push({ role: 'assistant', text: warning });
+            return;
+        }
+
+        const query = (result?.query || originalQuestion || '').trim();
+        if (!query) {
+            const message = '⚠️ Ricerca web non avviata: manca una query valida.';
+            if (thinkingLine) {
+                thinkingLine.classList.remove('web-search-loading');
+                this.updateAILineWithText(thinkingLine, message);
+            } else {
+                this.addAIOutput(message);
+            }
+            this.aiConversation.push({ role: 'assistant', text: message });
+            return;
+        }
+
+        let statusLine = thinkingLine;
+        if (!statusLine) {
+            statusLine = this.addAIOutput(`🌐 Ricerca web in corso per "${query}"...`);
+        } else {
+            statusLine.textContent = `🌐 Ricerca web in corso per "${query}"...`;
+        }
+        statusLine.classList.add('web-search-loading');
+
+        try {
+            const api = await this._getApi();
+            const response = await api.invoke('web_search', {
+                query,
+                searchEngine: result?.searchEngine || 'duckduckgo',
+                maxResults: result?.maxResults || 5,
+                fetchContent: true,
+            });
+
+            statusLine.classList.remove('web-search-loading');
+
+            const payload = typeof response === 'string' ? JSON.parse(response) : (response || {});
+            const results = Array.isArray(payload.results) ? payload.results : [];
+
+            if (!results.length) {
+                const message = payload.error
+                    ? `⚠️ Ricerca web fallita: ${payload.error}`
+                    : `⚠️ Nessun risultato trovato per "${query}"`;
+                this.updateAILineWithText(statusLine, message);
+                this.aiConversation.push({ role: 'assistant', text: message });
+                return;
+            }
+
+            const firstSummaryLine = (payload.summary || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .find((line) => line.length);
+
+            const headerText = firstSummaryLine
+                ? this.truncateForDisplay(firstSummaryLine, 160)
+                : `Trovati ${results.length} risultati per "${query}"`;
+
+            this.updateAILineWithText(
+                statusLine,
+                `🌐 ${headerText}\n🪄 Sto analizzando le fonti nella finestra dedicata dell'assistente.`,
+            );
+
+            this.renderAIInsightSearchResults({
+                ...payload,
+                query,
+            });
+
+            const conversationText = this.composeSearchConversationText({
+                ...payload,
+                query,
+            });
+            if (conversationText) {
+                this.aiConversation.push({ role: 'assistant', text: conversationText });
+            }
+
+            await this.followUpWithSearchResults(
+                { ...payload, query },
+                {
+                    thinkingLine: null,
+                    originalQuestion,
+                    contextLines,
+                    systemInfo,
+                    cwd,
+                    directorySnapshots,
+                    webSearchDepth: (webSearchDepth || 0) + 1,
+                },
+            );
+        } catch (error) {
+            statusLine.classList.remove('web-search-loading');
+            const message = `❌ Errore durante la ricerca web: ${error.message || error}`;
+            this.updateAILineWithText(statusLine, message);
+            this.aiConversation.push({ role: 'assistant', text: message });
+        }
+    }
+
+    buildWebSearchResultsHTML(response = {}) {
+        const results = Array.isArray(response.results) ? response.results : [];
+        const itemsHtml = results
+            .map((item, index) => {
+                const title = this.escapeHtml(item.title || item.url || `Risultato ${index + 1}`);
+                const url = this.escapeHtml(item.url || '');
+                const snippet = item.snippet
+                    ? this.escapeHtml(item.snippet).replace(/\n/g, '<br>')
+                    : '';
+                const content = item.content
+                    ? this.escapeHtml(this.truncateForDisplay(item.content, 320)).replace(/\n/g, '<br>')
+                    : '';
+                const source = this.escapeHtml(item.source || response.searchEngine || 'Web');
+
+                return `
+                    <div class="web-search-result-item">
+                        <div class="web-search-result-title">
+                            <span class="web-search-index">${index + 1}.</span>
+                            <a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>
+                        </div>
+                        <div class="web-search-result-url">${url}</div>
+                        ${snippet ? `<div class="web-search-result-snippet">${snippet}</div>` : ''}
+                        ${content ? `<div class="web-search-result-content">${content}</div>` : ''}
+                        <div class="web-search-result-source">Fonte: ${source}</div>
+                    </div>
+                `;
+            })
+            .join('');
+
+        const summaryHtml = response.summary
+            ? this.escapeHtml(response.summary).replace(/\n/g, '<br>')
+            : '';
+
+        return `
+            <div class="web-search-results-wrapper">
+                <div class="web-search-results-header">
+                    🌐 Ricerca Web (${this.escapeHtml(response.searchEngine || 'Web')}) — ${this.escapeHtml(response.query || '')}
+                    ${response.fallback ? '<span class="web-search-fallback">[risultati simulati]</span>' : ''}
+                </div>
+                <div class="web-search-results-body">
+                    ${itemsHtml || '<div class="web-search-empty">Nessun risultato disponibile.</div>'}
+                </div>
+                ${summaryHtml ? `<div class="web-search-summary">${summaryHtml}</div>` : ''}
+            </div>
+        `;
+    }
+
+    composeSearchConversationText(response = {}) {
+        const results = Array.isArray(response.results) ? response.results : [];
+        if (!results.length) {
+            return '';
+        }
+
+        const lines = [
+            `Ricerca web su ${response.searchEngine || 'Web'} per "${response.query || ''}"`,
+        ];
+
+        results.forEach((item, index) => {
+            const title = item.title || item.url || `Risultato ${index + 1}`;
+            const url = item.url ? ` — ${item.url}` : '';
+            const snippet = item.snippet
+                ? `\n    ${this.truncateForDisplay(item.snippet, 200)}`
+                : '';
+            lines.push(`${index + 1}. ${title}${url}${snippet}`);
+        });
+
+        if (response.fallback) {
+            lines.push('⚠️ Risultati simulati per indisponibilità del motore di ricerca.');
+        }
+
+        return lines.join('\n');
+    }
+
+    buildSearchContextBlock(response = {}) {
+        const results = Array.isArray(response.results) ? response.results : [];
+        if (!results.length) {
+            return '';
+        }
+
+        return results
+            .map((item, index) => {
+                const title = item.title || item.url || `Risultato ${index + 1}`;
+                const snippet = item.snippet
+                    ? `Snippet: ${this.truncateForDisplay(item.snippet, 240)}`
+                    : '';
+                const content = item.content
+                    ? `Contenuto: ${this.truncateForDisplay(item.content, 400)}`
+                    : '';
+                return [
+                    `[${index + 1}] ${title}`,
+                    `URL: ${item.url || 'n/d'}`,
+                    snippet,
+                    content,
+                ]
+                    .filter(Boolean)
+                    .join('\n');
+            })
+            .join('\n\n');
+    }
+
+    truncateForDisplay(text, maxLength = 200) {
+        if (!text || typeof text !== 'string') {
+            return '';
+        }
+
+        if (text.length <= maxLength) {
+            return text;
+        }
+
+        return `${text.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+    }
+
+    async followUpWithSearchResults(searchResponse = {}, context = {}) {
+        const {
+            originalQuestion = '',
+            contextLines = [],
+            systemInfo = {},
+            cwd = this.cwd || '~',
+            directorySnapshots = [],
+            webSearchDepth = 0,
+        } = context;
+
+        if (!originalQuestion) {
+            return;
+        }
+
+        const processingLine = this.addAIOutput('🤖 Sto integrando i risultati della ricerca...');
+        processingLine.classList.add('ai-thinking');
+
+        try {
+            const searchBlock = this.buildSearchContextBlock(searchResponse);
+            const followupPrompt = [
+                `Domanda originale dell'utente: ${originalQuestion}`,
+                `Risultati della ricerca web (${searchResponse.searchEngine || 'Web'})`,
+                searchBlock,
+                'Fornisci una risposta aggiornata e affidabile utilizzando le informazioni sopra. '
+                + 'Cita le fonti usando il formato [numero risultato]. Rispondi nella stessa lingua della domanda originale.',
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+
+            const rawResponse = await this.invokeAIProvider(followupPrompt, {
+                expectCommand: false,
+                contextLines,
+                originalQuestion,
+                systemInfo,
+                cwd,
+                directorySnapshots,
+            });
+
+            const aiResult = this.parseAIResult(rawResponse, {
+                expectCommand: false,
+                originalQuestion,
+            });
+
+            processingLine.classList.remove('ai-thinking');
+
+            await this.presentAIResult(aiResult, {
+                ...context,
+                thinkingLine: processingLine,
+                expectCommand: false,
+                webSearchDepth,
+                displayTarget: 'overlay',
+                overlayMetadata: {
+                    searchResponse,
+                    query: searchResponse.query || originalQuestion,
+                },
+            });
+        } catch (error) {
+            processingLine.classList.remove('ai-thinking');
+            const message = `❌ Errore nell'elaborazione dei risultati web: ${error.message || error}`;
+            this.updateAILineWithText(processingLine, message);
+            this.aiConversation.push({ role: 'assistant', text: message });
         }
     }
 
