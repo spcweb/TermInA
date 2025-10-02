@@ -12,13 +12,25 @@ class SimpleTerminal {
         this.output = [];
         this.cursor = null;
         this.aiConversation = []; // Cronologia conversazioni AI
-        this.ptyModeEnabled = true; // Abilita PTY per default per comandi interattivi
+    this.ptyModeEnabled = true; // Abilita PTY per comandi interattivi reali
         this.autoScrollEnabled = true; // Abilita scroll automatico
         this.smoothScrollEnabled = true; // Scroll fluido o istantaneo
         this.isUserScrolling = false; // Traccia se l'utente sta scrollando manualmente
         this.contentObserver = null; // Observer per monitorare i cambiamenti di contenuto
         this.currentAIGroup = null; // Contenitore corrente della sessione chat AI
         this.aiStatusManager = null; // Manager per lo status AI
+        this.systemInfo = null; // Cache informazioni di sistema per prompt AI
+        this.systemInfoTimestamp = 0;
+        this.terminalSettings = {
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: 14,
+            lineHeight: 1.4,
+            cursorStyle: 'bar',
+            cursorBlink: true,
+            autoScroll: true,
+            smoothScroll: true,
+            scrollback: 10000,
+        };
         
         // Nuove proprietà PTY
         this.ptyTerminal = null;
@@ -32,6 +44,8 @@ class SimpleTerminal {
         this.loadingDots = 0;
         this.commandTimeoutTimer = null;
         this.isExecuting = false;
+        this.api = null; // Cache per l'API Tauri
+    this.cursorBlinkEnabled = true;
         this.ptyCommands = [
             'vim', 'vi', 'nano', 'emacs',           // Editor
             'htop', 'top', 'watch',                 // Monitor in tempo reale
@@ -57,46 +71,74 @@ class SimpleTerminal {
         console.log('Auto-scroll enabled:', this.autoScrollEnabled);
         console.log('Smooth-scroll enabled:', this.smoothScrollEnabled);
         console.log('PTY mode enabled:', this.ptyModeEnabled);
-        this.init();
-        this.setupSettingsListener();
+        // this.init();
+        // this.setupSettingsListener();
     }
 
     // Helper function per accedere all'API Tauri in modo robusto
-    async getTauriAPI() {
-        try {
-            // Debug minimale (evita spam e accessi non sicuri)
-            const tauri = window.__TAURI__;
-            // Pattern Tauri v2: invoke sta in __TAURI__.core.invoke quando si usa lo script globale
-            if (tauri?.invoke) return tauri;            // (alcune build custom espongono direttamente invoke)
-            if (tauri?.core?.invoke) return { invoke: tauri.core.invoke.bind(tauri.core), event: tauri.event, core: tauri.core };
-            // Compat vecchio / script personalizzati
-            if (window.tauri?.invoke) return window.tauri;
-            // Helper esposto dal preload
-            if (typeof window.getTauriInvoke === 'function') {
-                const inv = window.getTauriInvoke();
-                if (inv) return { invoke: inv };
+    async _getApi() {
+        const adapt = (raw) => {
+            if (!raw) return null;
+            if (typeof raw.invoke === 'function') {
+                return raw;
             }
-            // Dynamic import (solo moduli ESM bundlati)
-            try {
-                const core = await import('@tauri-apps/api/core');
-                if (core?.invoke) return { invoke: core.invoke };
-            } catch (_) { /* ignorato */ }
-        } catch (e) {
-            console.warn('Tauri API detection error:', e);
+            if (raw.core && typeof raw.core.invoke === 'function') {
+                const adapted = {
+                    ...raw,
+                    invoke: raw.core.invoke.bind(raw.core),
+                };
+                if (!adapted.event && raw.event) {
+                    adapted.event = raw.event;
+                }
+                return adapted;
+            }
+            return null;
+        };
+
+        if (this.api && typeof this.api.invoke === 'function') {
+            return this.api;
         }
-        return null; // Non disponibile
+
+        const direct = adapt(window.__TAURI__);
+        if (direct) {
+            this.api = direct;
+            return this.api;
+        }
+
+        if (window.getTauriAPI) {
+            try {
+                const resolved = await window.getTauriAPI();
+                const adapted = adapt(resolved) || resolved;
+                if (adapted && typeof adapted.invoke === 'function') {
+                    if (!adapted.event && window.__TAURI__?.event) {
+                        adapted.event = window.__TAURI__.event;
+                    }
+                    this.api = adapted;
+                    return this.api;
+                }
+                console.warn('⚠️ getTauriAPI returned an object without invoke:', resolved);
+            } catch (error) {
+                console.error('❌ Failed to resolve Tauri API via window.getTauriAPI:', error);
+            }
+        }
+
+        throw new Error('Tauri API initialization function not found or invoke missing');
     }
 
     // Helper function per eseguire comandi tramite il terminale Rust
     async executeCommandViaRust(command) {
-        const tauriApi = await this.getTauriAPI();
+        const tauriApi = await this._getApi();
         if (!tauriApi || !tauriApi.invoke) {
             // Fallback simulato lato browser
             return this.executeFallbackCommand(command);
         }
         try {
             console.log('Executing command via Rust:', command);
-            const result = await tauriApi.invoke('run_command', { command });
+            const result = await tauriApi.invoke('run_command', {
+                payload: {
+                    command,
+                },
+            });
             console.log('Command result:', result);
             return result;
         } catch (err) {
@@ -176,10 +218,14 @@ class SimpleTerminal {
         // In a browser environment, we can't execute shell commands directly
         // But we can use the terminal Rust to execute them
         try {
-            const tauriApi = await this.getTauriAPI();
+            const tauriApi = await this._getApi();
             if (tauriApi && tauriApi.invoke) {
                 console.log('Using Tauri API to execute shell command');
-                return await tauriApi.invoke('run_command', { command });
+                return await tauriApi.invoke('run_command', {
+                    payload: {
+                        command,
+                    },
+                });
             } else {
                 console.log('Tauri API not available, using simulated response');
                 // Simulate command execution for testing
@@ -198,32 +244,21 @@ class SimpleTerminal {
     setupSettingsListener() {
         // Listener per aggiornamenti delle impostazioni dal pannello
         console.log('🔧 Setting up settings listener...');
-        console.log('🔧 window.__TAURI__:', !!window.__TAURI__);
-        console.log('🔧 window.__TAURI__.event:', !!window.__TAURI__?.event);
-        console.log('🔧 window.__TAURI__.event.listen:', !!window.__TAURI__?.event?.listen);
         
-        if (window.__TAURI__ && window.__TAURI__.event) {
-            console.log('✅ Tauri event API available, setting up listener');
+        const setup = async () => {
             try {
-                const listener = window.__TAURI__.event.listen('settings-updated', (event) => {
+                const tauriAPI = await this._getApi();
+                await tauriAPI.event.listen('settings-updated', (event) => {
                     console.log('🎯 Settings updated event received:', event.payload);
-                    console.log('🎯 Event type:', typeof event.payload);
-                    console.log('🎯 Event keys:', Object.keys(event.payload || {}));
-                    console.log('🎯 Calling applySettings...');
                     this.applySettings(event.payload);
                 });
-                console.log('✅ Settings listener setup complete, listener:', listener);
+                console.log('✅ Settings listener setup complete');
             } catch (error) {
                 console.error('❌ Error setting up settings listener:', error);
             }
-        } else {
-            console.warn('❌ Tauri event API not available for settings listener');
-            console.warn('❌ Available APIs:', {
-                tauri: !!window.__TAURI__,
-                event: !!window.__TAURI__?.event,
-                listen: !!window.__TAURI__?.event?.listen
-            });
-        }
+        };
+        
+        setup();
     }
 
 
@@ -233,11 +268,184 @@ class SimpleTerminal {
         console.log('AI settings updated:', this.aiSettings);
     }
 
+    async ensureAIConfigLoaded() {
+        if (this.aiSettings && typeof this.aiSettings === 'object') {
+            return this.aiSettings;
+        }
+
+        try {
+            const config = await this.loadSettingsFromBackend();
+            if (config && config.ai) {
+                this.aiSettings = config.ai;
+                return this.aiSettings;
+            }
+        } catch (error) {
+            console.warn('Unable to load AI configuration:', error);
+        }
+
+        return this.aiSettings || null;
+    }
+
+    async ensureSystemInfo(force = false) {
+        const now = Date.now();
+        if (!force && this.systemInfo && (now - this.systemInfoTimestamp) < 5 * 60 * 1000) {
+            return this.systemInfo;
+        }
+
+        try {
+            const tauriApi = await this._getApi();
+            if (tauriApi?.invoke) {
+                const info = await tauriApi.invoke('get_system_info');
+                if (info && typeof info === 'object') {
+                    this.systemInfo = info;
+                    this.systemInfoTimestamp = now;
+                    return this.systemInfo;
+                }
+            }
+        } catch (error) {
+            console.warn('Impossibile recuperare get_system_info dal backend:', error);
+        }
+
+        const platformGuess = (() => {
+            const raw = (navigator.platform || navigator.userAgent || '').toLowerCase();
+            if (raw.includes('win')) return 'win32';
+            if (raw.includes('mac')) return 'darwin';
+            return 'linux';
+        })();
+
+        const home = (() => {
+            const envHome = window.process?.env?.HOME || window.process?.env?.USERPROFILE;
+            if (envHome) return envHome;
+            if (platformGuess === 'win32') return '%USERPROFILE%';
+            return '~';
+        })();
+
+        this.systemInfo = {
+            platform: platformGuess,
+            arch: window.navigator?.userAgentData?.architecture || '',
+            shell: platformGuess === 'win32' ? 'powershell' : 'bash',
+            homeDir: home,
+            desktopDir: platformGuess === 'win32' ? `${home}\\Desktop` : `${home}/Desktop`,
+            documentsDir: platformGuess === 'win32' ? `${home}\\Documents` : `${home}/Documents`,
+            downloadsDir: platformGuess === 'win32' ? `${home}\\Downloads` : `${home}/Downloads`,
+            picturesDir: platformGuess === 'win32' ? `${home}\\Pictures` : `${home}/Pictures`,
+            musicDir: platformGuess === 'win32' ? `${home}\\Music` : `${home}/Music`,
+            videosDir: platformGuess === 'win32'
+                ? `${home}\\${platformGuess === 'darwin' ? 'Movies' : 'Videos'}`
+                : `${home}/${platformGuess === 'darwin' ? 'Movies' : 'Videos'}`,
+            publicDir: platformGuess === 'win32' ? `${home}\\Public` : `${home}/Public`,
+        };
+        this.systemInfoTimestamp = now;
+        return this.systemInfo;
+    }
+
+    async collectDirectorySnapshots(systemInfo, currentCwd, expectCommand) {
+        if (!expectCommand) {
+            return [];
+        }
+
+        try {
+            const tauriApi = await this._getApi();
+            if (!tauriApi?.invoke) {
+                return [];
+            }
+
+            const platform = (systemInfo?.platform || '').toLowerCase();
+            const isWindows = platform === 'win32';
+            const listCommand = isWindows ? 'dir /a /b' : 'ls -a';
+            const resolvePath = (value) => {
+                if (!value || typeof value !== 'string') {
+                    return null;
+                }
+                if (value.startsWith('~') && systemInfo?.homeDir) {
+                    return `${systemInfo.homeDir}${value.slice(1)}`;
+                }
+                return value;
+            };
+
+            const candidates = [
+                currentCwd,
+                systemInfo?.desktopDir,
+                systemInfo?.documentsDir,
+                systemInfo?.downloadsDir,
+                systemInfo?.picturesDir,
+            ]
+                .map((item) => resolvePath(item))
+                .filter((item) => item && item.length);
+
+            const unique = Array.from(new Set(candidates));
+            const snapshots = [];
+
+            for (const directory of unique) {
+                try {
+                    const result = await tauriApi.invoke('run_command', {
+                        payload: {
+                            command: listCommand,
+                            cwd: directory,
+                        },
+                    });
+
+                    if (!result || result.success === false) {
+                        continue;
+                    }
+
+                    const raw = (result.stdout || result.output || '').trim();
+                    if (!raw) {
+                        continue;
+                    }
+
+                    const entries = raw
+                        .split(/\r?\n/)
+                        .map((line) => line.trim())
+                        .filter((line) => line && line !== '.' && line !== '..')
+                        .slice(0, 25);
+
+                    if (!entries.length) {
+                        continue;
+                    }
+
+                    snapshots.push({
+                        directory,
+                        entries,
+                    });
+                } catch (error) {
+                    console.warn('Directory snapshot failure:', directory, error);
+                }
+            }
+
+            return snapshots;
+        } catch (error) {
+            console.warn('Impossibile creare snapshot directory:', error);
+            return [];
+        }
+    }
+
+    getRecentTerminalContext(maxLines = 6) {
+        try {
+            if (!this.outputElement || !maxLines || maxLines <= 0) {
+                return [];
+            }
+
+            const lines = Array.from(this.outputElement.querySelectorAll('.output-line'));
+            if (!lines.length) {
+                return [];
+            }
+
+            return lines
+                .slice(-maxLines)
+                .map((node) => (node.textContent || '').trim())
+                .filter((text) => text.length);
+        } catch (error) {
+            console.warn('Failed to collect terminal context for AI:', error);
+            return [];
+        }
+    }
+
     async loadSettingsFromBackend() {
         console.log('=== LOADING SETTINGS FROM BACKEND ===');
         try {
-            const tauriApi = await this.getTauriAPI();
-            console.log('Tauri API obtained:', tauriApi);
+            const tauriApi = await this._getApi();
+            console.log('Tauri API obtained for settings');
             
             if (!tauriApi || !tauriApi.invoke) {
                 console.log('Tauri API not available for loading settings');
@@ -281,6 +489,47 @@ class SimpleTerminal {
         this.showPrompt();
         this.setupEventListeners();
         this.startCursorBlink();
+        
+        // Focus sul container del terminale per abilitare l'input
+        const terminalContainer = document.getElementById('terminal-container');
+        if (terminalContainer) {
+            terminalContainer.focus();
+            console.log('Initial focus set on terminal container');
+        }
+
+        // Assicurati che il focus rimanga sul container - versione più aggressiva
+        const ensureFocus = () => {
+            const terminalContainer = document.getElementById('terminal-container');
+            if (terminalContainer && document.activeElement !== terminalContainer) {
+                terminalContainer.focus();
+                console.log('Forced focus on terminal container');
+            }
+        };
+
+        // Focus su click
+        document.addEventListener('click', (e) => {
+            console.log('Document click, checking focus');
+            setTimeout(ensureFocus, 10);
+        });
+
+        // Focus periodico per assicurarsi che rimanga
+        setInterval(() => {
+            const terminalContainer = document.getElementById('terminal-container');
+            if (terminalContainer && document.activeElement !== terminalContainer) {
+                console.log('Periodic focus check - refocusing terminal');
+                terminalContainer.focus();
+            }
+        }, 1000); // Ogni secondo
+
+        // Focus su keydown se non siamo già focalizzati
+        document.addEventListener('keydown', (e) => {
+            const terminalContainer = document.getElementById('terminal-container');
+            if (terminalContainer && document.activeElement !== terminalContainer) {
+                console.log('Keydown detected, terminal not focused - focusing');
+                terminalContainer.focus();
+            }
+        });
+        
         // Carica le impostazioni iniziali in modo asincrono e non bloccante
         this.loadInitialSettings().catch(error => {
             console.error('Failed to load initial settings:', error);
@@ -429,15 +678,20 @@ class SimpleTerminal {
             tryRender();
             return;
         }
-        const inv = this.getQuickInvoke();
-        if (inv) {
-            inv('get_cwd').then(cwd => {
+        
+        const getCwdAsync = async () => {
+            try {
+                const tauriAPI = await this._getApi();
+                const cwd = await tauriAPI.invoke('get_cwd');
                 this.cwd = cwd;
+            } catch (e) {
+                // fallback
+            } finally {
                 tryRender();
-            }).catch(() => tryRender());
-        } else {
-            tryRender();
-        }
+            }
+        };
+
+        getCwdAsync();
     }
 
     // Helper sincrono leggero per punti early-init
@@ -586,8 +840,9 @@ class SimpleTerminal {
     line.classList.add('new-line');
     this.currentAIGroup.appendChild(line);
     // Rimuovi la classe dopo l'animazione per evitare ri-trigger
-    setTimeout(() => line.classList.remove('new-line'), 1600);
+        setTimeout(() => line.classList.remove('new-line'), 1600);
         // Il MutationObserver si occuperà dello scroll automatico
+        return line;
     }
 
     scrollToBottom() {
@@ -717,24 +972,26 @@ class SimpleTerminal {
         // Ascolta eventi di aggiornamento impostazioni da Tauri e aggiorna lo status AI
         const attach = async () => {
             try {
-                // Prefer API event se disponibile, altrimenti import dinamico
-                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
-                    await window.__TAURI__.event.listen('settings-updated', (evt) => {
-                        console.log('Settings updated event received:', evt);
-                        const payload = evt && (evt.payload || evt.detail || evt);
-                        if (payload && payload.ai) {
-                            console.log('Updating AI status with new config:', payload.ai);
-                            // Usa la config fornita senza sovrascriverla con get_config
-                            if (this.aiStatusManager) {
-                                this.aiStatusManager.handleSettingsUpdate(payload);
-                            } else {
-                                this.updateAIStatus(payload.ai, true);
-                            }
+                const tauriAPI = await this._getApi();
+                await tauriAPI.event.listen('settings-updated', (evt) => {
+                    console.log('Settings updated event received:', evt);
+                    let payload = evt && (evt.payload ?? evt.detail ?? evt);
+
+                    if (typeof payload === 'string') {
+                        try {
+                            payload = JSON.parse(payload);
+                        } catch (parseError) {
+                            console.warn('Failed to parse settings payload string:', parseError);
+                            payload = null;
                         }
-                    });
-                } else {
-                    console.warn('Event API non disponibile per settings-updated: Tauri API not available');
-                }
+                    }
+
+                    if (payload && typeof payload === 'object') {
+                        this.applySettings(payload);
+                    } else {
+                        console.warn('Ignoring settings-updated event without valid payload:', payload);
+                    }
+                });
             } catch (e) {
                 console.warn('Impossibile attivare listener settings-updated:', e);
             }
@@ -864,14 +1121,17 @@ class SimpleTerminal {
             statusDot.style.borderColor = '';
             
             // Test della connessione
-            if (window.__TAURI__ && window.__TAURI__) {
+            const tauriAPI = await this._getApi();
+            if (tauriAPI) {
                 // Se non forzato, recupera una config fresca dal backend per evitare mismatch
                 let effectiveAIConfig = aiConfig;
                 if (!preferProvided) {
                     try {
-                        const api = await this.getTauriAPI();
-                        const fresh = api?.invoke ? await api.invoke('get_config') : null;
-                        if (fresh && fresh.ai) effectiveAIConfig = fresh.ai;
+                        const fresh = await tauriAPI.invoke('get_config');
+                        const aiFresh = fresh && fresh.ai ? fresh.ai : null;
+                        if (aiFresh) {
+                            effectiveAIConfig = aiFresh;
+                        }
                     } catch (_) {}
                 }
                 // Se manca il provider ma c'è ollama, preferisci ollama
@@ -880,8 +1140,11 @@ class SimpleTerminal {
                 }
                 // Nota: il comando Rust si aspetta la chiave 'ai_config'
                 console.log('Testing AI connection with config:', effectiveAIConfig);
-                const api2 = await this.getTauriAPI();
-                let testResult = api2?.invoke ? await api2.invoke('test_ai_connection', { provider: effectiveAIConfig.provider, ai_config: effectiveAIConfig }) : { success:false, error:'invoke unavailable' };
+                let testResult = await tauriAPI.invoke('test_ai_connection', {
+                    provider: effectiveAIConfig.provider,
+                    aiConfig: effectiveAIConfig,
+                    ai_config: effectiveAIConfig,
+                });
                 console.log('AI connection test result:', testResult);
                 
                 // Normalizza eventuale risposta stringa
@@ -973,7 +1236,7 @@ class SimpleTerminal {
             if (this.aiStatusManager) {
                 await this.aiStatusManager.checkAIStatus(true);
             } else {
-                const tauriApi = await this.getTauriAPI();
+                const tauriApi = await this._getApi();
                 if (tauriApi && tauriApi.invoke) {
                     const config = await tauriApi.invoke('get_config');
                     if (config.ai) {
@@ -1017,9 +1280,9 @@ class SimpleTerminal {
         // Controlla lo status dell'AI ogni 30 secondi (metodo legacy)
         setInterval(async () => {
             try {
-                if (window.__TAURI__ && window.__TAURI__) {
-                    const api3 = await this.getTauriAPI();
-                    const config = api3?.invoke ? await api3.invoke('get_config') : null;
+                const tauriAPI = await this._getApi();
+                if (tauriAPI) {
+                    const config = await tauriAPI.invoke('get_config');
                     if (config.ai) {
                         const aiStatusElement = document.getElementById('ai-status');
                         const aiStatusDot = document.querySelector('.ai-status-dot');
@@ -1141,45 +1404,139 @@ class SimpleTerminal {
     applyTerminalSettings(terminalConfig) {
         const terminal = this.container;
         if (!terminal || !terminalConfig) return;
-        if (typeof document !== 'undefined') {
-            const root = document.documentElement;
-            if (terminalConfig.fontFamily) { root.style.setProperty('--terminal-font-family', terminalConfig.fontFamily); terminal.style.fontFamily = terminalConfig.fontFamily; }
-            if (terminalConfig.fontSize) { root.style.setProperty('--terminal-font-size', terminalConfig.fontSize + 'px'); terminal.style.fontSize = terminalConfig.fontSize + 'px'; }
-            if (terminalConfig.lineHeight) { root.style.setProperty('--terminal-line-height', terminalConfig.lineHeight); terminal.style.lineHeight = terminalConfig.lineHeight; }
-        }
-        if (terminalConfig.cursorStyle) this.applyCursorStyle(terminalConfig.cursorStyle);
-        if (typeof terminalConfig.cursorBlink !== 'undefined') {
-            if (terminalConfig.cursorBlink) this.startCursorBlink(); else if (this.cursor) { this.cursor.style.opacity='1'; }
-        }
-        if (typeof terminalConfig.autoScroll !== 'undefined') this.autoScrollEnabled = terminalConfig.autoScroll;
-        if (typeof terminalConfig.smoothScroll !== 'undefined') this.smoothScrollEnabled = terminalConfig.smoothScroll;
 
-        // Applica blink del cursore
-        if (typeof terminalConfig.cursorBlink !== 'undefined') {
-            this.cursorBlinkEnabled = terminalConfig.cursorBlink;
-            if (!terminalConfig.cursorBlink && this.cursor) {
-                this.cursor.style.opacity = '1';
-                this.cursor.style.animation = 'none';
-            } else if (this.cursor) {
-                this.cursor.style.animation = 'cursor-blink 1s infinite';
+        const root = typeof document !== 'undefined' ? document.documentElement : null;
+        const mergedConfig = { ...this.terminalSettings, ...terminalConfig };
+
+        // Gestione font
+        if (root) {
+            const normalizedFont = this.normalizeFontFamilyValue(mergedConfig.fontFamily || terminalConfig.fontFamily);
+            if (normalizedFont) {
+                mergedConfig.fontFamily = normalizedFont.cssVarValue;
+                root.style.setProperty('--terminal-font-family', normalizedFont.cssVarValue);
+                terminal.style.fontFamily = normalizedFont.cssVarValue;
+                this.applyFontFamilyToElements(normalizedFont.cssVarValue);
             }
         }
 
-        if (typeof terminalConfig.autoScroll !== 'undefined') {
-            this.autoScrollEnabled = terminalConfig.autoScroll;
-            console.log('Auto-scroll impostato da config:', terminalConfig.autoScroll);
+        // Dimensioni font e line-height
+        if (root && mergedConfig.fontSize) {
+            const fontSizePx = `${mergedConfig.fontSize}px`;
+            root.style.setProperty('--terminal-font-size', fontSizePx);
+            terminal.style.fontSize = fontSizePx;
+            if (this.scrollableElement) this.scrollableElement.style.fontSize = fontSizePx;
+            if (this.cursor) this.cursor.style.fontSize = fontSizePx;
+        }
+
+        if (root && mergedConfig.lineHeight) {
+            const lineHeightStr = `${mergedConfig.lineHeight}`;
+            root.style.setProperty('--terminal-line-height', lineHeightStr);
+            terminal.style.lineHeight = lineHeightStr;
+            if (this.scrollableElement) this.scrollableElement.style.lineHeight = lineHeightStr;
+            if (this.cursor) this.cursor.style.lineHeight = lineHeightStr;
+        }
+
+        // Stile del cursore
+        if (mergedConfig.cursorStyle) {
+            this.applyCursorStyle(mergedConfig.cursorStyle);
+        }
+
+        if (typeof mergedConfig.cursorBlink !== 'undefined') {
+            this.cursorBlinkEnabled = mergedConfig.cursorBlink;
+            if (mergedConfig.cursorBlink) {
+                this.startCursorBlink();
+            } else if (this.cursor) {
+                this.cursor.style.opacity = '1';
+                this.cursor.style.animation = 'none';
+            }
+        }
+
+        // Auto-scroll e smooth scroll
+        if (typeof mergedConfig.autoScroll !== 'undefined') {
+            this.autoScrollEnabled = mergedConfig.autoScroll;
+            console.log('Auto-scroll impostato da config:', mergedConfig.autoScroll);
         } else {
-            // Assicurati che sia true di default
             this.autoScrollEnabled = true;
             console.log('Auto-scroll impostato di default:', true);
         }
-        if (typeof terminalConfig.smoothScroll !== 'undefined') {
-            this.smoothScrollEnabled = terminalConfig.smoothScroll;
-            console.log('Smooth-scroll impostato da config:', terminalConfig.smoothScroll);
+
+        if (typeof mergedConfig.smoothScroll !== 'undefined') {
+            this.smoothScrollEnabled = mergedConfig.smoothScroll;
+            console.log('Smooth-scroll impostato da config:', mergedConfig.smoothScroll);
         } else {
-            // Assicurati che sia true di default
             this.smoothScrollEnabled = true;
             console.log('Smooth-scroll impostato di default:', true);
+        }
+
+        this.terminalSettings = mergedConfig;
+        this.applyInteractiveTerminalSettings(mergedConfig);
+    }
+
+    normalizeFontFamilyValue(fontFamily) {
+        if (!fontFamily || typeof fontFamily !== 'string') {
+            return null;
+        }
+
+        const trimmed = fontFamily.trim();
+        if (!trimmed.length) {
+            return null;
+        }
+
+        if (trimmed.includes(',')) {
+            return {
+                cssVarValue: trimmed,
+            };
+        }
+
+        const alreadyQuoted = /^['"].*['"]$/.test(trimmed);
+        const needsQuotes = /\s/.test(trimmed) && !alreadyQuoted;
+        const primary = needsQuotes ? `"${trimmed}"` : trimmed;
+        return {
+            cssVarValue: `${primary}, monospace`,
+        };
+    }
+
+    applyFontFamilyToElements(fontFamily) {
+        const targets = [
+            this.scrollableElement,
+            this.outputElement,
+            this.inputTextElement,
+            this.cursor,
+        ];
+
+        targets.forEach((node) => {
+            if (node && node.style) {
+                node.style.fontFamily = fontFamily;
+            }
+        });
+
+        if (this.container) {
+            const extraTargets = this.container.querySelectorAll('.terminal-output, .terminal-input-line, .prompt, .input-text, .before-cursor, .after-cursor, .rich-output, .ai-output, .terminal-prompt-block');
+            extraTargets.forEach((node) => {
+                if (node && node.style) {
+                    node.style.fontFamily = fontFamily;
+                }
+            });
+        }
+    }
+
+    applyInteractiveTerminalSettings(terminalConfig) {
+        const payload = {
+            fontFamily: terminalConfig.fontFamily,
+            fontSize: terminalConfig.fontSize,
+            lineHeight: terminalConfig.lineHeight,
+            cursorBlink: terminalConfig.cursorBlink,
+            cursorStyle: terminalConfig.cursorStyle,
+            scrollback: terminalConfig.scrollback,
+        };
+
+        if (window.interactiveTerminal && typeof window.interactiveTerminal.updateFromSettings === 'function') {
+            if (window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__) {
+                delete window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__;
+            }
+            window.interactiveTerminal.updateFromSettings(payload);
+        } else {
+            window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__ = payload;
         }
     }
 
@@ -1244,19 +1601,17 @@ class SimpleTerminal {
             try {
                 console.log(`🎨 Attempt ${retries + 1} to load settings...`);
                 
-                if (window.__TAURI__ && window.__TAURI__) {
-                    const api4 = await this.getTauriAPI();
-                    if (api4?.invoke) {
-                        const config = await api4.invoke('get_config');
-                        console.log('🎨 Config loaded from backend:', config);
-                        
-                        if (config && config.theme) {
-                            console.log('🎨 Applying saved theme:', config.theme);
-                            this.applySettings(config);
-                            return; // Successo, esci dal loop
-                        } else {
-                            console.log('🎨 No theme in config, will try again...');
-                        }
+                const tauriAPI = await this._getApi();
+                if (tauriAPI) {
+                    const config = await tauriAPI.invoke('get_config');
+                    console.log('🎨 Config loaded from backend:', config);
+                    
+                    if (config && config.theme) {
+                        console.log('🎨 Applying saved theme:', config.theme);
+                        this.applySettings(config);
+                        return; // Successo, esci dal loop
+                    } else {
+                        console.log('🎨 No theme in config, will try again...');
                     }
                 }
                 
@@ -1329,15 +1684,13 @@ class SimpleTerminal {
             console.log(`🎨 Checking backend availability (${checkCount}/${maxChecks})...`);
             
             try {
-                if (window.__TAURI__ && window.__TAURI__) {
-                    const api4 = await this.getTauriAPI();
-                    if (api4?.invoke) {
-                        const config = await api4.invoke('get_config');
-                        if (config && config.theme) {
-                            console.log('🎨 Backend available, applying saved theme:', config.theme);
-                            this.applySettings(config);
-                            return; // Trovato, esci
-                        }
+                const tauriAPI = await this._getApi();
+                if (tauriAPI) {
+                    const config = await tauriAPI.invoke('get_config');
+                    if (config && config.theme) {
+                        console.log('🎨 Backend available, applying saved theme:', config.theme);
+                        this.applySettings(config);
+                        return; // Trovato, esci
                     }
                 }
             } catch (error) {
@@ -1353,6 +1706,7 @@ class SimpleTerminal {
     }
 
     handleKeydown(e) {
+        console.log('Keydown event:', e.key, 'target:', e.target);
         // Se siamo in modalità password, gestisci diversamente
         if (this.passwordMode) {
             return this.handlePasswordKeydown(e);
@@ -1735,6 +2089,14 @@ class SimpleTerminal {
             this.historyIndex = -1; // Reset indice dopo nuovo comando
         }
 
+        if (this.isInteractiveCommand(command)) {
+            await this.launchInteractiveCommand(command);
+            this.currentLine = '';
+            this.cursorPosition = 0;
+            this.showPrompt();
+            return;
+        }
+
         // Controlla se il comando dovrebbe usare PTY
         const shouldUsePTY = this.shouldUsePTY(command);
         console.log(`SimpleTerminal: shouldUsePTY(${command}) = ${shouldUsePTY}`);
@@ -1756,6 +2118,10 @@ class SimpleTerminal {
 
     shouldUsePTY(command) {
         if (!this.ptyModeEnabled || !this.ptyTerminal) {
+            return false;
+        }
+
+        if (this.isInteractiveCommand(command)) {
             return false;
         }
 
@@ -1853,6 +2219,44 @@ class SimpleTerminal {
         return shouldUse;
     }
 
+    isInteractiveCommand(command) {
+        if (!command) {
+            return false;
+        }
+
+        const interactiveCommands = [
+            'top', 'htop', 'btop', 'glances',
+            'vim', 'vi', 'nano', 'emacs',
+            'less', 'more', 'man', 'info',
+            'watch', 'tail -f', 'journalctl -f',
+            'tmux', 'screen', 'ssh', 'telnet', 'nc', 'netcat',
+            'python', 'python3', 'node', 'ruby', 'perl',
+            'mysql', 'psql', 'sqlite3',
+        ];
+
+        return interactiveCommands.some((cmd) => {
+            return command === cmd || command.startsWith(`${cmd} `);
+        });
+    }
+
+    async launchInteractiveCommand(command) {
+        if (!window.interactiveTerminal) {
+            this.addOutput('❌ Terminale interattivo non disponibile in questa build.');
+            return;
+        }
+
+        try {
+            this.addOutput(`🖥️ Aprendo terminale interattivo per: ${command}`);
+            this.isPTYMode = false;
+            this.updatePTYStatusIndicator();
+            await window.interactiveTerminal.openTerminal(command, this.cwd);
+            this.addOutput('ℹ️ Premi `q` o ⌃C all\'interno della sessione per uscire. Usa ESC o la ✕ per chiudere la finestra.');
+        } catch (error) {
+            console.error('Failed to launch interactive terminal:', error);
+            this.addOutput(`❌ Impossibile avviare terminale interattivo: ${error.message || error}`);
+        }
+    }
+
     async executeWithPTY(command) {
         try {
             console.log(`SimpleTerminal: executeWithPTY called with command: ${command}`);
@@ -1918,8 +2322,14 @@ class SimpleTerminal {
             });
 
             // Esegui il comando con output in tempo reale
-            const api5 = await this.getTauriAPI();
-            const result = api5?.invoke ? await api5.invoke('run_command', { command: command }) : '[fallback]';
+            const api5 = await this._getApi();
+            const result = api5?.invoke
+                ? await api5.invoke('run_command', {
+                      payload: {
+                          command,
+                      },
+                  })
+                : '[fallback]';
             
             // Nascondi loading indicator
             this.hideLoadingIndicator();
@@ -1948,1864 +2358,6 @@ class SimpleTerminal {
             this.clearTerminal();
         } else if (command === 'help') {
             this.showHelp();
-        } else if (command.includes('npm install') || command.includes('yarn install') || command.includes('pip install')) {
-            // Esegui comandi di installazione con output in tempo reale
-            await this.executeInstallCommand(command);
-        } else if (command === 'exit') {
-            window.close();
-        } else if (command === 'enable-pty') {
-            this.ptyModeEnabled = true;
-            this.addOutput('🔧 PTY mode enabled! Interactive commands will now work properly.');
-        } else if (command === 'disable-pty') {
-            this.ptyModeEnabled = false;
-            this.addOutput('🔧 PTY mode disabled. Using standard command execution.');
-            if (this.ptyTerminal && this.ptyTerminal.isActive) {
-                await this.ptyTerminal.stopSession();
-                this.isPTYMode = false;
-            }
-        } else if (command === 'pty-status') {
-            this.addOutput(`🔧 PTY mode: ${this.ptyModeEnabled ? 'ENABLED' : 'DISABLED'}`);
-            this.addOutput(`🔌 PTY session: ${this.ptyTerminal && this.ptyTerminal.isActive ? 'ACTIVE' : 'INACTIVE'}`);
-            this.addOutput(`⚡ Current mode: ${this.isPTYMode ? 'PTY' : 'TRADITIONAL'}`);
-            
-            // Ottieni lo status del PTY Manager
-            if (window.__TAURI__ && window.__TAURI__) {
-                try {
-                    const api6 = await this.getTauriAPI();
-                    const result = api6?.invoke ? await api6.invoke('pty_get_sessions') : { success:false, sessions:[] };
-                    if (result.success) {
-                        this.addOutput(`📊 Active PTY sessions: ${result.sessions.length}`);
-                        result.sessions.forEach(session => {
-                            this.addOutput(`   - Session ${session.id}: ${session.type} (buffer: ${session.bufferSize} chars)`);
-                        });
-                    }
-                } catch (error) {
-                    this.addOutput(`❌ Error getting PTY status: ${error.message}`);
-                }
-            }
-            
-            this.addOutput('📝 PTY mode allows full interactive commands like yay, htop, vim, etc.');
-            this.addOutput('💡 Use "enable-pty" or "disable-pty" to toggle this feature.');
-            this.addOutput('🔄 Use "pty-restart" to restart the PTY session.');
-        } else if (command === 'pty-restart') {
-            if (this.ptyTerminal) {
-                await this.ptyTerminal.stopSession();
-                const started = await this.ptyTerminal.startSession();
-                this.addOutput(started ? '✅ PTY session restarted' : '❌ Failed to restart PTY session');
-            } else {
-                this.addOutput('❌ PTY not initialized');
-            }
-        } else if (command === 'test-pty-simple') {
-            this.addOutput('🧪 Testing PTY with simple command...');
-            if (this.ptyTerminal) {
-                // Test diretto senza loading indicator
-                const started = await this.ptyTerminal.startSession();
-                if (started) {
-                    this.addOutput('✅ PTY session started');
-                    const success = await this.ptyTerminal.sendCommand('echo "PTY test successful"');
-                    this.addOutput(success ? '✅ Command sent to PTY' : '❌ Failed to send command');
-                    
-                    // Aspetta un po' e poi mostra il buffer
-                    setTimeout(async () => {
-                        try {
-                            const api7 = await this.getTauriAPI();
-                            const result = api7?.invoke ? await api7.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 }) : { output:'' };
-                            this.addOutput(`📊 PTY buffer content: ${result.output || 'empty'}`);
-                        } catch (error) {
-                            this.addOutput(`❌ Error getting PTY output: ${error.message}`);
-                        }
-                    }, 2000);
-                } else {
-                    this.addOutput('❌ Failed to start PTY session');
-                }
-            } else {
-                this.addOutput('❌ PTY not available');
-            }
-        } else if (command === 'test-pty-direct') {
-            this.addOutput('🧪 Testing direct PTY output...');
-            if (this.ptyTerminal && this.ptyTerminal.isActive) {
-                try {
-                    const api8 = await this.getTauriAPI();
-                    const result = api8?.invoke ? await api8.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 }) : { output:'' };
-                    this.addOutput(`📊 Direct PTY output: "${result.output || 'empty'}"`);
-                    this.addOutput(`📊 Output length: ${result.output ? result.output.length : 0} characters`);
-                } catch (error) {
-                    this.addOutput(`❌ Error: ${error.message}`);
-                }
-            } else {
-                this.addOutput('❌ PTY session not active');
-            }
-        } else if (command === 'force-output') {
-            this.addOutput('🧪 Forcing PTY output display...');
-            if (this.ptyTerminal && this.ptyTerminal.isActive) {
-                try {
-                    // Forza la lettura dell'output
-                    const api9 = await this.getTauriAPI();
-                    const result = api9?.invoke ? await api9.invoke('pty_get_output', { session_id: this.ptyTerminal.sessionId, offset: 0 }) : { output:'' };
-                    if (result.output && result.output.length > 0) {
-                        this.addOutput('📊 PTY has output, displaying it:');
-                        this.addOutput(result.output);
-                    } else {
-                        this.addOutput('📊 PTY buffer is empty');
-                    }
-                } catch (error) {
-                    this.addOutput(`❌ Error: ${error.message}`);
-                }
-            } else {
-                this.addOutput('❌ PTY session not active');
-            }
-        } else if (command === 'test-pty-api') {
-            this.addOutput('🧪 Testing PTY API directly...');
-            try {
-                // Test creazione sessione
-                const api10 = await this.getTauriAPI();
-                const sessionId = api10?.invoke ? await api10.invoke('pty_create_session') : 'fake';
-                this.addOutput(`📊 Created session: ${sessionId}`);
-                
-                // Test invio comando
-                const api11 = await this.getTauriAPI();
-                const writeResult = api11?.invoke ? await api11.invoke('pty_write', { session_id: sessionId, input: 'echo "API test"\r' }) : { success:false };
-                this.addOutput(`📊 Write result: ${JSON.stringify(writeResult)}`);
-                
-                // Test lettura output dopo delay
-                setTimeout(async () => {
-                    try {
-                        const api12 = await this.getTauriAPI();
-                        const outputResult = api12?.invoke ? await api12.invoke('pty_get_immediate_output', { session_id: sessionId, timestamp: 0 }) : { output:'' };
-                        this.addOutput(`📊 Output result: ${JSON.stringify(outputResult)}`);
-                        
-                        // Cleanup
-                        const api13 = await this.getTauriAPI();
-                        if (api13?.invoke) await api13.invoke('pty_close', { session_id: sessionId });
-                    } catch (error) {
-                        this.addOutput(`❌ Error in delayed test: ${error.message}`);
-                    }
-                }, 3000);
-            } catch (error) {
-                this.addOutput(`❌ API test error: ${error.message}`);
-            }
-        } else if (command === 'test-pty-detection') {
-            this.addOutput('🧪 Testing PTY command detection...');
-            const testCommands = [
-                'npm install lodash',
-                'yarn add lodash', 
-                'pip install requests',
-                'echo "test"',
-                'ls -la'
-            ];
-            
-            testCommands.forEach(cmd => {
-                const shouldUse = this.shouldUsePTY(cmd);
-                this.addOutput(`📊 shouldUsePTY("${cmd}") = ${shouldUse}`);
-            });
-            
-            this.addOutput('💡 Now try: npm install --dry-run lodash');
-        } else if (command === 'test-sudo') {
-            this.addOutput('🧪 Testing sudo functionality...');
-            this.addOutput('💡 Try: sudo ls -la /root');
-            this.addOutput('💡 Try: sudo softwareupdate -ia');
-            this.addOutput('💡 The system will prompt for password securely.');
-        } else if (command === 'test-pty') {
-            this.addOutput('🧪 Testing PTY functionality...');
-            if (this.ptyTerminal) {
-                const started = await this.ptyTerminal.startSession();
-                if (started) {
-                    this.addOutput('✅ PTY session started successfully');
-                    this.addOutput('💡 Try these commands:');
-                    this.addOutput('   - htop (if installed)');
-                    this.addOutput('   - watch date');
-                    this.addOutput('   - ping -c 3 google.com');
-                } else {
-                    this.addOutput('❌ Failed to start PTY session');
-                }
-            } else {
-                this.addOutput('❌ PTY not available');
-            }
-        } else if (command === 'save-ai-chat') {
-            this.saveAIConversation();
-        } else if (command === 'clear-ai-chat') {
-            this.clearAIConversation();
-        } else if (command === 'show-ai-chat') {
-            this.showAIConversation();
-        } else if (command === 'toggle-autoscroll') {
-            this.toggleAutoScroll();
-        } else if (command === 'scroll-bottom') {
-            this.forceScrollToBottom();
-            this.addOutput('📜 Scrollato in fondo');
-        } else if (command === 'autoscroll-status') {
-            this.addOutput(`📜 Auto-scroll: ${this.autoScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
-            this.addOutput(`📍 Scroll manuale: ${this.isUserScrolling ? 'ATTIVO' : 'INATTIVO'}`);
-            this.addOutput(`🌊 Smooth scroll: ${this.smoothScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
-            this.addOutput('💡 Usa "toggle-autoscroll" per attivare/disattivare auto-scroll');
-            this.addOutput('💡 Usa "toggle-smooth-scroll" per attivare/disattivare smooth scroll');
-            this.addOutput('💡 Usa "scroll-bottom" per andare in fondo immediatamente');
-        } else if (command === 'toggle-smooth-scroll') {
-            this.smoothScrollEnabled = !this.smoothScrollEnabled;
-            this.addOutput(`🌊 Smooth scroll: ${this.smoothScrollEnabled ? 'ABILITATO' : 'DISABILITATO'}`);
-        } else if (command === 'debug-fonts') {
-            this.showAvailableFonts();
-        } else if (command === 'debug-cursor') {
-            this.showCursorStyles();
-        } else if (command === 'debug-tauri') {
-            this.addOutput('🧪 Debug Tauri API detection...');
-            const tauriRaw = !!window.__TAURI__;
-            const tauriCore = !!window.__TAURI__?.core?.invoke;
-            const tauriInvoke = typeof window.__TAURI__?.invoke === 'function';
-            const legacy = !!window.tauri?.invoke;
-            const preloadHelper = typeof window.getTauriInvoke === 'function' && !!window.getTauriInvoke();
-            let dynamicImport = false;
-            try {
-                // Non bloccare se fallisce
-                const core = await import('@tauri-apps/api/core');
-                dynamicImport = typeof core.invoke === 'function';
-            } catch (_) {}
-            this.addOutput(`__TAURI__ object: ${tauriRaw}`);
-            this.addOutput(`__TAURI__.invoke: ${tauriInvoke}`);
-            this.addOutput(`__TAURI__.core.invoke: ${tauriCore}`);
-            this.addOutput(`window.tauri.invoke: ${legacy}`);
-            this.addOutput(`preload getTauriInvoke(): ${preloadHelper}`);
-            this.addOutput(`dynamic import @tauri-apps/api/core: ${dynamicImport}`);
-            const api = await this.getTauriAPI();
-            this.addOutput(`getTauriAPI() => ${api && api.invoke ? 'OK' : 'NULL'}`);
-            this.addOutput('UserAgent: ' + navigator.userAgent);
-            this.addOutput('Location: ' + window.location.href);
-            this.addOutput('✅ Fine debug. Se NULL, verifica che stai eseguendo "npm run tauri dev" e che il preload sia registrato.');
-        } else if (command.startsWith('cursor-')) {
-            this.testCursorStyle(command.replace('cursor-', ''));
-        } else if (command === 'install-homebrew') {
-            await this.installHomebrew();
-        } else if (command.startsWith('ai ') || command.startsWith('ask ') ||
-                   command.startsWith('execute ') || command.startsWith('run ')) {
-            await this.processAICommand(command);
-        } else if (command.startsWith('sudo ')) {
-            // Gestione speciale per comandi sudo
-            await this.handleSudoCommand(command);
-        } else if (command) {
-            // Esegui il comando tramite il terminale Rust
-            try {
-                const result = await this.executeCommandViaRust(command);
-                this.addOutput(result);
-            } catch (error) {
-                this.addOutput('❌ Error executing command: ' + error.message);
-            }
-        }
-    }
-
-    async handleSudoCommand(command) {
-        this.addOutput('🔐 Sudo command detected: ' + command);
-        this.addOutput('🔑 Please enter your password when prompted...');
-        
-        try {
-            // Usa il sistema sudo sicuro dell'app
-            const tauriApi = await this.getTauriAPI();
-            if (!tauriApi || !tauriApi.invoke) {
-                this.addOutput('❌ Tauri API not available for sudo');
-                return;
-            }
-            const password = await this.promptSecurePassword();
-            if (!password) {
-                this.addOutput('❌ Password not provided, command cancelled');
-                return;
-            }
-            this.addOutput('🔄 Executing sudo command...');
-            const tauriApi2 = await this.getTauriAPI();
-            const api14 = await this.getTauriAPI();
-            const result = api14?.invoke ? await api14.invoke('run_sudo_command', { command: command, password: password }) : 'sudo not available';
-            this.addOutput(result);
-        } catch (error) {
-            this.addOutput(`❌ Error executing sudo command: ${error.message}`);
-        }
-    }
-
-    async promptSecurePassword() {
-        return new Promise((resolve) => {
-            this.addOutput('🔐 Enter your password below:');
-            this.passwordMode = true;
-            this.currentLine = '';
-            this.cursorPosition = 0;
-            this.showPrompt();
-            
-            // Store resolve function to call when password is entered
-            this.passwordResolve = resolve;
-        });
-    }
-
-    // Callback chiamato quando un comando PTY è completato
-    onPTYCommandComplete() {
-        this.isPTYMode = false;
-        
-        // Nascondi il loading indicator se presente
-        this.hideLoadingIndicator();
-        
-        // Aggiorna lo stato del PTY indicator
-        this.updatePTYStatusIndicator();
-        
-        // Debug: log command completion
-        console.log('PTY command completed');
-    }
-
-    // Mostra un prompt per la password
-    showPasswordPrompt(promptText) {
-        this.addOutput('🔐 Password required:');
-        this.addOutput(promptText.trim());
-        this.addOutput('💡 Type your password and press Enter (input will be hidden)');
-        
-        // Attiva modalità password
-        this.passwordMode = true;
-        this.currentLine = '';
-        this.cursorPosition = 0;
-        this.showPrompt();
-    }
-
-    // Gestisce l'input in modalità password
-    async handlePasswordInput() {
-        if (!this.passwordMode) {
-            return;
-        }
-
-        const password = this.currentLine;
-        this.passwordMode = false;
-        
-        // Nasconde la password nell'output
-        this.addOutput('🔐 [Password entered]');
-        
-        // Se c'è una resolve function in attesa (per sudo), chiamala
-        if (this.passwordResolve) {
-            const resolve = this.passwordResolve;
-            this.passwordResolve = null;
-            resolve(password);
-        } else if (this.ptyTerminal) {
-            // Altrimenti invia al PTY
-            const success = await this.ptyTerminal.sendInput(password + '\r');
-            if (success) {
-                this.addOutput('🔄 Password sent, continuing...');
-            } else {
-                this.addOutput('❌ Failed to send password');
-            }
-        }
-
-        // Reset della linea
-        this.currentLine = '';
-        this.cursorPosition = 0;
-        this.showPrompt();
-    }
-
-    // Metodo per aggiornare la linea corrente (usato dal PTY per output parziale)
-    updateCurrentLine(text) {
-        // Debug: log dell'aggiornamento della linea corrente
-        console.log('SimpleTerminal updateCurrentLine:', text.substring(0, 100) + (text.length > 100 ? '...' : ''));
-        
-        // Questo metodo può essere usato per aggiornare l'output in tempo reale
-        // durante l'esecuzione di comandi PTY
-        const lastLine = this.outputElement.lastElementChild;
-        if (lastLine && lastLine.classList.contains('pty-live-output')) {
-            lastLine.textContent = text;
-        } else {
-            const line = document.createElement('div');
-            line.className = 'output-line pty-live-output';
-            line.textContent = text;
-            this.outputElement.appendChild(line);
-        }
-    }
-
-    // Forza l'aggiornamento del display per output dinamici
-    forceDisplayUpdate() {
-        // Forza il reflow del DOM per aggiornamenti immediati
-        if (this.outputElement) {
-            this.outputElement.offsetHeight; // Trigger reflow
-        }
-        
-        // Se l'auto-scroll è abilitato e l'utente non sta scrollando manualmente
-        if (this.autoScrollEnabled && !this.isUserScrolling) {
-            this.scrollToBottom();
-        }
-    }
-
-    // Mostra un indicatore di loading per un comando
-    showLoadingIndicator(command, type = 'default') {
-        this.removeLoadingIndicator();
-        
-        const container = document.createElement('div');
-        container.className = 'command-executing';
-        
-        let content = '';
-        switch (type) {
-            case 'pty':
-                content = `
-                    <div class="loading-indicator">
-                        <div class="spinner"></div>
-                        <span>Executing in PTY mode: <span class="command-text">${this.escapeHtml(command)}</span></span>
-                    </div>
-                `;
-                break;
-            case 'sudo':
-                content = `
-                    <div class="loading-indicator sudo-password-prompt">
-                        <div class="progress-dots"></div>
-                        <span>Executing sudo command: <span class="command-text">${this.escapeHtml(command)}</span></span>
-                    </div>
-                `;
-                break;
-            case 'long':
-                content = `
-                    <div class="loading-indicator">
-                        <div class="spinner"></div>
-                        <span>Executing long-running command: <span class="command-text">${this.escapeHtml(command)}</span></span>
-                    </div>
-                `;
-                break;
-            default:
-                content = `
-                    <div class="loading-indicator">
-                        <div class="progress-dots"></div>
-                        <span>Executing: <span class="command-text">${this.escapeHtml(command)}</span></span>
-                    </div>
-                `;
-        }
-        
-        container.innerHTML = content;
-        this.outputElement.appendChild(container);
-        this.currentLoadingIndicator = container;
-        this.commandStartTime = Date.now();
-        
-        // Avvia il controllo del timeout
-        this.startTimeoutWarning(command);
-        
-        return container;
-    }
-
-    // Rimuove l'indicatore di loading
-    removeLoadingIndicator() {
-        if (this.currentLoadingIndicator) {
-            this.currentLoadingIndicator.remove();
-            this.currentLoadingIndicator = null;
-            this.commandStartTime = null;
-            this.timeoutWarningShown = false;
-        }
-    }
-
-    // Avvia il controllo del timeout per mostrare avvisi
-    startTimeoutWarning(command) {
-        // Dopo 10 secondi, mostra un avviso che il comando sta ancora eseguendo
-        setTimeout(() => {
-            if (this.currentLoadingIndicator && !this.timeoutWarningShown) {
-                this.timeoutWarningShown = true;
-                const warning = document.createElement('div');
-                warning.className = 'command-timeout-warning';
-                warning.innerHTML = `
-                    <div class="loading-indicator">
-                        ⏳ Command is taking longer than expected...
-                    </div>
-                    <div style="font-size: 0.9em; margin-top: 4px;">
-                        💡 For interactive commands, try pressing Enter or Ctrl+C if stuck
-                    </div>
-                `;
-                this.outputElement.appendChild(warning);
-            }
-        }, 10000);
-
-        // Dopo 30 secondi, mostra suggerimenti più specifici
-        setTimeout(() => {
-            if (this.currentLoadingIndicator) {
-                const suggestion = document.createElement('div');
-                suggestion.className = 'command-timeout-warning';
-                
-                let suggestionText = '';
-                if (command.includes('sudo')) {
-                    suggestionText = '🔐 If waiting for password, check if a password prompt appeared above';
-                } else if (command.includes('softwareupdate')) {
-                    suggestionText = '📦 Software updates can take 30+ minutes depending on update size';
-                } else if (command.includes('yay') || command.includes('pacman')) {
-                    suggestionText = '📦 Package installations may require user confirmation - check for prompts';
-                } else {
-                    suggestionText = '⚡ Long-running command detected - this is normal for some operations';
-                }
-                
-                suggestion.innerHTML = `
-                    <div class="loading-indicator">
-                        ${suggestionText}
-                    </div>
-                `;
-                this.outputElement.appendChild(suggestion);
-            }
-        }, 30000);
-    }
-
-    // Aggiorna l'indicatore con nuovo testo
-    updateLoadingIndicator(text) {
-        if (this.currentLoadingIndicator) {
-            const textSpan = this.currentLoadingIndicator.querySelector('.command-text');
-            if (textSpan) {
-                textSpan.textContent = text;
-            }
-        }
-    }
-
-    // Mostra l'indicatore dello stato PTY
-    updatePTYStatusIndicator() {
-        // Cerca un indicatore esistente
-        let indicator = document.querySelector('.pty-session-indicator');
-        
-        if (!indicator) {
-            // Crea nuovo indicatore
-            indicator = document.createElement('div');
-            indicator.className = 'pty-session-indicator';
-            
-            // Aggiungilo al prompt header
-            const promptHeader = document.querySelector('.prompt-header');
-            if (promptHeader) {
-                promptHeader.appendChild(indicator);
-            }
-        }
-        
-        // Aggiorna lo stato
-        const isActive = this.ptyTerminal && this.ptyTerminal.isActive;
-        indicator.className = `pty-session-indicator ${isActive ? 'active' : 'inactive'}`;
-        indicator.innerHTML = `
-            <div class="status-dot"></div>
-            <span>PTY ${isActive ? 'Active' : 'Inactive'}</span>
-        `;
-    }
-
-    async executeCommand(command) {
-        try {
-            // Verifica se il comando richiede un loading indicator
-            const needsLoading = this.shouldShowLoading(command);
-            let loadingStartTime = null;
-            
-            if (needsLoading) {
-                loadingStartTime = Date.now();
-                this.showLoadingIndicator(command, {
-                    timeout: 60000, // 1 minuto timeout
-                    style: 'spinner'
-                });
-            }
-
-            // Controlla se è un comando sudo
-            if (command.trim().startsWith('sudo ')) {
-                await this.handleSudoCommand(command);
-                
-                // Nascondi loading solo se è stato mostrato abbastanza a lungo
-                if (needsLoading) {
-                    const elapsed = Date.now() - loadingStartTime;
-                    if (elapsed < 500) {
-                        // Se il comando è stato molto veloce, aspetta un po' prima di nascondere
-                        setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
-                    } else {
-                        this.hideLoadingIndicator();
-                    }
-                }
-                return;
-            }
-
-            // Controlla se è un comando che potrebbe richiedere interazione (come installer)
-            if (command.includes('curl -fsSL') && command.includes('install.sh')) {
-                if (needsLoading) this.hideLoadingIndicator();
-                this.addOutput(`🔄 Executing installer with interactive support...`);
-                
-                if (window.__TAURI__ && window.__TAURI__) {
-                    const api15 = await this.getTauriAPI();
-                    const result = api15?.invoke ? await api15.invoke('run_interactive_command', { command: command }) : '[interactive fallback]';
-                    this.addOutput(result);
-                } else {
-                    this.addOutput('❌ Interactive command support not available');
-                }
-                return;
-            }
-
-            // Usa l'API per eseguire comandi reali
-            if (window.__TAURI__ && window.__TAURI__) {
-                const api16 = await this.getTauriAPI();
-                const result = api16?.invoke ? await api16.invoke('run_command', { command: command }) : '[fallback exec]';
-                
-                // Nascondi loading con logica intelligente
-                if (needsLoading) {
-                    const elapsed = Date.now() - loadingStartTime;
-                    if (elapsed < 500) {
-                        // Comando molto veloce, aspetta un po'
-                        setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
-                    } else {
-                        this.hideLoadingIndicator();
-                    }
-                }
-                
-                // Controlla se il risultato indica che serve un dialog password
-                if (typeof result === 'string' && result.includes('Password required for:')) {
-                    // Estrai il comando dal messaggio
-                    const commandMatch = result.match(/Password required for: (.+)/);
-                    if (commandMatch) {
-                        const sudoCommand = commandMatch[1].trim();
-                        console.log('Frontend: Detected sudo command, calling handleSudoCommand:', sudoCommand);
-                        await this.handleSudoCommand(sudoCommand);
-                        return;
-                    }
-                }
-                
-                this.addOutput(result);
-            } else {
-                if (needsLoading) this.hideLoadingIndicator();
-                this.addOutput(`Command not found: ${command}`);
-                this.addOutput('Type "help" for available commands.');
-            }
-        } catch (error) {
-            this.hideLoadingIndicator();
-            this.addOutput(`Error executing command: ${error.message}`);
-        }
-    }
-
-    async handleSudoCommand(command) {
-        this.addOutput(`🔐 Password required for: ${command}`);
-        
-        // Crea un prompt di password
-        const password = await this.promptPassword();
-        
-        if (password === null) {
-            this.addOutput('[Cancelled] Sudo command cancelled by user');
-            return;
-        }
-
-        try {
-            // Nascondi il loading precedente e mostra uno specifico per sudo
-            this.hideLoadingIndicator();
-            const loadingStartTime = Date.now();
-            
-            this.showLoadingIndicator(command, {
-                timeout: 180000, // 3 minuti per comandi sudo lunghi
-                style: 'spinner',
-                message: `Executing sudo command: ${command.substring(5)}` // Rimuove "sudo "
-            });
-            
-            this.addOutput('🔄 Executing sudo command...');
-            console.log('Frontend: Calling runSudoCommand with:', { command, passwordLength: password ? password.length : 0 });
-            const tauriApi2 = await this.getTauriAPI();
-            const api17 = await this.getTauriAPI();
-            const result = api17?.invoke ? await api17.invoke('run_sudo_command', { command: command, password: password }) : 'sudo not available';
-            console.log('Frontend: Received result:', result);
-            
-            // Logica intelligente per nascondere il loading
-            const elapsed = Date.now() - loadingStartTime;
-            if (elapsed < 500) {
-                setTimeout(() => this.hideLoadingIndicator(), 500 - elapsed);
-            } else {
-                this.hideLoadingIndicator();
-            }
-            
-            this.addOutput(result);
-        } catch (error) {
-            this.hideLoadingIndicator();
-            this.addOutput(`[Error] Failed to execute sudo command: ${error.message}`);
-        }
-    }
-
-    async promptPassword() {
-        return new Promise((resolve) => {
-            console.log('Creating password dialog...');
-            
-            // Rimuovi eventuali dialog esistenti
-            const existingOverlay = document.querySelector('.password-overlay');
-            if (existingOverlay) {
-                existingOverlay.remove();
-            }
-            
-            // Crea un overlay più semplice
-            const overlay = document.createElement('div');
-            overlay.className = 'password-overlay';
-            overlay.style.cssText = `
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100vw !important;
-                height: 100vh !important;
-                background: rgba(0, 0, 0, 0.9) !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                z-index: 999999 !important;
-                pointer-events: auto !important;
-            `;
-
-            const dialog = document.createElement('div');
-            dialog.className = 'password-dialog';
-            dialog.style.cssText = `
-                background: #1e1e1e !important;
-                border: 2px solid #00d4aa !important;
-                border-radius: 12px !important;
-                padding: 30px !important;
-                min-width: 450px !important;
-                max-width: 500px !important;
-                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8) !important;
-                text-align: center !important;
-                font-family: 'Monaco', 'Menlo', monospace !important;
-                color: #fff !important;
-                pointer-events: auto !important;
-            `;
-
-            dialog.innerHTML = `
-                <h3 style="color: #00d4aa; margin-bottom: 20px; font-size: 18px;">🔐 Administrator Password</h3>
-                <p style="margin-bottom: 20px; color: #ccc;">Enter your system password to execute sudo command:</p>
-                <input type="password" id="sudo-password-input" placeholder="Password" style="
-                    width: 100% !important;
-                    padding: 15px !important;
-                    margin: 15px 0 !important;
-                    background: #2d2d2d !important;
-                    border: 2px solid #444 !important;
-                    border-radius: 8px !important;
-                    color: #fff !important;
-                    font-size: 16px !important;
-                    font-family: monospace !important;
-                    box-sizing: border-box !important;
-                    outline: none !important;
-                    text-security: disc !important;
-                    -webkit-text-security: disc !important;
-                ">
-                <div style="margin-top: 20px;">
-                    <button id="sudo-cancel-btn" style="
-                        padding: 12px 20px !important;
-                        margin: 0 10px !important;
-                        background: #444 !important;
-                        border: 1px solid #666 !important;
-                        border-radius: 6px !important;
-                        color: #fff !important;
-                        cursor: pointer !important;
-                        font-size: 14px !important;
-                    ">Cancel</button>
-                    <button id="sudo-ok-btn" style="
-                        padding: 12px 20px !important;
-                        margin: 0 10px !important;
-                        background: #00d4aa !important;
-                        border: 1px solid #00d4aa !important;
-                        border-radius: 6px !important;
-                        color: #000 !important;
-                        cursor: pointer !important;
-                        font-weight: bold !important;
-                        font-size: 14px !important;
-                    ">OK</button>
-                </div>
-            `;
-
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
-
-            const passwordInput = document.getElementById('sudo-password-input');
-            const okBtn = document.getElementById('sudo-ok-btn');
-            const cancelBtn = document.getElementById('sudo-cancel-btn');
-
-            console.log('Elements created:', { passwordInput, okBtn, cancelBtn });
-
-            const cleanup = () => {
-                console.log('Cleaning up dialog...');
-                if (overlay && overlay.parentNode) {
-                    overlay.parentNode.removeChild(overlay);
-                }
-            };
-
-            okBtn.addEventListener('click', () => {
-                console.log('OK button clicked');
-                const password = passwordInput.value;
-                cleanup();
-                resolve(password);
-            });
-
-            cancelBtn.addEventListener('click', () => {
-                console.log('Cancel button clicked');
-                cleanup();
-                resolve(null);
-            });
-
-            // Gestione tastiera
-            passwordInput.addEventListener('keydown', (e) => {
-                console.log('Key pressed:', e.key);
-                e.stopPropagation();
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    okBtn.click();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelBtn.click();
-                }
-            });
-
-            // Focus con debug
-            setTimeout(() => {
-                console.log('Attempting to focus password input...');
-                passwordInput.focus();
-                
-                // Test se l'input è focusabile
-                console.log('Active element:', document.activeElement);
-                console.log('Input focused:', document.activeElement === passwordInput);
-                
-                // Forza il focus
-                passwordInput.click();
-                passwordInput.select();
-                
-                // Verifica nuovamente
-                setTimeout(() => {
-                    console.log('After forced focus - Active element:', document.activeElement);
-                    console.log('Input value can be set:', passwordInput.value = 'test', passwordInput.value === 'test');
-                    passwordInput.value = ''; // Reset
-                }, 100);
-            }, 100);
-        });
-    }
-
-    clearTerminal() {
-        this.outputElement.innerHTML = '';
-        this.currentLine = '';
-        this.cursorPosition = 0;
-        // Reset dello stato di scrolling
-        this.isUserScrolling = false;
-        this.autoScrollEnabled = true;
-        this.showWelcome();
-        // L'observer si occuperà automaticamente dello scroll dopo il welcome
-    }
-
-    showHelp() {
-        const help = `
-Available commands:
-  ai <question>      - Ask AI anything (suggests commands)
-  ask <question>     - Alternative syntax for AI
-  execute <question> - AI executes commands automatically with iteration
-  run <question>     - Alternative syntax for auto-execution
-  
-  save-ai-chat       - Save AI conversation to file
-  show-ai-chat       - Display AI conversation history  
-  clear-ai-chat      - Clear AI conversation history
-  
-  enable-pty         - Enable enhanced mode for interactive commands
-  disable-pty        - Disable enhanced mode (use standard execution)
-  pty-status         - Show current enhanced mode status
-  
-  toggle-autoscroll  - Enable/disable automatic scrolling
-  toggle-smooth-scroll - Enable/disable smooth scrolling animation
-  scroll-bottom      - Force scroll to bottom immediately
-  autoscroll-status  - Show current scrolling settings
-  
-  install-homebrew   - Homebrew installation helper with multiple methods
-  
-  help               - Show this help
-  clear              - Clear screen (Ctrl+K/Cmd+K)
-  exit               - Exit terminal
-  
-  debug-fonts        - Show available fonts
-  debug-cursor       - Show cursor styles
-  
-  cursor-bar         - Test bar cursor
-  cursor-block       - Test block cursor
-  cursor-underline   - Test underline cursor
-  test-cursors       - Test all cursor styles
-  
-  theme-warp-dark    - Test Warp Dark theme
-  theme-warp-light   - Test Warp Light theme
-  theme-terminal-classic - Test Terminal Classic theme
-  theme-cyberpunk    - Test Cyberpunk theme
-  test-themes        - Test all themes
-  test-simple-theme  - Test simple theme (red background)
-
-System Commands:
-  sudo <command>     - Execute commands with administrator privileges
-                      (Password prompt will appear securely)
-  
-  Any Unix/Linux command like: ls, cd, mkdir, npm, git, etc.
-
-Enhanced Mode (🔧 ENABLED by default):
-  🍺 Homebrew installer: /bin/bash -c "$(curl -fsSL https://...)"
-  📦 Interactive installs: npm install, pip install, etc.
-  🌐 Downloads: wget, curl with progress bars
-  📁 Git operations: git clone with progress
-  🔧 Package managers: yay, pacman, apt-get (full interactive support)
-  📝 Text editors: vim, nano, emacs (full terminal support)
-  📊 System monitors: htop, top, watch (real-time updates)
-
-PTY Commands:
-  pty-status         - Show PTY mode and session status
-  pty-restart        - Restart the PTY session
-  enable-pty         - Enable PTY mode for interactive commands
-  disable-pty        - Disable PTY mode (use traditional execution)
-  test-pty           - Test PTY functionality
-  test-sudo          - Test sudo functionality with secure password
-
-Important Notes:
-  🍺 Homebrew: Enhanced mode improves compatibility with installers
-  🔐 Interactive Commands: Full terminal emulation with real TTY
-  ⚡ Performance: Automatic fallback for simple commands
-  📱 Compatibility: Works with all standard Unix/Linux tools
-  🎮 Interactive Tools: yay, htop, vim work exactly like in a real terminal
-
-Keyboard Shortcuts:
-  ↑/↓                - Navigate command history
-  Tab                - Auto-complete commands
-  Ctrl/Cmd+C         - Copy selected text or current line
-  Ctrl/Cmd+V         - Paste from clipboard
-  Ctrl/Cmd+A         - Select all terminal content
-  Ctrl/Cmd+K         - Clear terminal
-  Ctrl/Cmd+L         - Clear terminal (alternative)
-  Ctrl/Cmd+J         - Scroll to bottom instantly
-  Page Down          - Scroll to bottom instantly
-
-AI Commands:
-  ai "create a folder called test"     - AI suggests the command
-  execute "create a folder called test" - AI creates folder automatically
-  run "show disk space"               - AI executes and verifies result
-`;
-        this.addOutput(help);
-    }
-
-    async processAICommand(command) {
-        console.log('=== PROCESS AI COMMAND CALLED ===');
-        console.log('Full command received:', command);
-        
-        const question = command.replace(/^(ai|ask|execute|run)\s+/, '');
-        const isAutoExecute = command.startsWith('execute ') || command.startsWith('run ');
-        
-        console.log('Extracted question:', question);
-        console.log('Auto-execute mode:', isAutoExecute);
-        
-        // Registra la domanda dell'utente
-        this.addToAIConversation('user', question);
-        
-        let thinkingMessageElement;
-        let webSearchMessageElement = null;
-        
-        if (isAutoExecute) {
-            thinkingMessageElement = this.addOutput('🚀 AI Agent executing...');
-        } else {
-            // Mostra un messaggio più informativo che indica che potrebbe cercare online
-            thinkingMessageElement = this.addOutput('🤖 Analyzing request...');
-            thinkingMessageElement.className = 'ai-thinking';
-        }
-        
-        try {
-            // Implementa un sistema di timeout progressivo per mostrare l'avanzamento
-            const progressTimeouts = [];
-            
-            // Dopo 1 secondo, suggerisci che potrebbe cercare online
-            progressTimeouts.push(setTimeout(() => {
-                if (thinkingMessageElement && thinkingMessageElement.parentNode) {
-                    thinkingMessageElement.textContent = '🤖 Analyzing (may search web)...';
-                }
-            }, 1000));
-            
-            // Dopo 3 secondi, mostra che probabilmente sta cercando online
-            progressTimeouts.push(setTimeout(() => {
-                if (thinkingMessageElement && thinkingMessageElement.parentNode) {
-                    thinkingMessageElement.textContent = '🌐 Likely searching internet...';
-                    thinkingMessageElement.className = 'web-search-loading';
-                    webSearchMessageElement = thinkingMessageElement;
-                }
-            }, 3000));
-            
-            // Prova prima l'API Tauri, poi usa l'approccio alternativo
-            const tauriApi = await this.getTauriAPI();
-            
-            let result;
-            if (tauriApi && tauriApi.invoke) {
-                // Usa l'API Tauri se disponibile
-                console.log('Using Tauri API for AI command');
-
-                // Garantisci di avere la config AI aggiornata dal backend
-                let effectiveAIConfig = this.aiSettings || {};
-                try {
-                    const fresh = await tauriApi.invoke('get_config');
-                    if (fresh && fresh.ai) {
-                        effectiveAIConfig = fresh.ai;
-                    } else if (!this.aiSettings || Object.keys(this.aiSettings).length === 0) {
-                        // Fallback: carica dal backend se vuoto
-                        console.log('Loading AI settings for AI command...');
-                        await this.loadSettingsFromBackend();
-                        effectiveAIConfig = this.aiSettings || {};
-                    }
-                } catch (e) {
-                    console.warn('Could not fetch fresh config, using cached aiSettings');
-                }
-
-                // Se manca il provider ma è presente la sezione ollama, preferisci ollama
-                if (!effectiveAIConfig.provider && effectiveAIConfig.ollama) {
-                    effectiveAIConfig.provider = 'ollama';
-                }
-                console.log('AI Settings being sent:', effectiveAIConfig);
-
-                result = await tauriApi.invoke('ai_agent_with_web', { 
-                    prompt: question, 
-                    context: this.getTerminalContext(), 
-                    // Invia entrambe le varianti per compatibilità Tauri v2
-                    autoExecute: isAutoExecute,
-                    auto_execute: isAutoExecute,
-                    // Compatibilità: il comando Rust usa _ai_config; inviamo tutte le varianti
-                    aiConfig: effectiveAIConfig || null,
-                    ai_config: effectiveAIConfig || null,
-                    _ai_config: effectiveAIConfig || null
-                });
-            } else {
-                // Usa l'approccio alternativo se l'API Tauri non è disponibile
-                console.log('Tauri API not available, using alternative approach');
-                result = await this.executeAICommandDirect(command);
-                
-                // Wrappa il risultato in un formato compatibile
-                result = {
-                    type: 'ai_response',
-                    response: result
-                };
-            }
-            
-            // Pulisci tutti i timeout
-            progressTimeouts.forEach(timeout => clearTimeout(timeout));
-            
-            // Rimuovi tutti i messaggi di loading
-            if (thinkingMessageElement) {
-                thinkingMessageElement.remove();
-            }
-            if (webSearchMessageElement) {
-                webSearchMessageElement.remove();
-            }
-
-            console.log('AI Agent with Web result:', result);
-            
-            // L'observer si occuperà automaticamente dello scroll per tutto l'output AI
-            
-            switch (result.type) {
-                case 'web_enhanced':
-                    // Mostra che l'AI ha effettivamente cercato su internet
-                    const webLoadingMessage = this.addOutput('🌐 Looking on internet...');
-                    webLoadingMessage.className = 'web-search-loading';
-                    
-                    // Mostra il loader progressivo
-                    await this.showWebSearchLoader(webLoadingMessage, result.searchQuery);
-                    
-                    // Rimuovi il messaggio di caricamento web
-                    webLoadingMessage.remove();
-                    
-                    this.addAIOutput('🌐 ' + result.response);
-                    this.addAIOutput('🔍 Ricerca web eseguita per: ' + result.searchQuery);
-                    this.addAIOutput('📊 Confidenza: ' + (result.confidence * 100).toFixed(0) + '%');
-                    this.addAIOutput('💡 L\'AI ha cercato informazioni aggiornate su internet per fornirti una risposta più accurata');
-                    this.addToAIConversation('ai', result.response, null, null, 'web_enhanced');
-                    break;
-                    
-                case 'executed':
-                    this.addAIOutput('🚀 ' + result.response);
-                    this.addAIOutput('✅ Comando eseguito: ' + result.command);
-                    this.addAIOutput('📊 Output: ' + result.output);
-                    this.addToAIConversation('ai', result.response, result.command, result.output, 'executed');
-                    break;
-                case 'command': {
-                    // Backend ha identificato un comando, proponi approvazione con adattamento piattaforma
-                    const rawCmd = (result.command && typeof result.command === 'string') ? result.command : '';
-                    let adapted = this.adaptCommandToPlatform(rawCmd);
-                    // Se il comando è sospetto (es. singola parola) prova a ricostruire da intento cartella
-                    const suspiciousSingleWord = adapted && /^[A-Za-z0-9_.-]+$/.test(adapted);
-                    if (suspiciousSingleWord) {
-                        const fromIntent = this.buildFolderCreationCommandFromText(String(result.response || ''));
-                        if (fromIntent) adapted = this.adaptCommandToPlatform(fromIntent);
-                    }
-                    if (adapted) {
-                        const toRun = await this.showInlineAIApproval(adapted);
-                        if (toRun && typeof toRun === 'string' && toRun.trim()) {
-                            await this.executeApprovedCommand(toRun.trim());
-                        } else if (toRun === false || toRun === null) {
-                            this.addOutput('🛑 Esecuzione annullata');
-                        }
-                    } else {
-                        // Fallback al testo
-                        const aiText = typeof result.response === 'string' ? result.response : '';
-                        this.addAIOutput('🤖 ' + aiText);
-                    }
-                    break;
-                }
-                    
-                case 'ai_response':
-                default: {
-                    const aiText = typeof result.response === 'string' ? result.response : (result && result.response ? String(result.response) : '');
-                    this.addAIOutput('🤖 ' + aiText);
-                    this.addToAIConversation('ai', aiText, null, null, 'ai_response');
-
-                    // Se NON è auto-exec, prova a estrarre un comando e chiedi conferma per l'esecuzione
-                    if (!isAutoExecute) {
-                        const suggested = this.extractCommandFromAIResponse(aiText);
-                        if (suggested) {
-                            try {
-                                const toRun = await this.showInlineAIApproval(this.adaptCommandToPlatform(suggested));
-                                if (toRun && typeof toRun === 'string' && toRun.trim()) {
-                                    await this.executeApprovedCommand(toRun.trim());
-                                } else if (toRun === false || toRun === null) {
-                                    this.addOutput('🛑 Esecuzione annullata');
-                                }
-                            } catch (e) {
-                                console.warn('Approval flow error:', e);
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-            
-        } catch (error) {
-            // Pulisci tutti i timeout in caso di errore
-            if (typeof progressTimeouts !== 'undefined') {
-                progressTimeouts.forEach(timeout => clearTimeout(timeout));
-            }
-            
-            if (thinkingMessageElement) {
-                thinkingMessageElement.remove();
-            }
-            if (webSearchMessageElement && webSearchMessageElement !== thinkingMessageElement) {
-                webSearchMessageElement.remove();
-            }
-            
-            console.error('AI Agent error:', error);
-            const errorText = typeof error === 'string'
-                ? error
-                : (error && (error.message || error.error || error.code))
-                    ? (error.message || error.error || String(error.code))
-                    : (function(){ try { return JSON.stringify(error); } catch { return String(error); } })();
-            const errorMsg = 'AI Agent Error: ' + (errorText || 'unknown error');
-            this.addAIOutput('❌ ' + errorMsg);
-            this.addToAIConversation('ai', errorMsg);
-        }
-    }
-
-    // Estrae un comando shell da una risposta AI (cerca blocchi ```bash|sh|zsh o la prima riga plausibile)
-    extractCommandFromAIResponse(text) {
-        if (!text || typeof text !== 'string') return null;
-        try {
-            // 0) Rilevamento esplicito: intento di creazione cartella
-            const fromIntentEarly = this.buildFolderCreationCommandFromText(text);
-            if (fromIntentEarly) {
-                return this.adaptCommandToPlatform(fromIntentEarly);
-            }
-            // Funzione di sanificazione di una riga candidata
-            const sanitize = (s) => {
-                if (!s) return '';
-                let v = String(s).trim();
-                // Rimuovi prompt e marker di lista
-                v = v.replace(/^\$\s+/, '');
-                v = v.replace(/^\s*(?:[-*•]|\d+\.)\s+/, '');
-                // Rimuovi backticks di wrapping
-                v = v.replace(/^`+|`+$/g, '');
-                // Se l'intera riga è racchiusa tra lo stesso tipo di quote, rimuovile (mantieni quote interne)
-                const wrap = v.match(/^(["'])([\s\S]*)\1$/);
-                if (wrap) {
-                    v = wrap[2];
-                }
-                // Rimuovi punteggiatura finale isolata (non rimuovere quote)
-                v = v.replace(/[\s]*[.,;:!?)]$/g, '');
-                // Collassa spazi
-                v = v.replace(/\s+/g, ' ').trim();
-                return v;
-            };
-
-            // Estrae riferimenti a variabili tipo $VAR o ${VAR}
-            const getVarRefs = (s) => {
-                const refs = new Set();
-                if (!s) return refs;
-                const re = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
-                let m;
-                while ((m = re.exec(s)) !== null) {
-                    const name = m[1] || m[2];
-                    if (name) refs.add(name);
-                }
-                return refs;
-            };
-
-            // Parsing assegnazioni (VAR=..., export VAR=...)
-            const parseAssignments = (lines) => {
-                const map = new Map();
-                const ordered = [];
-                const assignRe = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
-                for (const raw of lines) {
-                    const line = String(raw || '').trim();
-                    if (!line || line.startsWith('#')) continue;
-                    const m = line.match(assignRe);
-                    if (m) {
-                        const name = m[1];
-                        let val = m[2].trim();
-                        // Mantieni virgolette come nel testo per preservare spazi
-                        ordered.push({ name, value: val, line: raw });
-                        if (!map.has(name)) map.set(name, val);
-                    }
-                }
-                return { map, ordered };
-            };
-
-            // Verifica variabili non definite (ignora alcune standard di ambiente)
-            const hasUndefinedVars = (s, assignsMap) => {
-                const builtins = new Set(['HOME','USER','PWD','PATH','SHELL','TMPDIR','TMP','LOGNAME','LANG','LC_ALL']);
-                const refs = getVarRefs(s);
-                const missing = [];
-                for (const r of refs) {
-                    if (builtins.has(r)) continue;
-                    if (!assignsMap.has(r)) missing.push(r);
-                }
-                return { missing, refs };
-            };
-
-            // Anteponi le assegnazioni necessarie per costruire un one-liner eseguibile
-            const buildComposite = (cmd, assignsOrdered, needed) => {
-                if (!needed || needed.length === 0) return cmd;
-                const parts = [];
-                for (const a of assignsOrdered) {
-                    if (needed.includes(a.name)) parts.push(`${a.name}=${a.value}`);
-                }
-                if (parts.length > 0) return parts.join('; ') + '; ' + cmd;
-                return cmd;
-            };
-
-            // Evita righe chiaramente non comando
-            const isPlausible = (s) => {
-                if (!s) return false;
-                const badStarts = /^(error:|ai agent error:|nota:|note:)/i;
-                if (badStarts.test(s)) return false;
-                if (/^\d+[.)]?$/.test(s)) return false; // solo un numero tipo "3." 
-                // Comandi consentiti (con o senza sudo)
-                const allowed = /^(?:sudo\s+)?(mkdir|ls|grep|cat|echo|touch|rm|cp|mv|du|df|uname|whoami|sysctl|sw_vers|pmset|ifconfig|ipconfig|ps|top|htop|btop|pwd|cd|chmod|chown|brew|port|apt|dnf|pacman|git|curl|wget|tar|zip|unzip|python|node|npm|pnpm|yarn|docker|kubectl)\b/;
-                return allowed.test(s);
-            };
-
-            // Cerca un blocco di codice con linguaggio shell
-            const codeBlockRegex = /```(bash|sh|zsh)?\n([\s\S]*?)```/i;
-            const m = text.match(codeBlockRegex);
-            let candidate = null;
-            if (m && m[2]) {
-                const rawLines = m[2].split(/\r?\n/);
-                const lines = rawLines.map(l => sanitize(l));
-                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawLines);
-                // Prova prima a prendere una riga plausibile che non richiede variabili non definite
-                for (const l of lines) {
-                    if (!l || l.startsWith('#') || !isPlausible(l)) continue;
-                    const { missing, refs } = hasUndefinedVars(l, assignsMap);
-                    if (missing.length === 0) {
-                        candidate = buildComposite(l, assignsOrdered, Array.from(refs));
-                        break;
-                    }
-                }
-                // Se non trovato, ma il blocco è breve, combina assegnazioni + comando plausibile
-                if (!candidate && lines.filter(Boolean).length <= 4) {
-                    const plausible = lines.find(l => isPlausible(l));
-                    if (plausible) {
-                        const { missing, refs } = hasUndefinedVars(plausible, assignsMap);
-                        if (missing.length === 0 && assignsOrdered.length > 0) {
-                            candidate = buildComposite(plausible, assignsOrdered, Array.from(refs));
-                        }
-                    }
-                }
-            }
-            // Fallback: prima riga che sembra un comando (inizia con $ o contiene spazi ed è priva di punteggio finale)
-            if (!candidate) {
-                const rawAll = text.split(/\r?\n/);
-                const lines = rawAll.map(l => sanitize(l));
-                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
-
-                let picked = null;
-                for (let l of lines) {
-                    if (!l) continue;
-                    if (l.startsWith('$ ')) l = l.replace(/^\$\s+/, '');
-                    if (!isPlausible(l)) continue;
-                    const { missing, refs } = hasUndefinedVars(l, assignsMap);
-                    if (missing.length === 0) {
-                        picked = buildComposite(l, assignsOrdered, Array.from(refs));
-                        break;
-                    }
-                }
-                candidate = picked || null;
-            }
-            // Fallback: inline code `...` che contiene un comando plausibile
-            if (!candidate) {
-                const inline = Array.from(text.matchAll(/`([^`]+)`/g)).map(m => sanitize(m[1]));
-                const rawAll = text.split(/\r?\n/);
-                const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
-                let picked = null;
-                for (const snippet of inline) {
-                    if (!isPlausible(snippet)) continue;
-                    const { missing, refs } = hasUndefinedVars(snippet, assignsMap);
-                    if (missing.length === 0) {
-                        picked = buildComposite(snippet, assignsOrdered, Array.from(refs));
-                        break;
-                    }
-                }
-                candidate = picked || null;
-            }
-            // Ultimo fallback: pattern semplice tipo mkdir/ls/cat/etc.
-            if (!candidate) {
-                const simple = text.match(/\b(mkdir|ls|grep|cat|echo|touch|rm|cp|mv|du|df|uname|whoami|sysctl|sw_vers|pmset|ifconfig|ipconfig|ps|top|htop|btop|pwd|cd|chmod|chown|brew|port|apt|dnf|pacman|git|curl|wget|tar|zip|unzip|python|node|npm|pnpm|yarn|docker|kubectl)\b[^\n]*/i);
-                if (simple) {
-                    const rawAll = text.split(/\r?\n/);
-                    const { map: assignsMap, ordered: assignsOrdered } = parseAssignments(rawAll);
-                    let line = sanitize(simple[0]);
-                    const { missing, refs } = hasUndefinedVars(line, assignsMap);
-                    if (missing.length === 0) {
-                        candidate = buildComposite(line, assignsOrdered, Array.from(refs));
-                    }
-                }
-            }
-            // Evita di prendere blocchi multi-comando con ```
-            if (candidate) {
-                // rimuovi backticks e prompt, preserva quote interne
-                candidate = sanitize(candidate).replace(/```/g, '').trim();
-                // Se è nel formato sh -c "..." o '...', estrai il contenuto
-                const shWrap = candidate.match(/^sh\s+-c\s+(["'])([\s\S]+)\1$/);
-                if (shWrap) {
-                    candidate = shWrap[2].trim();
-                }
-                // Ultima protezione: se rimangono variabili non definite, scarta
-                const rawAll = text.split(/\r?\n/);
-                const { map: finalAssigns } = parseAssignments(rawAll);
-                const { missing } = hasUndefinedVars(candidate, finalAssigns);
-                if (missing.length > 0) return null;
-            }
-            // Adatta alla piattaforma corrente prima di restituire
-            // Se il candidato è assente o è una singola parola sospetta (es: "python"), prova l'intento
-            if (!candidate || /^[A-Za-z0-9_.-]+$/.test(candidate)) {
-                const fromIntent = this.buildFolderCreationCommandFromText(text);
-                if (fromIntent) return this.adaptCommandToPlatform(fromIntent);
-            }
-            const adapted = candidate ? this.adaptCommandToPlatform(candidate) : null;
-            return adapted || null;
-        } catch (_) {
-            return null;
-        }
-    }
-
-    // Costruisce un comando mkdir da testo che richiede la creazione di una cartella (IT/EN)
-    buildFolderCreationCommandFromText(text) {
-        if (!text) return null;
-        const s = String(text).toLowerCase();
-        // Verifica parole chiave di intento
-        const intent = /(crea|creare|creami|make|create|build)\s+(una\s+)?(cartella|directory|dir|folder)/i;
-        if (!intent.test(s)) return null;
-
-        // Estrai nome della cartella: cerca tra virgolette o dopo "chiamata/named/called"
-        const nameRegexes = [
-            /(?:chiamat[ao]|di\s+nome|named|called)\s+["'“”]?([a-z0-9._\-]+)["'“”]?/i,
-            /(?:cartella|directory|folder)\s+(?:chiamat[ao]\s+)?["'“”]?([a-z0-9._\-]+)["'“”]?/i
-        ];
-        let dirName = null;
-        for (const rx of nameRegexes) {
-            const m = text.match(rx);
-            if (m && m[1]) { dirName = m[1]; break; }
-        }
-        // Fallback: prendi la prima parola tra backticks
-        if (!dirName) {
-            const tick = text.match(/`([A-Za-z0-9._\-]+)`/);
-            if (tick) dirName = tick[1];
-        }
-        if (!dirName) return null;
-
-        // Determina base path (Desktop/Downloads/Documents) se menzionati
-        const base = this.resolveBaseDirFromText(s);
-        const full = base ? `${base}/${dirName}` : `./${dirName}`;
-        return `mkdir -p ${full}`;
-    }
-
-    // Risolve una base directory semplice da keyword (IT/EN)
-    resolveBaseDirFromText(s) {
-        try {
-            const isWindows = navigator.userAgent && /Windows/i.test(navigator.userAgent);
-            const home = isWindows ? '%USERPROFILE%' : '~';
-            // Mapping keyword -> subdir
-            if (/(desktop|scrivania)/i.test(s)) return `${home}/Desktop`;
-            if (/(download|downloads|scaric)/i.test(s)) return `${home}/Downloads`;
-            if (/(documenti|documents|docs)/i.test(s)) return `${home}/Documents`;
-            if (/(musica|music)/i.test(s)) return `${home}/Music`;
-            if (/(immagini|pictures|foto|photos)/i.test(s)) return `${home}/Pictures`;
-            if (/(video|videos|movie|film)/i.test(s)) return `${home}/Videos`;
-            return null; // usa cwd
-        } catch (_) {
-            return null;
-        }
-    }
-
-    // Mostra un piccolo overlay di approvazione per eseguire il comando suggerito
-    async showAIExecutionApproval(command) {
-        return new Promise((resolve) => {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;';
-
-            const modal = document.createElement('div');
-            modal.style.cssText = 'background:#1f2430;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:12px;min-width:480px;max-width:80vw;box-shadow:0 12px 32px rgba(0,0,0,0.5);';
-            modal.innerHTML = `
-                <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08);font-weight:600;">Confermi l'esecuzione del comando?</div>
-                <div style="padding:16px 20px;">
-                    <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">Puoi modificare il comando prima di eseguirlo:</div>
-                    <textarea id="ai-cmd" rows="2" style="width:100%;margin:0;padding:12px;background:#11141a;border:1px solid rgba(255,255,255,0.12);border-radius:8px;white-space:pre-wrap;word-break:break-all;color:#e5e7eb;font-family:SF Mono,Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.4;">${this.escapeHtml(command)}</textarea>
-                    <div style="margin-top:10px;font-size:12px;color:#a0aec0;">Controlla il comando proposto dall'AI e scegli se eseguirlo.</div>
-                </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">
-                    <button id="ai-copy" style="background:#374151;color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;">Copia</button>
-                    <button id="ai-cancel" style="background:#4b5563;color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;">Annulla</button>
-                    <button id="ai-run" style="background:#10b981;color:#0b1220;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600;">Esegui</button>
-                </div>
-            `;
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-
-            const cleanup = () => { try { document.body.removeChild(overlay); } catch(_){} };
-            modal.querySelector('#ai-cancel').onclick = () => { cleanup(); resolve(null); };
-            modal.querySelector('#ai-run').onclick = () => { const val = modal.querySelector('#ai-cmd').value; cleanup(); resolve(val); };
-            modal.querySelector('#ai-copy').onclick = async () => {
-                try { await navigator.clipboard.writeText(modal.querySelector('#ai-cmd').value || command); } catch(_) {}
-            };
-        });
-    }
-
-    async executeApprovedCommand(command) {
-        try {
-            const tauriApi = await this.getTauriAPI();
-            if (!tauriApi || !tauriApi.invoke) throw new Error('Tauri API non disponibile');
-            const adapted = this.adaptCommandToPlatform(command);
-            this.addOutput('▶️ ' + adapted);
-            const output = await tauriApi.invoke('run_command', { command: adapted });
-            if (output) {
-                this.addOutput(output);
-            }
-        } catch (e) {
-            this.addOutput('❌ Errore esecuzione: ' + (e && (e.message || e.error) || String(e)));
-        }
-    }
-
-    // Adatta un comando generato dall'AI alla piattaforma corrente (path e sintassi)
-    adaptCommandToPlatform(command) {
-        try {
-            if (!command || typeof command !== 'string') return command;
-            // Se siamo in Windows, mantieni (minime conversioni); su Unix, converti path Windows
-            const isWindows = navigator.userAgent && /Windows/i.test(navigator.userAgent);
-            let result = command;
-
-            // Normalizza quote smart
-            result = result.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-
-            if (!isWindows) {
-                // Variabili ambiente Windows -> Unix
-                result = result.replace(/%USERPROFILE%/gi, '~');
-                result = result.replace(/%HOMEPATH%/gi, '~');
-
-                // Pattern %USERPROFILE%\\Dir or %USERPROFILE%/Dir -> ~/Dir
-                result = result.replace(/%(?:USERPROFILE|HOMEPATH)%[\\/]+/gi, '~/');
-
-                // Converti backslash in slash per Unix (ma non dentro le opzioni)
-                // Esempio: mkdir "C:\\Users\\me\\Desktop\\test" -> mkdir "~/Desktop/test"
-                result = result.replace(/\\/g, '/');
-
-                // Aggiungi -p ai mkdir se manca
-                if (/^\s*mkdir\s+/i.test(result) && !/\s-\w*\bp\b/.test(result)) {
-                    result = result.replace(/^\s*mkdir\s+/i, 'mkdir -p ');
-                }
-            } else {
-                // Su Windows, sostituisci ~/ con %USERPROFILE%\\
-                result = result.replace(/~\//g, '%USERPROFILE%\\');
-            }
-
-            return result;
-        } catch (_) {
-            return command;
-        }
-    }
-
-    escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-    }
-
-    // UI di approvazione inline dentro il terminale
-    async showInlineAIApproval(command) {
-        return new Promise((resolve) => {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.03);';
-            wrap.className = 'ai-approval-inline';
-            wrap.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#a0aec0;font-size:12px;">
-                    <span>Confermi l'esecuzione del comando suggerito?</span>
-                </div>
-                <textarea rows="2" style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:#0f1218;color:#e5e7eb;font-family:SF Mono,Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.4;">${this.escapeHtml(command)}</textarea>
-                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
-                    <button data-act="copy" style="background:#374151;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">Copia</button>
-                    <button data-act="cancel" style="background:#4b5563;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">Annulla</button>
-                    <button data-act="run" style="background:#10b981;color:#0b1220;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600;">Esegui</button>
-                </div>
-            `;
-            // Append inline al terminale e scrolla
-            if (this.outputElement) {
-                this.outputElement.appendChild(wrap);
-                try { wrap.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(_){}
-            } else {
-                document.body.appendChild(wrap);
-            }
-
-            const textarea = wrap.querySelector('textarea');
-            const on = (sel, handler) => { const btn = wrap.querySelector(sel); if (btn) btn.addEventListener('click', handler); };
-            on('button[data-act="cancel"]', () => { cleanup(); resolve(null); });
-            on('button[data-act="run"]', () => { const val = textarea.value; cleanup(); resolve(val); });
-            on('button[data-act="copy"]', async () => { try { await navigator.clipboard.writeText(textarea.value); } catch(_){} });
-
-            const cleanup = () => { try { wrap.remove(); } catch(_){} };
-        });
-    }
-
-    getTerminalContext() {
-        // Raccoglie le ultime righe del terminale come contesto
-        const outputLines = this.outputElement.textContent.split('\n');
-        return outputLines.slice(-10).filter(line => line.trim() !== '');
-    }
-
-    /**
-     * Mostra un loader progressivo per la ricerca web
-     */
-    async showWebSearchLoader(loadingElement, searchQuery) {
-        if (!loadingElement) return;
-        
-        const loadingSteps = [
-            { text: '🌐 Looking on internet...', duration: 800 },
-            { text: `🔍 Searching for: ${searchQuery}`, duration: 600 },
-            { text: '📊 Integrating results...', duration: 400 }
-        ];
-        
-        for (const step of loadingSteps) {
-            if (loadingElement.parentNode) { // Verifica che l'elemento esista ancora
-                loadingElement.textContent = step.text;
-                loadingElement.className = 'web-search-loading';
-                await new Promise(resolve => setTimeout(resolve, step.duration));
-            }
-        }
-    }
-
-    showExecutionHistory(history) {
-        if (!history || history.length === 0) return;
-        
-        this.addAIOutput('\n📚 Cronologia esecuzione:');
-        history.forEach((entry, index) => {
-            this.addAIOutput(`  ${entry.iteration}. ${entry.command}`);
-            this.addAIOutput(`     💭 ${entry.reasoning}`);
-            if (entry.result.success) {
-                this.addAIOutput(`     ✅ Successo`);
-            } else {
-                this.addAIOutput(`     ❌ Errore: ${entry.result.output.substring(0, 100)}...`);
-            }
-        });
-        // L'observer si occuperà automaticamente dello scroll
-    }
-
-    // Gestione conversazioni AI
-    saveAIConversation() {
-        if (this.aiConversation.length === 0) {
-            this.addOutput('❌ Nessuna conversazione AI da salvare');
-            return;
-        }
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `ai-chat-${timestamp}.txt`;
-        
-        let chatContent = `TermInA AI Conversation - ${new Date().toLocaleString()}\n`;
-        chatContent += '='.repeat(60) + '\n\n';
-        
-        this.aiConversation.forEach((entry, index) => {
-            chatContent += `[${entry.timestamp}] ${entry.type.toUpperCase()}: ${entry.content}\n`;
-            if (entry.type === 'ai' && entry.command) {
-                chatContent += `  → Suggested Command: ${entry.command}\n`;
-            }
-            if (entry.type === 'ai' && entry.result) {
-                chatContent += `  → Result: ${entry.result}\n`;
-            }
-            chatContent += '\n';
-        });
-
-        // Salva usando l'API Electron
-        this.saveToFile(filename, chatContent);
-        this.addOutput(`💾 Conversazione AI salvata come: ${filename}`);
-    }
-
-    async saveToFile(filename, content) {
-        try {
-            if (window.__TAURI__ && window.__TAURI__) {
-                const api18 = await this.getTauriAPI();
-                const result = api18?.invoke ? await api18.invoke('save_to_downloads', { filename: filename, content: content }) : { success:false };
-                if (result.success) {
-                    this.addOutput(`📁 File salvato in: ${result.path}`);
-                } else {
-                    throw new Error(result.error);
-                }
-            } else {
-                // Fallback usando download browser
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                this.addOutput(`📁 File scaricato: ${filename}`);
-            }
-        } catch (error) {
-            console.error('Error saving file:', error);
-            // Fallback: usa il download del browser
-            try {
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                this.addOutput(`📁 File scaricato come fallback: ${filename}`);
-            } catch (fallbackError) {
-                this.addOutput(`❌ Errore nel salvare il file: ${error.message}`);
-            }
-        }
-    }
-
-    clearAIConversation() {
-        this.aiConversation = [];
-        this.addOutput('🗑️ Cronologia conversazioni AI cancellata');
-    }
-
-    // Gestione loading indicator per comandi lunghi
-    showLoadingIndicator(command, options = {}) {
-        // Rimuovi eventuali loading indicator esistenti
-        this.hideLoadingIndicator();
-
-        // Configura opzioni
-        const config = {
-            showTime: options.showTime !== false, // Default true
-            timeout: options.timeout || 30000,    // 30 secondi default
-            style: options.style || 'spinner',    // 'dots', 'spinner', 'bar'
-            message: options.message || `Executing: ${command}`,
-            minDisplayTime: options.minDisplayTime || 500, // Mostra per almeno 500ms
-            ...options
-        };
-
-        // Crea elemento loading
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'command-loading-indicator';
-        loadingDiv.innerHTML = `
-            <div class="loading-content">
-                <div class="loading-animation">
-                    <span class="loading-icon"></span>
-                    <span class="loading-text">${config.message}</span>
-                </div>
-                <div class="loading-time" ${!config.showTime ? 'style="display: none;"' : ''}>
-                    <span class="time-elapsed">0s</span>
-                </div>
-            </div>
-        `;
-
-        // Aggiungi all'output
-        this.outputElement.appendChild(loadingDiv);
-        this.currentLoadingIndicator = loadingDiv;
-        this.commandStartTime = Date.now();
-        this.timeoutWarningShown = false;
-
-        // Avvia animazione
-        this.startLoadingAnimation(config.style);
-
-        // Timer per aggiornare il tempo
-        if (config.showTime) {
-            this.startTimeUpdater();
-        }
-
-        // Timer di timeout
-        if (config.timeout > 0) {
-            this.commandTimeoutTimer = setTimeout(() => {
-                this.showTimeoutWarning(config.timeout / 1000);
-            }, config.timeout);
-        }
-
-        // Auto-scroll
-        this.scrollToBottom();
-    }
-
-    hideLoadingIndicator() {
-        if (this.currentLoadingIndicator) {
-            this.currentLoadingIndicator.remove();
-            this.currentLoadingIndicator = null;
-        }
-
-        // Ferma animazioni e timer
-        if (this.loadingAnimationFrame) {
-            cancelAnimationFrame(this.loadingAnimationFrame);
-            this.loadingAnimationFrame = null;
-        }
-
-        if (this.commandTimeoutTimer) {
-            clearTimeout(this.commandTimeoutTimer);
-            this.commandTimeoutTimer = null;
-        }
-
-        this.commandStartTime = null;
-        this.timeoutWarningShown = false;
-    }
-
-    startLoadingAnimation(style = 'dots') {
-        if (!this.currentLoadingIndicator) return;
-
-        const iconElement = this.currentLoadingIndicator.querySelector('.loading-icon');
-        if (!iconElement) return;
-
-        const animate = () => {
-            if (!this.currentLoadingIndicator) return;
-
-            switch (style) {
-                case 'dots':
-                    this.loadingDots = (this.loadingDots + 1) % 4;
-                    iconElement.textContent = '⚪'.repeat(this.loadingDots) + '⚫'.repeat(3 - this.loadingDots);
-                    break;
-                case 'spinner':
-                    const spinners = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-                    this.loadingDots = (this.loadingDots + 1) % spinners.length;
-                    iconElement.textContent = spinners[this.loadingDots];
-                    break;
-                case 'bar':
-                    const bars = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█', '▇', '▆', '▅', '▄', '▃', '▂'];
-                    this.loadingDots = (this.loadingDots + 1) % bars.length;
-                    iconElement.textContent = bars[this.loadingDots];
-                    break;
-            }
-
-            this.loadingAnimationFrame = setTimeout(animate, 200);
-        };
-
-        animate();
-    }
-
-    startTimeUpdater() {
-        if (!this.currentLoadingIndicator || !this.commandStartTime) return;
-
-        const timeElement = this.currentLoadingIndicator.querySelector('.time-elapsed');
-        if (!timeElement) return;
-
-        const updateTime = () => {
-            if (!this.currentLoadingIndicator || !this.commandStartTime) return;
-
-            const elapsed = Math.floor((Date.now() - this.commandStartTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-
-            if (minutes > 0) {
-                timeElement.textContent = `${minutes}m ${seconds}s`;
-            } else {
-                timeElement.textContent = `${seconds}s`;
-            }
-
-            // Cambia colore se impiega troppo tempo
-            if (elapsed > 30) {
-                timeElement.style.color = '#ff9500'; // Arancione
-            }
-            if (elapsed > 60) {
-                timeElement.style.color = '#ff5722'; // Rosso
-            }
-
-            setTimeout(updateTime, 1000);
-        };
-
-        updateTime();
-    }
-
-    showTimeoutWarning(timeoutSeconds) {
-        if (this.timeoutWarningShown || !this.currentLoadingIndicator) return;
-        this.timeoutWarningShown = true;
-
-        const warningDiv = document.createElement('div');
-        warningDiv.className = 'timeout-warning';
-        warningDiv.innerHTML = `
-            ⚠️ Command is taking longer than expected (${timeoutSeconds}s).
-            Press Ctrl+C to cancel or wait for completion.
-        `;
-
-        this.currentLoadingIndicator.appendChild(warningDiv);
-    }
-
-    // Verifica se un comando richiede un loading indicator
-    shouldShowLoading(command) {
-        // Comandi interni che sono sempre istantanei
-        const instantCommands = [
-            'clear', 'help', 'exit', 'pwd', 'cd', 'ls', 'dir', 'echo',
-            'enable-pty', 'disable-pty', 'pty-status', 'pty-restart',
-            'save-ai-chat', 'clear-ai-chat', 'show-ai-chat', 
-            'toggle-autoscroll', 'scroll-bottom', 'autoscroll-status',
-            'toggle-smooth-scroll', 'debug-fonts', 'debug-cursor',
-            'test-pty', 'test-sudo', 'install-homebrew'
-        ];
-
-        const trimmedCommand = command.trim().toLowerCase();
-        
-        // Non mostrare loading per comandi AI (hanno il loro feedback)
-        if (trimmedCommand.startsWith('ai ') || 
-            trimmedCommand.startsWith('ask ') ||
-            trimmedCommand.startsWith('execute ') || 
-            trimmedCommand.startsWith('run ') ||
-            trimmedCommand.startsWith('cursor-')) {
-            return false;
-        }
-
-        // Non mostrare loading per comandi interni istantanei
-        if (instantCommands.includes(trimmedCommand) || 
-            instantCommands.some(cmd => trimmedCommand.startsWith(cmd + ' '))) {
-            return false;
-        }
-
-        // Mostra loading per tutti gli altri comandi
-        // Questo copre automaticamente tutti i comandi di sistema su tutte le piattaforme
-        return true;
-    }
-
-    showAIConversation() {
-        if (this.aiConversation.length === 0) {
-            this.addOutput('ℹ️ Nessuna conversazione AI nella cronologia');
-            return;
-        }
-
-        this.addOutput('💬 Cronologia conversazioni AI:');
-        this.addOutput('─'.repeat(50));
-        
-        this.aiConversation.forEach((entry, index) => {
-            const time = new Date(entry.timestamp).toLocaleTimeString();
-            if (entry.type === 'user') {
-                this.addOutput(`[${time}] 👤 ${entry.content}`);
-            } else if (entry.type === 'ai') {
-                this.addOutput(`[${time}] 🤖 ${entry.content}`);
-                if (entry.command) {
-                    this.addOutput(`    💡 Comando: ${entry.command}`);
-                }
-            }
-        });
-        
-        this.addOutput('─'.repeat(50));
-        this.addOutput(`ℹ️ Totale: ${this.aiConversation.length} messaggi`);
-    }
-
-    // Aggiungi messaggio alla conversazione AI
-    addToAIConversation(type, content, command = null, result = null, responseType = null) {
-        this.aiConversation.push({
-            timestamp: new Date().toISOString(),
-            type: type, // 'user' or 'ai'
-            content: content,
-            command: command,
-            result: result,
-            responseType: responseType // 'web_enhanced', 'local_only', 'fallback', etc.
-        });
-
-        // Mantieni solo gli ultimi 100 messaggi per gestione memoria
-        if (this.aiConversation.length > 100) {
-            this.aiConversation = this.aiConversation.slice(-100);
-        }
-    }
-
-    // Versione migliorata del processCommand per supportare i nuovi comandi
-    async processCommandOriginal() {
-        const command = this.currentLine.trim();
-        
-        // Mostra il comando eseguito
-        this.addOutput('$ ' + command);
-        
-        // Aggiungi alla cronologia
-        if (command) {
-            this.history.push(command);
-        }
-
-        // Processa il comando
-        if (command === 'clear') {
-            this.clearTerminal();
-        } else if (command === 'help') {
-            this.showHelp();
         } else if (command === 'exit') {
             window.close();
         } else if (command === 'debug-fonts') {
@@ -3823,7 +2375,7 @@ AI Commands:
                     this.addOutput('❌ Errore reload config: ' + e.message);
                 }
             } else {
-                this.addOutput('⚠️ Backend non disponibile (refresh-config)');
+                this.addOutput('⚙️ Backend non disponibile (refresh-config)');
             }
         } else if (command.startsWith('cursor-')) {
             this.testCursorStyle(command.replace('cursor-', ''));
@@ -3846,28 +2398,621 @@ AI Commands:
         this.showPrompt();
     }
 
-    suggestCommand(command) {
+    async processAICommand(command) {
+        let thinkingLine = null;
+
+        try {
+            const trimmed = (command || '').trim();
+            const match = trimmed.match(/^(ai|ask|execute|run)\s+/i);
+            const keyword = match ? match[1].toLowerCase() : 'ai';
+            const question = match ? trimmed.slice(match[0].length).trim() : trimmed;
+            const expectCommand = keyword !== 'ask';
+
+            if (!question) {
+                this.addAIOutput('⚠️ Specifica una richiesta per l\'assistente AI.');
+                return;
+            }
+
+            this.clearAISuggestions();
+
+            this.aiConversation.push({ role: 'user', text: question });
+            this.addAIOutput(`🙋 ${question}`);
+
+            thinkingLine = this.addAIOutput('🤖 Sto elaborando...');
+
+            const aiConfig = await this.ensureAIConfigLoaded();
+            if (!aiConfig || (aiConfig.provider && aiConfig.provider === 'disabled')) {
+                this.updateAILineWithText(thinkingLine, '⚠️ L\'assistente AI è disabilitato nelle impostazioni.');
+                return;
+            }
+
+            const systemInfo = await this.ensureSystemInfo();
+            const currentCwd = this.cwd || systemInfo?.homeDir || '~';
+            const directorySnapshots = await this.collectDirectorySnapshots(systemInfo, currentCwd, expectCommand);
+
+            const contextLines = this.getRecentTerminalContext(aiConfig.context_lines || 5);
+            const rawResponse = await this.invokeAIProvider(question, {
+                expectCommand,
+                keyword,
+                contextLines,
+                originalQuestion: question,
+                systemInfo,
+                cwd: currentCwd,
+                directorySnapshots,
+            });
+
+            const aiResult = this.parseAIResult(rawResponse, {
+                expectCommand,
+                originalQuestion: question,
+            });
+
+            await this.presentAIResult(aiResult, {
+                thinkingLine,
+                expectCommand,
+                originalQuestion: question,
+            });
+        } catch (mainError) {
+            console.error('processAICommand error:', mainError);
+
+            if (!thinkingLine) {
+                thinkingLine = this.addAIOutput('🤖');
+            }
+
+            try {
+                const fallback = await this.executeAICommandDirect(command);
+                const fallbackText = typeof fallback === 'string'
+                    ? fallback
+                    : (fallback?.output || JSON.stringify(fallback));
+                this.updateAILineWithText(thinkingLine, `🤖 ${fallbackText}`);
+                this.aiConversation.push({ role: 'assistant', text: fallbackText });
+            } catch (fallbackError) {
+                console.error('AI fallback failed:', fallbackError);
+                this.updateAILineWithText(thinkingLine, `❌ Errore AI: ${mainError.message || mainError}`);
+            }
+        }
+    }
+
+    parseAIResult(rawResponse, options = {}) {
+        const { expectCommand = false } = options || {};
+        const text = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse || '');
+        const json = this.extractJSONFromText(text);
+        const fallbackSummary = 'Comando suggerito dall\'AI';
+
+        const normalizeCommandItem = (entry, defaultExplanation) => {
+            if (!entry) {
+                return null;
+            }
+
+            if (typeof entry === 'string') {
+                const commandText = entry.trim();
+                if (!commandText) {
+                    return null;
+                }
+                return {
+                    command: commandText,
+                    explanation: defaultExplanation || fallbackSummary,
+                };
+            }
+
+            if (typeof entry === 'object') {
+                const commandText = (entry.command || entry.shell || entry.cmd || entry.value || entry.text || '')
+                    .toString()
+                    .trim();
+
+                if (!commandText) {
+                    return null;
+                }
+
+                const rawDanger = entry.danger ?? entry.warning ?? entry.risk ?? false;
+                const danger = typeof rawDanger === 'string'
+                    ? ['true', 'yes', 'y', 'danger', 'warning', 'warn'].includes(rawDanger.toLowerCase())
+                    : rawDanger === true;
+
+                return {
+                    command: commandText,
+                    explanation: entry.explanation || entry.summary || entry.reason || defaultExplanation || fallbackSummary,
+                    summary: entry.summary || defaultExplanation || fallbackSummary,
+                    notes: entry.notes || entry.details || entry.comment || '',
+                    danger,
+                    cwd: entry.cwd || entry.directory || entry.path || '',
+                };
+            }
+
+            return null;
+        };
+
+        if (json) {
+            const mode = (json.mode || json.type || '').toString().toLowerCase();
+            const summary = json.summary || json.explanation || json.response || json.text || json.message || '';
+            const commands = [];
+
+            if (Array.isArray(json.commands)) {
+                json.commands.forEach((item) => {
+                    const normalized = normalizeCommandItem(item, summary);
+                    if (normalized) {
+                        commands.push(normalized);
+                    }
+                });
+            }
+
+            if (!commands.length && Array.isArray(json.command)) {
+                json.command.forEach((item) => {
+                    const normalized = normalizeCommandItem(item, summary);
+                    if (normalized) {
+                        commands.push(normalized);
+                    }
+                });
+            }
+
+            if (!commands.length && json.command) {
+                const normalized = normalizeCommandItem(json.command, summary);
+                if (normalized) {
+                    commands.push(normalized);
+                }
+            }
+
+            if (!commands.length && Array.isArray(json.actions)) {
+                json.actions.forEach((item) => {
+                    const normalized = normalizeCommandItem(item, summary);
+                    if (normalized) {
+                        commands.push(normalized);
+                    }
+                });
+            }
+
+            if (!commands.length && json.next_command) {
+                const normalized = normalizeCommandItem(json.next_command, summary);
+                if (normalized) {
+                    commands.push(normalized);
+                }
+            }
+
+            if (commands.length) {
+                return {
+                    type: 'suggestion',
+                    summary: summary || commands[0].explanation || fallbackSummary,
+                    commands,
+                };
+            }
+
+            if (summary) {
+                return {
+                    type: 'informational',
+                    text: summary,
+                };
+            }
+
+            if (mode === 'informational' && (json.response || json.message)) {
+                return {
+                    type: 'informational',
+                    text: json.response || json.message,
+                };
+            }
+        }
+
+        if (expectCommand) {
+            const codeBlockMatch = text.match(/```(?:bash|sh|shell)?\s*([\s\S]*?)```/i);
+            const codeCandidate = codeBlockMatch ? codeBlockMatch[1] : '';
+            const codeLine = codeCandidate
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .find((line) => line.length > 0);
+
+            const fallbackLine = text
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .find((line) => line.length > 0);
+
+            const commandLine = codeLine || fallbackLine;
+
+            if (commandLine) {
+                return {
+                    type: 'suggestion',
+                    summary: fallbackSummary,
+                    commands: [
+                        {
+                            command: commandLine,
+                            explanation: fallbackSummary,
+                        },
+                    ],
+                };
+            }
+        }
+
+        return {
+            type: 'informational',
+            text,
+        };
+    }
+
+    extractJSONFromText(text) {
+        if (!text || typeof text !== 'string') {
+            return null;
+        }
+
+        let cleaned = text.trim();
+        if (cleaned.startsWith('```')) {
+            cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        }
+
+        try {
+            return JSON.parse(cleaned);
+        } catch (_) {}
+
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (match) {
+            try {
+                return JSON.parse(match[0]);
+            } catch (error) {
+                console.warn('Failed to parse JSON from AI response:', error);
+            }
+        }
+
+        return null;
+    }
+
+    async invokeAIProvider(question, options = {}) {
+        const aiConfig = this.aiSettings || {};
+        let provider = (aiConfig.provider || '').toLowerCase();
+
+        if (!provider && aiConfig.ollama) {
+            provider = 'ollama';
+        }
+
+        switch (provider) {
+            case 'ollama':
+                return await this.invokeOllama(question, options);
+            default:
+                throw new Error(`Provider AI non supportato: ${provider || 'n/d'}`);
+        }
+    }
+
+    async invokeOllama(question, options = {}) {
+        const settings = this.aiSettings?.ollama || {};
+        const baseUrl = (settings.base_url || settings.endpoint || 'http://localhost:11434').replace(/\/+$/, '');
+        const model = settings.model || 'llama3.1';
+        const contextLines = options.contextLines || [];
+        const expectCommand = options.expectCommand === true;
+        const systemInfo = options.systemInfo || {};
+        const cwd = options.cwd || systemInfo.homeDir || this.cwd || '~';
+        const directorySnapshots = Array.isArray(options.directorySnapshots)
+            ? options.directorySnapshots
+            : [];
+
+        const contextBlock = contextLines.length
+            ? `Contesto recente del terminale:\n${contextLines.join('\n')}`
+            : '';
+
+        const systemLines = [];
+        if (systemInfo.platform) {
+            const release = systemInfo.release ? ` ${systemInfo.release}` : '';
+            systemLines.push(`Sistema operativo: ${systemInfo.platform}${release}`.trim());
+        }
+        if (systemInfo.arch) {
+            systemLines.push(`Architettura: ${systemInfo.arch}`);
+        }
+        if (systemInfo.shell) {
+            systemLines.push(`Shell preferita: ${systemInfo.shell}`);
+        }
+        if (systemInfo.username || systemInfo.hostname) {
+            const identity = [systemInfo.username, systemInfo.hostname].filter(Boolean).join('@');
+            if (identity) {
+                systemLines.push(`Identità: ${identity}`);
+            }
+        }
+        systemLines.push(`Directory corrente del terminale: ${cwd}`);
+
+        const systemBlock = systemLines.length ? `Informazioni di sistema:\n${systemLines.join('\n')}` : '';
+
+        const dirEntries = [
+            ['Home', systemInfo.homeDir],
+            ['Desktop', systemInfo.desktopDir],
+            ['Documenti', systemInfo.documentsDir],
+            ['Download', systemInfo.downloadsDir],
+            ['Immagini', systemInfo.picturesDir],
+            ['Musica', systemInfo.musicDir],
+            ['Video', systemInfo.videosDir],
+            ['Public', systemInfo.publicDir],
+        ]
+            .filter(([, value]) => typeof value === 'string' && value.length);
+
+        const directoriesBlock = dirEntries.length
+            ? `Percorsi conosciuti:\n${dirEntries
+                .map(([label, value]) => `- ${label}: ${value}`)
+                .join('\n')}`
+            : '';
+
+        const snapshotBlock = directorySnapshots.length
+            ? `Contenuto directory recente:\n${directorySnapshots
+                .map((item) => {
+                    const list = item.entries
+                        .map((entry) => `  - ${entry}`)
+                        .join('\n');
+                    return `${item.directory}:\n${list}`;
+                })
+                .join('\n')}`
+            : '';
+
+        const exampleJson = `{"mode":"suggestion","summary":"Sposta 1.png nelle Immagini","commands":[{"command":"mkdir -p ~/Pictures && mv ~/Desktop/1.png ~/Pictures/1.png","explanation":"Crea la cartella se manca e sposta il file","notes":"Usa && per creare la cartella solo se assente","danger":false,"cwd":"~"}]}`;
+
+        const guidance = expectCommand
+            ? `L'utente desidera un comando pronto all'uso per rispondere a: "${question}".\n\nRestituisci SOLO JSON valido (senza testo aggiuntivo) seguendo queste regole:\n- Usa il campo "mode" con valore "suggestion" quando fornisci comandi.\n- Popola SEMPRE "commands" come array (anche con un solo elemento).\n- Ogni comando deve essere già pronto: combina passaggi multipli con "&&" nell'ordine corretto.\n- Includi "notes" con prerequisiti o avvertenze brevi.\n- Imposta "danger" a true se il comando può causare perdita di dati o modifiche di sistema.\n- Usa percorsi reali dai dati forniti (es. ${systemInfo.picturesDir || '~/Pictures'}).\n- Se una cartella potrebbe mancare, inserisci nel comando la creazione idempotente (es. mkdir -p).\n- Se non è possibile fornire un comando, restituisci JSON con "mode": "informational" e un campo "text" che spiega il motivo.\n- Non usare backtick o formattazioni Markdown.\n- Esempio di risposta valida: ${exampleJson}`
+            : `Domanda dell'utente: "${question}". Rispondi in modo conciso e utile per l'uso in un terminale, senza includere testo ridondante.`;
+
+        const instruction = [
+            contextBlock,
+            systemBlock,
+            directoriesBlock,
+            snapshotBlock,
+            guidance,
+        ]
+            .filter(Boolean)
+            .join('\n\n');
+
+        const messages = [
+            {
+                role: 'system',
+                content: 'Sei TermInA AI, un assistente integrato in un terminale moderno. Rispondi nella stessa lingua dell\'utente e mantieni le risposte concise.',
+            },
+            {
+                role: 'user',
+                content: instruction,
+            },
+        ];
+
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        if (settings.api_key) {
+            headers['Authorization'] = `Bearer ${settings.api_key}`;
+        }
+
+        let lastError = null;
+
+        try {
+            const response = await fetch(`${baseUrl}/api/chat`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    stream: false,
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return this.extractOllamaContent(data);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`Ollama /api/chat ${response.status}: ${errorText}`);
+        } catch (error) {
+            console.warn('Ollama chat endpoint failed:', error);
+            lastError = error;
+        }
+
+        try {
+            const response = await fetch(`${baseUrl}/api/generate`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model,
+                    prompt: `${contextBlock}${instruction}`,
+                    stream: false,
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return this.extractOllamaContent(data);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`Ollama /api/generate ${response.status}: ${errorText}`);
+        } catch (error) {
+            console.error('Ollama generate endpoint failed:', error);
+            throw lastError || error;
+        }
+    }
+
+    extractOllamaContent(data) {
+        if (!data) {
+            return '';
+        }
+
+        if (typeof data === 'string') {
+            return data;
+        }
+
+        if (data.message && data.message.content) {
+            return data.message.content;
+        }
+
+        if (Array.isArray(data.messages)) {
+            const last = data.messages.filter((item) => item && item.role !== 'system').pop();
+            if (last?.content) {
+                return last.content;
+            }
+        }
+
+        if (Array.isArray(data?.content)) {
+            return data.content
+                .map((part) => (typeof part === 'string' ? part : part?.text || ''))
+                .join('\n')
+                .trim();
+        }
+
+        if (Array.isArray(data?.choices) && data.choices[0]?.message?.content) {
+            return data.choices[0].message.content;
+        }
+
+        if (data.response) {
+            return data.response;
+        }
+
+        if (data.output) {
+            return data.output;
+        }
+
+        return JSON.stringify(data);
+    }
+
+    updateAILineWithText(lineElement, text) {
+        if (typeof text !== 'string') {
+            return;
+        }
+
+        const lines = text.split(/\r?\n/);
+
+        if (!lineElement) {
+            const first = lines.shift();
+            this.addAIOutput(first || '');
+            lines.forEach((line) => this.addAIOutput(line));
+            return;
+        }
+
+        const firstLine = lines.shift();
+        if (firstLine !== undefined) {
+            lineElement.textContent = firstLine;
+        }
+
+        lines.forEach((line) => this.addAIOutput(line));
+    }
+
+    async presentAIResult(result, { thinkingLine, expectCommand }) {
+        if (!result) {
+            this.updateAILineWithText(thinkingLine, '❌ Nessuna risposta dalla AI.');
+            return;
+        }
+
+        switch (result.type) {
+            case 'suggestion':
+            case 'auto_execute': {
+                const collected = Array.isArray(result.commands) ? result.commands.slice() : [];
+
+                if (!collected.length && result.command) {
+                    collected.push({
+                        command: result.command,
+                        explanation: result.explanation,
+                        notes: result.notes,
+                        danger: result.danger,
+                        cwd: result.cwd,
+                    });
+                }
+
+                const summary = result.summary
+                    || result.explanation
+                    || (collected[0]?.explanation)
+                    || 'Suggerimento comando dall\'AI';
+
+                if (!collected.length) {
+                    const fallbackText = expectCommand
+                        ? `${summary} (nessun comando disponibile).`
+                        : summary;
+                    this.updateAILineWithText(thinkingLine, `🤖 ${fallbackText}`);
+                    this.aiConversation.push({ role: 'assistant', text: fallbackText });
+                    break;
+                }
+
+                this.updateAILineWithText(thinkingLine, `🤖 ${summary}`);
+
+                collected.forEach((entry) => {
+                    if (!entry) {
+                        return;
+                    }
+                    const suggestion = typeof entry === 'string' ? { command: entry } : entry;
+                    if (!suggestion || !suggestion.command) {
+                        return;
+                    }
+                    this.suggestCommand({
+                        command: suggestion.command,
+                        explanation: suggestion.explanation || suggestion.summary || summary,
+                        summary,
+                        notes: suggestion.notes,
+                        danger: suggestion.danger,
+                        cwd: suggestion.cwd,
+                    });
+                });
+
+                const conversationText = [
+                    summary,
+                    ...collected
+                        .map((item) => (typeof item === 'string' ? item : item?.command))
+                        .filter(Boolean),
+                ]
+                    .join('\n')
+                    .trim();
+
+                this.aiConversation.push({
+                    role: 'assistant',
+                    text: conversationText || summary,
+                });
+                break;
+            }
+            case 'informational':
+            default: {
+                const text = result.text || 'Nessuna risposta disponibile.';
+                this.updateAILineWithText(thinkingLine, `🤖 ${text}`);
+                this.aiConversation.push({ role: 'assistant', text });
+                break;
+            }
+        }
+    }
+
+    suggestCommand(entry) {
+        const data = typeof entry === 'string' ? { command: entry } : (entry || {});
+        const command = (data.command || '').trim();
+        if (!command) {
+            return;
+        }
+
+        const summary = data.summary || data.explanation || 'Suggerimento comando dall\'AI';
+        const notes = (data.notes || '').toString();
+        const cwd = (data.cwd || '').toString();
+        const isDangerous = data.danger === true;
+
         // Crea un elemento di suggerimento comando stile Warp
         const suggestionDiv = document.createElement('div');
-        suggestionDiv.className = 'ai-command-suggestion';
+        suggestionDiv.className = `ai-command-suggestion${isDangerous ? ' danger' : ''}`;
         
         // Genera un ID unico per questo suggerimento
         const suggestionId = 'suggestion_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         // Salva il comando in un attributo data per evitare problemi con caratteri speciali
         suggestionDiv.setAttribute('data-command', command);
+        suggestionDiv.setAttribute('data-summary', summary);
+        if (isDangerous) {
+            suggestionDiv.setAttribute('data-danger', 'true');
+        }
+        if (cwd) {
+            suggestionDiv.setAttribute('data-cwd', cwd);
+        }
+        if (notes) {
+            suggestionDiv.setAttribute('data-notes', notes);
+        }
         
+        const formattedNotes = notes
+            ? this.escapeHtml(notes).replace(/\n/g, '<br>')
+            : '';
+
+        const cwdHtml = cwd
+            ? `<div class="suggestion-meta"><span class="meta-icon">📁</span><span class="meta-label">Directory:</span> <code>${this.escapeHtml(cwd)}</code></div>`
+            : '';
+
         suggestionDiv.innerHTML = `
             <div class="suggestion-header">
-                <span class="suggestion-icon">💡</span>
-                <span class="suggestion-text">Suggested command:</span>
+                <span class="suggestion-icon">${isDangerous ? '⚠️' : '💡'}</span>
+                <span class="suggestion-text">${this.escapeHtml(summary)}</span>
             </div>
             <div class="suggested-command">
                 <code>${this.escapeHtml(command)}</code>
             </div>
+            ${cwdHtml}
+            ${formattedNotes ? `<div class="suggestion-notes">${formattedNotes}</div>` : ''}
             <div class="suggestion-actions">
                 <button class="btn-execute" data-suggestion-id="${suggestionId}">
-                    ✅ Esegui
+                    ${isDangerous ? '⚠️ Esegui con cautela' : '✅ Esegui'}
                 </button>
                 <button class="btn-copy" data-suggestion-id="${suggestionId}">
                     📋 Copia
@@ -3900,14 +3045,23 @@ AI Commands:
 
     // Attacca event listeners per i bottoni di suggerimento
     attachSuggestionEventListeners(suggestionDiv, suggestionId) {
-        const command = suggestionDiv.getAttribute('data-command');
+    const command = suggestionDiv.getAttribute('data-command');
+    const summary = suggestionDiv.getAttribute('data-summary') || '';
+    const cwd = suggestionDiv.getAttribute('data-cwd') || '';
+    const danger = suggestionDiv.getAttribute('data-danger') === 'true';
+    const notes = suggestionDiv.getAttribute('data-notes') || '';
         
         // Bottone Esegui
         const executeBtn = suggestionDiv.querySelector('.btn-execute');
         if (executeBtn) {
             executeBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.executeAISuggestion(command);
+                this.executeAISuggestion(command, {
+                    summary,
+                    cwd,
+                    danger,
+                    notes,
+                });
             });
         }
         
@@ -3916,7 +3070,7 @@ AI Commands:
         if (copyBtn) {
             copyBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.copyAISuggestion(command);
+                this.copyAISuggestion(command, { summary, cwd, notes });
             });
         }
         
@@ -3925,7 +3079,7 @@ AI Commands:
         if (editBtn) {
             editBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.editAISuggestion(command);
+                this.editAISuggestion(command, { summary, cwd, notes });
             });
         }
         
@@ -3939,23 +3093,135 @@ AI Commands:
         }
     }
 
-    executeAISuggestion(command) {
-    const adapted = this.adaptCommandToPlatform(command);
-    this.addOutput('$ ' + adapted);
-    this.executeCommand(adapted);
+    executeAISuggestion(command, meta = {}) {
+        const details = meta || {};
+        if (details.danger && typeof window !== 'undefined') {
+            const confirmationMessage = details.summary
+                ? `⚠️ ${details.summary}\n\nEseguire comunque il comando suggerito?`
+                : '⚠️ Questo comando potrebbe essere rischioso. Procedere?';
+            if (!window.confirm(confirmationMessage)) {
+                this.addOutput('⛔ Esecuzione annullata.');
+                this.clearAISuggestions();
+                return;
+            }
+        }
+
+        const adapted = this.adaptCommandToPlatform(command);
+        const targetCwd = (details.cwd || '').trim();
+        const finalCommand = targetCwd && targetCwd !== this.cwd
+            ? `cd ${this.shellQuote(targetCwd)} && ${adapted}`
+            : adapted;
+
+        this.addOutput('$ ' + finalCommand);
+        this.executeCommand(finalCommand);
         // Rimuovi tutti i suggerimenti dopo l'esecuzione
         this.clearAISuggestions();
     }
 
-    copyAISuggestion(command) {
-        navigator.clipboard.writeText(command).then(() => {
-            this.addOutput('📋 Command copied to clipboard');
+    shellQuote(value) {
+        if (!value) {
+            return "''";
+        }
+
+        if (value === '~') {
+            return '~';
+        }
+
+        if (/^[\w@\/\.\-]+$/.test(value)) {
+            return value;
+        }
+
+        return `'${value.split("'").join("'\\''")}'`;
+    }
+
+    adaptCommandToPlatform(command) {
+        if (!command || typeof command !== 'string') {
+            return command;
+        }
+
+        const info = this.systemInfo || {};
+        const platform = (info.platform || '').toLowerCase();
+        let result = command.trim();
+
+        const dirMap = {
+            Desktop: info.desktopDir,
+            Documents: info.documentsDir,
+            Downloads: info.downloadsDir,
+            Pictures: info.picturesDir,
+            Music: info.musicDir,
+            Videos: info.videosDir,
+            Public: info.publicDir,
+        };
+
+        const quoteForPlatform = (value) => {
+            if (!value) return value;
+            if (platform === 'win32') {
+                return /\s/.test(value) ? `"${value}"` : value;
+            }
+            return this.shellQuote(value);
+        };
+
+        if (platform !== 'win32') {
+            const home = info.homeDir || '~';
+            result = result.replace(/%USERPROFILE%/gi, home);
+            result = result.replace(/%HOMEPATH%/gi, home);
+
+            for (const [label, realPath] of Object.entries(dirMap)) {
+                if (!realPath) continue;
+                const quoted = quoteForPlatform(realPath);
+                const patterns = [
+                    new RegExp(`%USERPROFILE%[\\\\/]${label}`, 'gi'),
+                    new RegExp(`%HOMEPATH%[\\\\/]${label}`, 'gi'),
+                    new RegExp(`~[\\\\/]${label}`, 'g'),
+                ];
+                patterns.forEach((re) => {
+                    result = result.replace(re, quoted);
+                });
+            }
+
+            result = result.replace(/\\/g, '/');
+
+            if (/^\s*mkdir\s+/i.test(result) && !/\s-+[^\n]*\bp\b/.test(result)) {
+                result = result.replace(/^\s*mkdir\s+/i, 'mkdir -p ');
+            }
+        } else {
+            const home = info.homeDir || '%USERPROFILE%';
+            result = result.replace(/~\\/g, `${home}\\`);
+            result = result.replace(/\$HOME\\/gi, `${home}\\`);
+            result = result.replace(/\$HOME\//gi, `${home}\\`);
+            result = result.replace(/\//g, '\\');
+
+            for (const [label, realPath] of Object.entries(dirMap)) {
+                if (!realPath) continue;
+                const patterns = [
+                    new RegExp(`~\\${label}`, 'gi'),
+                    new RegExp(`~/${label}`, 'gi'),
+                ];
+                patterns.forEach((re) => {
+                    result = result.replace(re, realPath);
+                });
+            }
+        }
+
+        return result;
+    }
+
+    copyAISuggestion(command, meta = {}) {
+        const payload = (meta?.cwd && meta.cwd !== this.cwd)
+            ? `cd ${this.shellQuote(meta.cwd)} && ${command}`
+            : command;
+
+        navigator.clipboard.writeText(payload).then(() => {
+            this.addOutput('📋 Comando copiato negli appunti');
         });
     }
 
-    editAISuggestion(command) {
+    editAISuggestion(command, meta = {}) {
         // Inserisce il comando nell'input per permettere modifiche
-        this.currentLine = command;
+        const target = (meta?.cwd && meta.cwd !== this.cwd)
+            ? `cd ${this.shellQuote(meta.cwd)} && ${command}`
+            : command;
+        this.currentLine = target;
         this.showPrompt();
         this.clearAISuggestions();
     }
@@ -3984,6 +3250,11 @@ AI Commands:
                 backdrop-filter: blur(10px);
                 animation: slideInSuggestion 0.3s ease-out;
             }
+
+            .ai-command-suggestion.danger {
+                background: linear-gradient(135deg, rgba(255, 94, 91, 0.18) 0%, rgba(255, 166, 0, 0.18) 100%);
+                border-color: rgba(255, 114, 94, 0.6);
+            }
             
             @keyframes slideInSuggestion {
                 from {
@@ -4002,6 +3273,10 @@ AI Commands:
                 margin-bottom: 8px;
                 font-weight: 600;
                 color: #00d4aa;
+            }
+
+            .ai-command-suggestion.danger .suggestion-header {
+                color: #ff5e5b;
             }
             
             .suggestion-icon {
@@ -4072,461 +3347,450 @@ AI Commands:
         document.head.appendChild(style);
     }
 
-    async openSettings() {
-        console.log('=== DEBUG: openSettings called ===');
-        try {
-            const tauriApi = await this.getTauriAPI();
-            if (tauriApi?.invoke) {
-                this.addOutput('🔄 Opening settings panel...');
-                await tauriApi.invoke('open_settings');
-                this.addOutput('✅ Settings panel opened successfully!');
-            } else {
-                this.addOutput('⚙️ Settings non disponibili in modalità browser. Avvia la versione desktop per modificarle: npm run tauri dev');
-            }
-        } catch (error) {
-            console.error('❌ Error calling open_settings:', error);
-            this.addOutput('❌ Error opening settings: ' + error.message);
+    async handlePTYKeydown(e) {
+        if (!this.ptyTerminal || !this.ptyTerminal.isActive) {
+            this.isPTYMode = false;
+            this.updatePTYStatusIndicator();
+            return;
         }
-    }
 
-    showAvailableFonts() {
-        this.addOutput('🔤 Font disponibili nel sistema:');
-        
-        const testFonts = [
-            'SF Mono', 'Monaco', 'Menlo', 'JetBrains Mono', 'Fira Code', 
-            'Source Code Pro', 'Hack', 'Inconsolata', 'Roboto Mono',
-            'Consolas', 'Courier New', 'Andale Mono'
-        ];
-        
-        testFonts.forEach(font => {
-            const isAvailable = this.isFontAvailable(font);
-            const status = isAvailable ? '✅' : '❌';
-            this.addOutput(`${status} ${font}`);
-        });
-        
-        this.addOutput('');
-        this.addOutput('💡 Usa il pannello impostazioni (⌘+,) per cambiare font');
-    }
+        const pty = this.ptyTerminal;
+        const key = e.key;
 
-    isFontAvailable(fontName) {
-        // Stesso metodo del pannello di controllo per coerenza
-        const testElement = document.createElement('span');
-        testElement.style.fontFamily = fontName;
-        testElement.style.fontSize = '16px';
-        testElement.style.position = 'absolute';
-        testElement.style.visibility = 'hidden';
-        testElement.style.top = '-1000px';
-        testElement.textContent = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        
-        document.body.appendChild(testElement);
-        
-        const fallbackElement = document.createElement('span');
-        fallbackElement.style.fontFamily = 'monospace';
-        fallbackElement.style.fontSize = '16px';
-        fallbackElement.style.position = 'absolute';
-        fallbackElement.style.visibility = 'hidden';
-        fallbackElement.style.top = '-1000px';
-        fallbackElement.textContent = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        
-        document.body.appendChild(fallbackElement);
-        
-        const testWidth = testElement.offsetWidth;
-        const fallbackWidth = fallbackElement.offsetWidth;
-        
-        document.body.removeChild(testElement);
-        document.body.removeChild(fallbackElement);
-        
-        return testWidth !== fallbackWidth || fontName === 'monospace';
-    }
+        const sendSequence = async (sequence) => {
+            try {
+                await pty.sendInput(sequence);
+            } catch (error) {
+                console.error('Failed to send PTY sequence:', error);
+            }
+        };
 
-    async installHomebrew() {
-        this.addOutput('🍺 Homebrew Installation Helper');
-        this.addOutput('');
-        this.addOutput('Homebrew requires specific conditions for installation:');
-        this.addOutput('• Administrator privileges');
-        this.addOutput('• Interactive terminal (TTY)');
-        this.addOutput('• Network access');
-        this.addOutput('');
-        this.addOutput('💡 Trying different installation methods...');
-        this.addOutput('');
-
-        // Metodo 1: Non-interactive
-        this.addOutput('📋 Method 1: Non-interactive installation...');
-        try {
-            if (window.__TAURI__ && window.__TAURI__) {
-                const api19 = await this.getTauriAPI();
-                const result1 = api19?.invoke ? await api19.invoke('run_command', { command: 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | NONINTERACTIVE=1 bash' }) : '[fallback]';
-                
-                if (result1.includes('[Success]') || result1.includes('Installation successful')) {
-                    this.addOutput('✅ Non-interactive installation succeeded!');
-                    this.addOutput(result1);
-                    return;
-                } else {
-                    this.addOutput('❌ Non-interactive method failed');
-                    this.addOutput('');
+        if (e.metaKey || e.ctrlKey) {
+            const lower = key.toLowerCase();
+            if (lower === 'c') {
+                e.preventDefault();
+                await pty.sendInterrupt();
+                return;
+            }
+            if (lower === 'd') {
+                e.preventDefault();
+                await pty.sendEOF();
+                return;
+            }
+            if (lower === 'z') {
+                e.preventDefault();
+                await pty.sendKill();
+                return;
+            }
+            if (lower === 'l') {
+                e.preventDefault();
+                await pty.clear();
+                return;
+            }
+            if (lower === 'v') {
+                e.preventDefault();
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        await pty.sendInput(text);
+                    }
+                } catch (err) {
+                    console.error('Clipboard paste failed in PTY mode:', err);
                 }
+                return;
             }
-        } catch (error) {
-            this.addOutput(`❌ Method 1 failed: ${error.message}`);
         }
 
-        // Metodo 2: Manual download and install
-        this.addOutput('📋 Method 2: Manual installation...');
-        this.addOutput('');
-        this.addOutput('🔧 Alternative commands you can try:');
-        this.addOutput('');
-        this.addOutput('1. In Terminal.app (recommended):');
-        this.addOutput('   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"');
-        this.addOutput('');
-        this.addOutput('2. Non-interactive version:');
-        this.addOutput('   curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | NONINTERACTIVE=1 bash');
-        this.addOutput('');
-        this.addOutput('3. Manual tarball installation:');
-        this.addOutput('   mkdir homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C homebrew');
-        this.addOutput('');
-        this.addOutput('4. Using Rosetta (for M1 Macs with compatibility issues):');
-        this.addOutput('   arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"');
-        this.addOutput('');
-        this.addOutput('💡 After installation, you may need to:');
-        this.addOutput('• Restart your terminal');
-        this.addOutput('• Run: source ~/.zshrc or source ~/.bash_profile');
-        this.addOutput('• Add Homebrew to your PATH');
-        this.addOutput('');
-        this.addOutput('🔍 Check if Homebrew is already installed:');
-        this.addOutput('   brew --version');
-    }
-
-    handlePTYKeydown(e) {
-        // Gestione tasti speciali in modalità PTY
         e.preventDefault();
-        
-        let keyToSend = '';
-        
-        if (e.ctrlKey) {
-            switch (e.key.toLowerCase()) {
-                case 'c':
-                    keyToSend = '\x03'; // Ctrl+C (interrupt)
-                    break;
-                case 'd':
-                    keyToSend = '\x04'; // Ctrl+D (EOF)
-                    break;
-                case 'z':
-                    keyToSend = '\x1a'; // Ctrl+Z (suspend)
-                    break;
-                case 'l':
-                    keyToSend = '\x0c'; // Ctrl+L (clear)
-                    break;
-                case '\\':
-                    keyToSend = '\x1c'; // Ctrl+\ (quit)
-                    break;
-                case 'h':
-                    keyToSend = '\x08'; // Ctrl+H (backspace)
-                    break;
-                case 'i':
-                    keyToSend = '\x09'; // Ctrl+I (tab)
-                    break;
-                case 'm':
-                    keyToSend = '\r'; // Ctrl+M (enter)
-                    break;
-                case '[':
-                    keyToSend = '\x1b'; // Ctrl+[ (escape)
-                    break;
-                case 'u':
-                    keyToSend = '\x15'; // Ctrl+U (kill line)
-                    break;
-                case 'k':
-                    keyToSend = '\x0b'; // Ctrl+K (kill to end of line)
-                    break;
-                case 'w':
-                    keyToSend = '\x17'; // Ctrl+W (kill word)
-                    break;
-                case 'a':
-                    keyToSend = '\x01'; // Ctrl+A (beginning of line)
-                    break;
-                case 'e':
-                    keyToSend = '\x05'; // Ctrl+E (end of line)
-                    break;
-                case 'b':
-                    keyToSend = '\x02'; // Ctrl+B (backward char)
-                    break;
-                case 'f':
-                    keyToSend = '\x06'; // Ctrl+F (forward char)
-                    break;
-                case 'n':
-                    keyToSend = '\x0e'; // Ctrl+N (next line)
-                    break;
-                case 'p':
-                    keyToSend = '\x10'; // Ctrl+P (previous line)
-                    break;
-                case 'r':
-                    keyToSend = '\x12'; // Ctrl+R (reverse search)
-                    break;
-                case 's':
-                    keyToSend = '\x13'; // Ctrl+S (forward search)
-                    break;
-                case 't':
-                    keyToSend = '\x14'; // Ctrl+T (transpose chars)
-                    break;
-                case 'y':
-                    keyToSend = '\x19'; // Ctrl+Y (yank)
-                    break;
-                default:
-                    return; // Altri Ctrl+ non gestiti
-            }
-        } else if (e.key === 'Enter') {
-            keyToSend = '\r';
-        } else if (e.key === 'Backspace') {
-            keyToSend = '\x7f';
-        } else if (e.key === 'Tab') {
-            keyToSend = '\t';
-        } else if (e.key === 'Escape') {
-            keyToSend = '\x1b';
-        } else if (e.key === 'ArrowUp') {
-            keyToSend = '\x1b[A';
-        } else if (e.key === 'ArrowDown') {
-            keyToSend = '\x1b[B';
-        } else if (e.key === 'ArrowRight') {
-            keyToSend = '\x1b[C';
-        } else if (e.key === 'ArrowLeft') {
-            keyToSend = '\x1b[D';
-        } else if (e.key === 'Home') {
-            keyToSend = '\x1b[H';
-        } else if (e.key === 'End') {
-            keyToSend = '\x1b[F';
-        } else if (e.key === 'PageUp') {
-            keyToSend = '\x1b[5~';
-        } else if (e.key === 'PageDown') {
-            keyToSend = '\x1b[6~';
-        } else if (e.key === 'Delete') {
-            keyToSend = '\x1b[3~';
-        } else if (e.key === 'Insert') {
-            keyToSend = '\x1b[2~';
-        } else if (e.key === 'F1') {
-            keyToSend = '\x1bOP';
-        } else if (e.key === 'F2') {
-            keyToSend = '\x1bOQ';
-        } else if (e.key === 'F3') {
-            keyToSend = '\x1bOR';
-        } else if (e.key === 'F4') {
-            keyToSend = '\x1bOS';
-        } else if (e.key === 'F5') {
-            keyToSend = '\x1b[15~';
-        } else if (e.key === 'F6') {
-            keyToSend = '\x1b[17~';
-        } else if (e.key === 'F7') {
-            keyToSend = '\x1b[18~';
-        } else if (e.key === 'F8') {
-            keyToSend = '\x1b[19~';
-        } else if (e.key === 'F9') {
-            keyToSend = '\x1b[20~';
-        } else if (e.key === 'F10') {
-            keyToSend = '\x1b[21~';
-        } else if (e.key === 'F11') {
-            keyToSend = '\x1b[23~';
-        } else if (e.key === 'F12') {
-            keyToSend = '\x1b[24~';
-        } else if (e.key.length === 1) {
-            // Caratteri normali
-            keyToSend = e.key;
-        } else {
-            return; // Tasto non gestito
+
+        switch (key) {
+            case 'Enter':
+                await pty.sendEnter();
+                this.currentLine = '';
+                this.cursorPosition = 0;
+                this.showPrompt();
+                break;
+            case 'Backspace':
+                await pty.sendBackspace();
+                break;
+            case 'Tab':
+                await pty.sendTab();
+                break;
+            case 'Escape':
+                await pty.sendEscape();
+                break;
+            case 'ArrowUp':
+                await sendSequence('\u001b[A');
+                break;
+            case 'ArrowDown':
+                await sendSequence('\u001b[B');
+                break;
+            case 'ArrowRight':
+                await sendSequence('\u001b[C');
+                break;
+            case 'ArrowLeft':
+                await sendSequence('\u001b[D');
+                break;
+            case 'Home':
+                await sendSequence('\u001b[H');
+                break;
+            case 'End':
+                await sendSequence('\u001b[F');
+                break;
+            case 'Delete':
+                await sendSequence('\u001b[3~');
+                break;
+            case 'PageUp':
+                await sendSequence('\u001b[5~');
+                break;
+            case 'PageDown':
+                await sendSequence('\u001b[6~');
+                break;
+            default:
+                if (key.length === 1) {
+                    await pty.sendInput(key);
+                }
         }
-        
-        if (keyToSend && this.ptyTerminal) {
-            this.ptyTerminal.sendInput(keyToSend);
+
+        this.forceDisplayUpdate();
+    }
+
+    updatePTYStatusIndicator() {
+        const container = document.getElementById('terminal-container');
+        if (container) {
+            const active = this.isPTYMode && this.ptyTerminal && this.ptyTerminal.isActive;
+            container.dataset.ptyActive = active ? 'true' : 'false';
         }
     }
 
-    handlePasswordKeydown(e) {
-        // Gestione limitata per modalità password
-        e.preventDefault();
-        
-        if (e.key === 'Enter') {
-            // Conferma password
-            this.processCommand();
-        } else if (e.key === 'Escape' || (e.ctrlKey && e.key.toLowerCase() === 'c')) {
-            // Cancella modalità password
-            this.passwordMode = false;
-            this.currentLine = '';
-            this.cursorPosition = 0;
-            this.addOutput('❌ Password input cancelled');
-            this.showPrompt();
-        } else if (e.key === 'Backspace') {
-            // Cancella carattere
-            if (this.cursorPosition > 0) {
-                this.currentLine = 
-                    this.currentLine.substring(0, this.cursorPosition - 1) + 
-                    this.currentLine.substring(this.cursorPosition);
-                this.cursorPosition--;
-                this.showPrompt();
-            }
-        } else if (e.key === 'ArrowLeft') {
-            // Muovi cursore a sinistra
-            if (this.cursorPosition > 0) {
-                this.cursorPosition--;
-                this.showPrompt();
-            }
-        } else if (e.key === 'ArrowRight') {
-            // Muovi cursore a destra
-            if (this.cursorPosition < this.currentLine.length) {
-                this.cursorPosition++;
-                this.showPrompt();
-            }
-        } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-            // Aggiungi carattere normale
-            this.currentLine = 
-                this.currentLine.substring(0, this.cursorPosition) + 
-                e.key + 
-                this.currentLine.substring(this.cursorPosition);
-            this.cursorPosition++;
-            this.showPrompt();
-        }
+    shouldShowLoading(command = '') {
+        if (!command) return false;
+        const longRunningPrefixes = [
+            'npm ', 'yarn ', 'pnpm ', 'pip ', 'brew ', 'cargo ', 'go ', 'mvn ',
+            'gradle ', 'docker ', 'git ', 'bundle ', 'composer ', 'rails ',
+            'watch ', 'tail -f', 'journalctl', 'systemctl ', 'make ', 'cmake '
+        ];
+        return longRunningPrefixes.some(prefix => command.startsWith(prefix) || command.includes(`${prefix} `));
     }
 
-    // Chiamato quando un comando PTY viene completato
-    onPTYCommandComplete() {
-        // Rimuovi l'indicatore di loading
-        this.removeLoadingIndicator();
-        
-        // Aggiungi un separatore per indicare che il comando è terminato
-        const separator = document.createElement('div');
-        separator.className = 'command-completion-separator';
-        separator.innerHTML = `
-            <div style="border-top: 1px solid #4a5568; margin: 8px 0; opacity: 0.3;"></div>
+    showLoadingIndicator(command, options = {}) {
+        this.hideLoadingIndicator();
+
+        const message = options.message || `Running: ${command}`;
+        const timeout = options.timeout || 0;
+
+        const container = this.container.querySelector('.terminal-output');
+        if (!container) return;
+
+        const indicator = document.createElement('div');
+        indicator.className = 'terminal-loading-indicator';
+        indicator.innerHTML = `
+            <div class="terminal-loading-spinner"></div>
+            <div class="terminal-loading-text">${message}</div>
         `;
-        this.outputElement.appendChild(separator);
-        
-        // Aggiorna lo stato PTY
-        this.updatePTYStatusIndicator();
-        
-        // Scroll al bottom
+
+        container.appendChild(indicator);
+        this.currentLoadingIndicator = indicator;
+        this.loadingDots = 0;
+        this.timeoutWarningShown = false;
+
+        if (!document.getElementById('terminal-loading-indicator-styles')) {
+            const style = document.createElement('style');
+            style.id = 'terminal-loading-indicator-styles';
+            style.textContent = `
+                .terminal-loading-indicator {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 16px;
+                    margin: 12px 0;
+                    border-radius: 12px;
+                    border: 1px solid rgba(0, 212, 170, 0.2);
+                    background: rgba(0, 212, 170, 0.08);
+                    color: #e5f8f3;
+                    font-size: 13px;
+                    backdrop-filter: blur(12px);
+                }
+                .terminal-loading-spinner {
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid rgba(0, 212, 170, 0.3);
+                    border-top-color: rgba(0, 212, 170, 0.9);
+
+                .ai-command-suggestion.danger .suggestion-actions .btn-execute {
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: rgba(255, 114, 94, 0.6);
+                }
+
+                .ai-command-suggestion .suggestion-meta {
+                    margin-top: 10px;
+                    font-size: 12px;
+                    color: rgba(255, 255, 255, 0.75);
+                    display: flex;
+                    gap: 6px;
+                    align-items: center;
+                }
+
+                .ai-command-suggestion .meta-icon {
+                    font-size: 12px;
+                }
+
+                .ai-command-suggestion .suggestion-meta .meta-label {
+                    font-weight: 600;
+                }
+
+                .ai-command-suggestion .suggestion-notes {
+                    margin-top: 12px;
+                    padding: 10px 12px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border-radius: 8px;
+                    font-size: 13px;
+                    line-height: 1.4;
+                }
+                    border-radius: 50%;
+                    animation: terminal-loading-spin 0.8s linear infinite;
+                }
+                .terminal-loading-text {
+                    font-family: 'JetBrains Mono', 'Menlo', monospace;
+                    letter-spacing: 0.3px;
+                }
+                @keyframes terminal-loading-spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        const updateMessage = () => {
+            if (!this.currentLoadingIndicator) return;
+            this.loadingDots = (this.loadingDots + 1) % 4;
+            const dots = '.'.repeat(this.loadingDots);
+            const textEl = this.currentLoadingIndicator.querySelector('.terminal-loading-text');
+            if (textEl) {
+                textEl.textContent = `${message}${dots}`;
+            }
+        };
+
+        this.loadingAnimationFrame = window.setInterval(updateMessage, 400);
+        updateMessage();
+
+        if (timeout > 0) {
+            this.commandTimeoutTimer = window.setTimeout(() => {
+                this.timeoutWarningShown = true;
+                this.addOutput(`⏳ Command is taking longer than expected: ${command}`);
+            }, timeout);
+        }
+    }
+
+    hideLoadingIndicator() {
+        if (this.currentLoadingIndicator && this.currentLoadingIndicator.remove) {
+            this.currentLoadingIndicator.remove();
+        }
+        this.currentLoadingIndicator = null;
+
+        if (this.loadingAnimationFrame) {
+            window.clearInterval(this.loadingAnimationFrame);
+            this.loadingAnimationFrame = null;
+        }
+
+        if (this.commandTimeoutTimer) {
+            window.clearTimeout(this.commandTimeoutTimer);
+            this.commandTimeoutTimer = null;
+        }
+    }
+
+    forceDisplayUpdate() {
+        this.scrollToBottom();
+        this.updateCursorPosition();
+    }
+
+    logTauriDiagnostics() {
+        try {
+            const raw = window.__TAURI__;
+            const adapted = this.api;
+            console.group('🔍 Tauri diagnostics');
+            console.log('raw __TAURI__:', raw);
+            console.log('cached api:', adapted);
+            if (adapted && typeof adapted.invoke !== 'function') {
+                console.warn('Cached API does not expose invoke:', adapted);
+            }
+            if (raw && !adapted) {
+                console.warn('Raw __TAURI__ available but not cached.');
+            }
+            console.groupEnd();
+        } catch (error) {
+            console.error('Failed to collect Tauri diagnostics:', error);
+        }
+    }
+
+    updateCurrentLine(text) {
+        if (!this.outputElement) return;
+
+        let lastLine = this.outputElement.lastElementChild;
+        if (!lastLine || !lastLine.classList.contains('output-line')) {
+            lastLine = document.createElement('div');
+            lastLine.className = 'output-line';
+            this.outputElement.appendChild(lastLine);
+        }
+
+        lastLine.textContent = text;
+        lastLine.dataset.ptyLive = 'true';
         this.scrollToBottom();
     }
 
-    // Funzione di utilità per l'escape dell'HTML
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    onPTYCommandComplete() {
+        this.isPTYMode = false;
+        this.updatePTYStatusIndicator();
+        this.hideLoadingIndicator();
+        this.showPrompt();
+        this.forceDisplayUpdate();
     }
 
-    // Metodi di test per temi e cursori
-    testCursorStyle(style) {
-        console.log('Testing cursor style:', style);
-        this.applyCursorStyle(style);
-        this.addOutput(`🖱️ Cursore cambiato a: ${style}`);
+    onRustTerminalCommandComplete() {
+        this.hideLoadingIndicator();
+        this.showPrompt();
+        this.forceDisplayUpdate();
     }
 
-    testTheme(themeName) {
-        console.log('Testing theme:', themeName);
-        
-        const themes = {
-            'warp-dark': {
-                background: '#1e2124',
-                foreground: '#ffffff',
-                cursor: '#00d4aa',
-                accent: '#00d4aa'
-            },
-            'warp-light': {
-                background: '#ffffff',
-                foreground: '#000000',
-                cursor: '#007acc',
-                accent: '#007acc'
-            },
-            'terminal-classic': {
-                background: '#000000',
-                foreground: '#00ff00',
-                cursor: '#00ff00',
-                accent: '#00ff00'
-            },
-            'cyberpunk': {
-                background: '#0a0a0a',
-                foreground: '#ff0080',
-                cursor: '#00ffff',
-                accent: '#00ffff'
-            }
-        };
-        
-        const theme = themes[themeName];
-        if (theme) {
-            this.applySettings({
-                theme: theme,
-                terminal: {
-                    font_family: 'JetBrains Mono',
-                    font_size: 14,
-                    cursor_style: 'bar',
-                    cursor_blink: true
+    async executeCommand(command) {
+        if (!command) {
+            return;
+        }
+
+        const invoke = async (payload) => {
+            try {
+                const tauriApi = await this._getApi();
+                if (tauriApi && typeof tauriApi.invoke === 'function') {
+                    return await tauriApi.invoke('run_command', { payload });
                 }
-            });
-            this.addOutput(`🎨 Tema applicato: ${themeName}`);
-        } else {
-            this.addOutput(`❌ Tema non trovato: ${themeName}`);
-            this.addOutput(`Temi disponibili: ${Object.keys(themes).join(', ')}`);
+            } catch (error) {
+                console.error('❌ invoke(run_command) failed:', error);
+                this.addOutput(`❌ invoke(run_command) failed: ${error.message || error}`);
+            }
+            console.warn('⚠️ run_command invoke unavailable. Payload:', payload, 'API snapshot:', this.api || window.__TAURI__);
+            return null;
+        };
+
+        const sanitizeArg = (arg) => {
+            if (!arg) return "";
+            if (arg === '~') return '~';
+            const escaped = arg.split("'").join("'\\''");
+            return "'" + escaped + "'";
+        };
+
+        const payloadBase = {};
+        if (this.cwd && this.cwd !== '~') {
+            payloadBase.cwd = this.cwd;
+        }
+
+        try {
+            if (command === 'pwd') {
+                const result = await invoke({ ...payloadBase, command: 'pwd' });
+                if (result) {
+                    const output = (result.stdout || result.output || '').trim();
+                    if (output) {
+                        this.cwd = output;
+                        this.addOutput(output);
+                        this.showPrompt();
+                    }
+                } else {
+                    this.addOutput(this.executeFallbackCommand(command));
+                }
+                return;
+            }
+
+            if (command === 'cd' || command.startsWith('cd ')) {
+                const target = command.length === 2 ? '' : command.slice(3).trim();
+                const resolved = target || '~';
+                const cdCommand = `cd ${sanitizeArg(resolved)} && pwd`;
+                const result = await invoke({ ...payloadBase, command: cdCommand });
+                if (result && result.success) {
+                    const newPath = (result.stdout || result.output || '').trim();
+                    if (newPath) {
+                        this.cwd = newPath;
+                        this.addOutput(`📁 Directory changed to ${newPath}`);
+                    } else {
+                        this.addOutput('❔ Unable to determine the new directory');
+                    }
+                    this.showPrompt();
+                } else if (result) {
+                    const errorText = result.stderr || result.output || 'cd failed';
+                    this.addOutput(`❌ ${errorText}`);
+                } else {
+                    this.addOutput(this.executeFallbackCommand(command));
+                }
+                return;
+            }
+
+            const result = await invoke({ ...payloadBase, command });
+            if (!result) {
+                const fallback = this.executeFallbackCommand(command);
+                if (fallback) {
+                    this.addOutput(`⚠️ Falling back to simulation (invoke missing).`);
+                    this.addOutput(fallback);
+                }
+                this.logTauriDiagnostics();
+                return;
+            }
+
+            const printLines = (text, prefix = '') => {
+                if (!text) return;
+                text.split(/\r?\n/).forEach(line => {
+                    if (line.length === 0 && prefix === '') {
+                        this.addOutput('');
+                    } else {
+                        this.addOutput(prefix ? `${prefix} ${line}` : line);
+                    }
+                });
+            };
+
+            if (result.stdout) {
+                printLines(result.stdout);
+            }
+
+            if (result.stderr) {
+                printLines(result.stderr, '⚠️');
+            }
+
+            if (!result.stdout && !result.stderr && result.output) {
+                printLines(result.output);
+            }
+
+            if (!result.success) {
+                const msg = result.stderr || result.output || 'Command failed';
+                this.addOutput(`❌ ${msg}`);
+            }
+
+            if (/^\s*pwd\s*$/.test(command)) {
+                const output = (result.stdout || result.output || '').trim();
+                if (output) {
+                    this.cwd = output;
+                }
+            }
+        } catch (error) {
+            console.error('executeCommand error:', error);
+            const fallback = this.executeFallbackCommand(command);
+            if (fallback) {
+                this.addOutput(fallback);
+            } else {
+                this.addOutput(`❌ ${error.message}`);
+            }
+        } finally {
+            this.showPrompt();
         }
     }
 
-    testAllThemes() {
-        this.addOutput('🎨 Testando tutti i temi...');
-        
-        const themes = ['warp-dark', 'warp-light', 'terminal-classic', 'cyberpunk'];
-        let currentTheme = 0;
-        
-        const interval = setInterval(() => {
-            if (currentTheme < themes.length) {
-                this.testTheme(themes[currentTheme]);
-                currentTheme++;
-            } else {
-                clearInterval(interval);
-                this.addOutput('🎨 Test temi completato!');
-            }
-        }, 2000);
+    async openSettings() {
+        console.log('Opening settings window...');
+        try {
+            const tauriAPI = await this._getApi();
+            console.log('Tauri API obtained, invoking open_settings_window');
+            await tauriAPI.invoke('open_settings_window');
+            console.log('Settings window opened successfully');
+        } catch (error) {
+            console.error('Failed to open settings window:', error);
+            this.addOutput('❌ Could not open settings. Is Tauri running?');
+        }
     }
-
-    testAllCursorStyles() {
-        this.addOutput('🖱️ Testando tutti gli stili del cursore...');
-        this.addOutput('   Prova a digitare per vedere come appare il cursore:');
-        
-        const styles = ['bar', 'block', 'underline'];
-        let currentStyle = 0;
-        
-        const interval = setInterval(() => {
-            if (currentStyle < styles.length) {
-                const style = styles[currentStyle];
-                this.testCursorStyle(style);
-                
-                // Aggiungi una breve descrizione di ogni stile
-                switch(style) {
-                    case 'bar':
-                        this.addOutput('   📏 Bar: Linea verticale sottile (2px)');
-                        break;
-                    case 'block':
-                        this.addOutput('   █ Block: Blocco che evidenzia il carattere');
-                        break;
-                    case 'underline':
-                        this.addOutput('   ▔ Underline: Sottolineatura lunga e sottile');
-                        break;
-                }
-                
-                currentStyle++;
-            } else {
-                clearInterval(interval);
-                this.addOutput('🖱️ Test stili cursore completato!');
-                this.addOutput('   Usa i comandi cursor-bar, cursor-block, cursor-underline per cambiare stile');
-            }
-        }, 3000);
-    }
-
 }
-
-// Variabile globale per il terminale
-let terminal;
-
-// Inizializza il terminale quando la pagina è carica
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('=== DOM CONTENT LOADED - INITIALIZING SIMPLE TERMINAL ===');
-    terminal = new SimpleTerminal();
-    console.log('=== SIMPLE TERMINAL INITIALIZED ===', terminal);
-    
-    
-    console.log('🔧 Terminal initialized successfully');
-});

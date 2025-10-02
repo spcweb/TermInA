@@ -12,7 +12,19 @@ class PTYTerminal {
         this.updateInterval = null;
         this.currentCommand = '';
         this.isExecuting = false;
+        this.api = null; // Cache per l'API Tauri
         console.log('PTYTerminal: Constructor completed');
+    }
+
+    async _getApi() {
+        if (this.api) {
+            return this.api;
+        }
+        if (window.getTauriAPI) {
+            this.api = await window.getTauriAPI();
+            return this.api;
+        }
+        throw new Error('Tauri API initialization function not found');
     }
 
     async startSession() {
@@ -22,10 +34,10 @@ class PTYTerminal {
             }
 
             console.log('PTY starting new session...');
-            if (!window.__TAURI__ || !window.__TAURI__.invoke) {
-                throw new Error('Tauri API not available');
-            }
-            const sessionId = await window.__TAURI__.invoke('pty_create_session');
+            const tauriAPI = await this._getApi();
+            const sessionId = await tauriAPI.invoke('pty_create_session', {
+                payload: {},
+            });
             this.sessionId = sessionId;
             this.isActive = true;
             this.startDataPolling();
@@ -41,8 +53,12 @@ class PTYTerminal {
         try {
             if (this.sessionId && this.isActive) {
                 console.log(`PTY stopping session ${this.sessionId}`);
-                // Use pty_close to gracefully close the session
-                await window.__TAURI__.invoke('pty_close', { session_id: this.sessionId });
+                const tauriAPI = await this._getApi();
+                await tauriAPI.invoke('pty_close', {
+                    payload: {
+                        session_id: this.sessionId,
+                    },
+                });
                 this.stopDataPolling();
                 this.isActive = false;
                 this.sessionId = null;
@@ -67,8 +83,13 @@ class PTYTerminal {
             }
 
             try {
-                // Usa l'output immediato per una risposta più veloce
-                const result = await window.__TAURI__.invoke('pty_get_immediate_output', { session_id: this.sessionId, timestamp: this.lastOutputTimestamp });
+                const tauriAPI = await this._getApi();
+                const result = await tauriAPI.invoke('pty_get_immediate_output', {
+                    payload: {
+                        session_id: this.sessionId,
+                        timestamp: this.lastOutputTimestamp,
+                    },
+                });
                 if (result.success && result.hasNewData && result.output) {
                     const newData = result.output;
                     if (newData.length > 0) {
@@ -106,7 +127,12 @@ class PTYTerminal {
         if (this.sessionId) {
             try {
                 console.log(`PTYTerminal: Closing session ${this.sessionId}`);
-                await window.__TAURI__.invoke('pty_close', { session_id: this.sessionId });
+                const tauriAPI = await this._getApi();
+                await tauriAPI.invoke('pty_close', {
+                    payload: {
+                        session_id: this.sessionId,
+                    },
+                });
                 this.sessionId = null;
                 this.isActive = false;
                 console.log('PTYTerminal: Session closed');
@@ -214,7 +240,13 @@ class PTYTerminal {
             this.currentCommand = command;
             this.isExecuting = true;
             console.log(`PTY sending command: ${command}`);
-            await window.__TAURI__.invoke('pty_write', { session_id: this.sessionId, input: command + '\n' });
+            const tauriAPI = await this._getApi();
+            await tauriAPI.invoke('pty_write', {
+                payload: {
+                    session_id: this.sessionId,
+                    input: command + '\n',
+                },
+            });
             return true;
         } catch (error) {
             console.error('Error sending command to PTY:', error);
@@ -228,8 +260,14 @@ class PTYTerminal {
         }
 
         try {
-            const result = await window.__TAURI__.invoke('pty_write', { session_id: this.sessionId, input: input });
-            return result.success;
+            const tauriAPI = await this._getApi();
+            await tauriAPI.invoke('pty_write', {
+                payload: {
+                    session_id: this.sessionId,
+                    input,
+                },
+            });
+            return true;
         } catch (error) {
             console.error('Error sending input to PTY:', error);
             return false;
@@ -277,35 +315,37 @@ class PTYTerminal {
     }
 
     async clear() {
-        if (!this.isActive || !this.sessionId) {
-            return false;
-        }
-
-        try {
-            const result = await window.__TAURI__.invoke('pty_clear', { session_id: this.sessionId });
-            if (result.success) {
+        if (this.isActive && this.sessionId) {
+            try {
+                const tauriAPI = await this._getApi();
+                await tauriAPI.invoke('pty_clear', {
+                    payload: {
+                        session_id: this.sessionId,
+                    },
+                });
                 this.outputBuffer = '';
                 this.lastOutputIndex = 0;
-                this.terminal.clearTerminal();
+                console.log(`PTY session ${this.sessionId} cleared`);
+            } catch (error) {
+                console.error('Error clearing PTY session:', error);
             }
-            return result.success;
-        } catch (error) {
-            console.error('Error clearing PTY:', error);
-            return false;
         }
     }
 
     async resize(cols, rows) {
-        if (!this.isActive || !this.sessionId) {
-            return false;
-        }
-
-        try {
-            const result = await window.__TAURI__.invoke('pty_resize', { session_id: this.sessionId, cols: cols, rows: rows });
-            return result.success;
-        } catch (error) {
-            console.error('Error resizing PTY:', error);
-            return false;
+        if (this.isActive && this.sessionId) {
+            try {
+                const tauriAPI = await this._getApi();
+                await tauriAPI.invoke('pty_resize', {
+                    payload: {
+                        session_id: this.sessionId,
+                        cols,
+                        rows,
+                    },
+                });
+            } catch (error) {
+                console.error('Error resizing PTY:', error);
+            }
         }
     }
 

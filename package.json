@@ -5,7 +5,7 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-  "dev:frontend": "http-server renderer -p 3000 -c-1",
+    "dev:frontend": "http-server renderer -p 3000 -c-1",
     "build": "tauri build",
     "build:debug": "tauri build --debug",
     "icons": "node build/generate-icons.js",
@@ -36,6 +36,7 @@
     "sharp": "^0.33.5"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "node-pty": "^1.0.0"
   }
 }

@@ -8,75 +8,217 @@ class InteractiveTerminal {
         this.closeBtn = document.getElementById('interactive-terminal-close');
         
         this.currentSessionId = null;
+        this.api = null;
+        this.pollInterval = null;
+        this.lastTimestamp = 0;
+        this.isOpen = false;
+        this.pendingClose = false;
+        this.terminal = null;
+        this.fitAddon = null;
+        this.terminalOptions = {
+            fontFamily: 'SF Mono, Monaco, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, Courier New, monospace',
+            fontSize: 14,
+            lineHeight: 1.2,
+            cursorBlink: true,
+            cursorStyle: 'block',
+            scrollback: 1000,
+        };
+
+        if (window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__) {
+            this.updateFromSettings(window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__);
+            delete window.__PENDING_INTERACTIVE_TERMINAL_SETTINGS__;
+        }
         
         this.initializeEventListeners();
-        this.initializeIPC();
+    }
+
+    async _getApi() {
+        if (this.api) {
+            return this.api;
+        }
+
+        const adapt = (raw) => {
+            if (!raw) return null;
+            if (typeof raw.invoke === 'function') {
+                return raw;
+            }
+            if (raw.core && typeof raw.core.invoke === 'function') {
+                return {
+                    ...raw,
+                    invoke: raw.core.invoke.bind(raw.core),
+                    event: raw.event || raw.core.event,
+                };
+            }
+            return null;
+        };
+
+        const direct = adapt(window.__TAURI__);
+        if (direct) {
+            this.api = direct;
+            return this.api;
+        }
+
+        if (window.getTauriAPI) {
+            const resolved = await window.getTauriAPI();
+            const adapted = adapt(resolved) || resolved;
+            if (adapted && typeof adapted.invoke === 'function') {
+                this.api = adapted;
+                return this.api;
+            }
+        }
+
+        throw new Error('Tauri API initialization function not found');
     }
 
     initializeEventListeners() {
-        // Chiudi terminale interattivo
-        this.closeBtn.addEventListener('click', () => {
-            this.closeTerminal();
-        });
+        const safeClose = () => {
+            this.closeTerminal().catch((error) => {
+                console.error('Error closing interactive terminal:', error);
+            });
+        };
 
-        // Chiudi con ESC
+        this.closeBtn.addEventListener('click', safeClose);
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.overlay.style.display !== 'none') {
-                this.closeTerminal();
+                safeClose();
             }
         });
 
-        // Chiudi cliccando sull'overlay
         this.overlay.addEventListener('click', (e) => {
             if (e.target === this.overlay) {
-                this.closeTerminal();
+                safeClose();
             }
         });
     }
 
-    initializeIPC() {
-        // In Tauri v2, gli eventi vengono gestiti diversamente
-        // Per ora, rimuoviamo questa funzionalità che non è supportata
-        console.log('Interactive terminal IPC initialized (Tauri v2)');
+    normalizeFontFamilyValue(fontFamily) {
+        if (!fontFamily || typeof fontFamily !== 'string') {
+            return null;
+        }
+
+        const trimmed = fontFamily.trim();
+        if (!trimmed.length) {
+            return null;
+        }
+
+        if (trimmed.includes(',')) {
+            return trimmed;
+        }
+
+        const alreadyQuoted = /^['"].*['"]$/.test(trimmed);
+        const needsQuotes = /\s/.test(trimmed) && !alreadyQuoted;
+        const primary = needsQuotes ? `"${trimmed}"` : trimmed;
+        return `${primary}, monospace`;
+    }
+
+    updateFromSettings(config) {
+        if (!config || typeof config !== 'object') {
+            return;
+        }
+
+        if (config.fontFamily) {
+            const normalized = this.normalizeFontFamilyValue(config.fontFamily);
+            if (normalized) {
+                this.terminalOptions.fontFamily = normalized;
+                if (this.terminal) {
+                    this.terminal.options.fontFamily = normalized;
+                }
+            }
+        }
+
+        if (config.fontSize && !Number.isNaN(Number(config.fontSize))) {
+            const size = Number(config.fontSize);
+            this.terminalOptions.fontSize = size;
+            if (this.terminal) {
+                this.terminal.options.fontSize = size;
+            }
+        }
+
+        if (config.lineHeight && !Number.isNaN(Number(config.lineHeight))) {
+            const lh = Number(config.lineHeight);
+            this.terminalOptions.lineHeight = lh;
+            if (this.terminal) {
+                this.terminal.options.lineHeight = lh;
+            }
+        }
+
+        if (typeof config.cursorBlink === 'boolean') {
+            this.terminalOptions.cursorBlink = config.cursorBlink;
+            if (this.terminal) {
+                this.terminal.options.cursorBlink = config.cursorBlink;
+            }
+        }
+
+        if (config.cursorStyle) {
+            this.terminalOptions.cursorStyle = config.cursorStyle;
+            if (this.terminal) {
+                this.terminal.options.cursorStyle = config.cursorStyle;
+            }
+        }
+
+        if (config.scrollback && !Number.isNaN(Number(config.scrollback))) {
+            const sb = Number(config.scrollback);
+            this.terminalOptions.scrollback = sb;
+            if (this.terminal) {
+                this.terminal.options.scrollback = sb;
+            }
+        }
+
+        if (this.terminal && this.fitAddon) {
+            requestAnimationFrame(() => {
+                try {
+                    this.fitAddon.fit();
+                } catch (error) {
+                    console.warn('Interactive terminal fit failed after settings update:', error);
+                }
+            });
+        }
     }
 
     async openTerminal(command, cwd) {
         try {
             console.log('Opening integrated terminal for command:', command, 'cwd:', cwd);
-            
-            // Aggiorna il titolo
+
+            if (this.isOpen) {
+                await this.closeTerminal();
+            }
+
+            const api = await this._getApi();
+
             this.commandNameElement.textContent = `Terminale Interattivo - ${command}`;
-            
-            // Mostra l'overlay
             this.overlay.style.display = 'flex';
-            console.log('Container shown, setting up terminal...');
-            
-            // Crea una sessione PTY per il comando interattivo
-            const result = await window.__TAURI__.createInteractiveSession(command, cwd);
-            console.log('Session creation result:', result);
-            
-            if (!result.success) {
-                console.error('Failed to create session:', result.error);
-                this.showError(`Failed to create session: ${result.error}`);
-                return;
-            }
-            
-            if (result.success) {
-                this.currentSessionId = result.sessionId;
-                
-                // Imposta il callback per ricevere dati in tempo reale
-                console.log(`DEBUG: Setting up callback for session ${this.currentSessionId}`);
-                const callbackResult = await window.__TAURI__.setupSessionCallback(this.currentSessionId);
-                console.log('DEBUG: Session callback setup result:', callbackResult);
-                
-                this.setupTerminal();
-            } else {
-                console.error('Failed to create interactive session:', result.error);
-                this.showError('Errore nella creazione della sessione interattiva: ' + result.error);
-            }
+            this.isOpen = true;
+            this.pendingClose = false;
+            this.lastTimestamp = 0;
+
+            const payload = {
+                shell: undefined,
+                cwd: cwd && cwd !== '~' ? cwd : undefined,
+                cols: 120,
+                rows: 32,
+            };
+
+            const sessionId = await api.invoke('pty_create_session', { payload });
+            console.log('Interactive PTY session created:', sessionId);
+            this.currentSessionId = sessionId;
+
+            this.setupTerminal();
+
+            await api.invoke('pty_write', {
+                payload: {
+                    session_id: sessionId,
+                    input: `${command}\n`,
+                },
+            });
+
+            this.startPolling();
         } catch (error) {
             console.error('Error opening interactive terminal:', error);
             this.showError('Errore nell\'apertura del terminale interattivo: ' + error.message);
+            this.isOpen = false;
+            this.pendingClose = false;
+            this.currentSessionId = null;
         }
     }
 
@@ -121,12 +263,12 @@ class InteractiveTerminal {
                 brightCyan: '#a4ffff',
                 brightWhite: '#ffffff'
             },
-            fontFamily: 'SF Mono, Monaco, Menlo, Consolas, Liberation Mono, DejaVu Sans Mono, Courier New, monospace',
-            fontSize: 14,
-            lineHeight: 1.2,
-            cursorBlink: true,
-            cursorStyle: 'block',
-            scrollback: 1000,
+            fontFamily: this.terminalOptions.fontFamily,
+            fontSize: this.terminalOptions.fontSize,
+            lineHeight: this.terminalOptions.lineHeight,
+            cursorBlink: this.terminalOptions.cursorBlink,
+            cursorStyle: this.terminalOptions.cursorStyle,
+            scrollback: this.terminalOptions.scrollback,
             tabStopWidth: 4,
             // Configurazioni ottimizzate per comandi interattivi
             allowTransparency: false,
@@ -239,9 +381,17 @@ class InteractiveTerminal {
         // Gestisci input del terminale
         this.terminal.onData((data) => {
             console.log('Terminal input received:', data);
-            if (this.currentSessionId) {
-                window.__TAURI__.ptyWrite(this.currentSessionId, data);
+            if (!this.currentSessionId || !this.api) {
+                return;
             }
+            this.api.invoke('pty_write', {
+                payload: {
+                    session_id: this.currentSessionId,
+                    input: data,
+                },
+            }).catch((error) => {
+                console.error('Failed to send PTY input:', error);
+            });
         });
 
         // Propaga le dimensioni al backend (se supportato)
@@ -252,7 +402,17 @@ class InteractiveTerminal {
                 const rows = this.terminal.rows;
                 if (cols && rows) {
                     console.log(`Sending resize to backend: ${cols}x${rows}`);
-                    window.__TAURI__.ptyResize(this.currentSessionId, cols, rows);
+                    if (this.api) {
+                        this.api.invoke('pty_resize', {
+                            payload: {
+                                session_id: this.currentSessionId,
+                                cols,
+                                rows,
+                            },
+                        }).catch((error) => {
+                            console.warn('Failed to send resize to backend:', error);
+                        });
+                    }
                 }
             } catch (error) {
                 console.warn('Failed to send resize to backend:', error);
@@ -263,89 +423,92 @@ class InteractiveTerminal {
         setTimeout(() => {
             this.sendResizeToBackend();
         }, 200);
-
-        // Imposta il listener per i dati in tempo reale
-        this.setupDataListener();
         
         // Focus sul terminale
         this.terminal.focus();
         console.log('Terminal setup complete');
     }
 
-    setupDataListener() {
-        if (!this.currentSessionId) return;
-
-        // Messaggio di inizializzazione più pulito
-        console.log('Setting up real-time terminal for interactive command');
-        this.terminal.write('\x1b[2J\x1b[H'); // Clear screen e posiziona cursore all'inizio
-
-        // Imposta il listener per i dati in tempo reale
-        console.log(`DEBUG: Setting up data listener for session ${this.currentSessionId}`);
-        window.__TAURI__.onSessionData((data) => {
-            console.log(`DEBUG: Received session data event:`, { sessionId: data.sessionId, currentSessionId: this.currentSessionId });
-            if (data.sessionId === this.currentSessionId) {
-                console.log(`DEBUG: Writing data to terminal for session ${data.sessionId}:`, data.data.substring(0, 200) + (data.data.length > 200 ? '...' : ''));
-                
-                // Processa le sequenze ANSI per una migliore visualizzazione
-                let processedData = data.data;
-                
-                // Rileva se contiene sequenze di clear screen
-                if (/\x1b\[2J/.test(processedData) || /\x1b\[H\x1b\[2J/.test(processedData)) {
-                    console.log('DEBUG: Clear screen detected, clearing terminal');
-                    this.terminal.clear();
-                    // Rimuovi le sequenze di clear screen dal dato da scrivere
-                    processedData = processedData.replace(/\x1b\[2J/g, '').replace(/\x1b\[H\x1b\[2J/g, '');
-                }
-                
-                // Per comandi interattivi come top, htop, btop, assicurati che le sequenze ANSI
-                // vengano processate correttamente per l'impaginazione
-                if (this.isInteractiveOutput(processedData)) {
-                    console.log('DEBUG: Interactive output detected, preserving ANSI sequences');
-                    // Non modificare l'output per comandi interattivi
-                    this.terminal.write(processedData);
-                } else {
-                    // Per output normale, scrivi direttamente
-                    this.terminal.write(processedData);
-                }
-            } else {
-                console.log(`DEBUG: Ignoring data for different session ${data.sessionId}`);
-            }
-        });
-
-        console.log('DEBUG: Real-time data listener setup completed for session:', this.currentSessionId);
-    }
-
-    // Rileva se l'output proviene da un comando interattivo
-    isInteractiveOutput(output) {
-        // Pattern per identificare output di comandi interattivi
-        const interactivePatterns = [
-            /\x1b\[2J/,  // Clear screen
-            /\x1b\[[0-9;]*H/,  // Cursor positioning
-            /\x1b\[[0-9;]*J/,  // Clear line/screen
-            /top - /,  // top command output
-            /PID\s+USER/,  // top/ps headers
-            /load average:/,  // System load info
-            /Tasks:/,  // Process info
-            /Mem:/,  // Memory info
-            /Swap:/,  // Swap info
-            /htop/,  // htop command
-            /btop/   // btop command
-        ];
-
-        return interactivePatterns.some(pattern => pattern.test(output));
-    }
-
-    closeTerminal() {
-        // Chiudi la sessione PTY se attiva
-        if (this.currentSessionId) {
-            window.__TAURI__.closeInteractiveSession(this.currentSessionId);
-            this.currentSessionId = null;
+    startPolling() {
+        if (!this.currentSessionId || !this.api) {
+            console.warn('Cannot start polling: session or API missing');
+            return;
         }
-        
-        // Nascondi l'overlay
+
+        this.stopPolling();
+        this.terminal.write('\x1b[2J\x1b[H');
+
+        const poll = async () => {
+            if (!this.currentSessionId || !this.api || this.pendingClose) {
+                return;
+            }
+
+            try {
+                const result = await this.api.invoke('pty_get_immediate_output', {
+                    payload: {
+                        session_id: this.currentSessionId,
+                        timestamp: this.lastTimestamp,
+                    },
+                });
+
+                if (result?.success && result.hasNewData && result.output) {
+                    if (result.lastTimestamp) {
+                        this.lastTimestamp = result.lastTimestamp;
+                    }
+                    this.terminal.write(result.output);
+                } else if (result?.success === false && result.error) {
+                    console.warn('Interactive PTY reported error:', result.error);
+                    if (/session not found/i.test(result.error)) {
+                        await this.closeTerminal();
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling interactive PTY output:', error);
+            }
+        };
+
+        poll();
+        this.pollInterval = setInterval(() => {
+            poll().catch((error) => {
+                console.error('Error during interactive PTY polling:', error);
+            });
+        }, 100);
+    }
+
+    stopPolling() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+    }
+
+    async closeTerminal() {
+        if (this.pendingClose) {
+            return;
+        }
+
+        this.pendingClose = true;
+        this.stopPolling();
+
+        const sessionId = this.currentSessionId;
+        this.currentSessionId = null;
+
+        if (sessionId && this.api) {
+            try {
+                await this.api.invoke('pty_close', {
+                    payload: {
+                        session_id: sessionId,
+                    },
+                });
+            } catch (error) {
+                console.warn('Failed to close interactive PTY session:', error);
+            }
+        }
+
         this.overlay.style.display = 'none';
-        
-        // Cleanup resize listeners
+
+        this.lastTimestamp = 0;
+
         if (this._resizeHandler) {
             window.removeEventListener('resize', this._resizeHandler);
             this._resizeHandler = null;
@@ -355,10 +518,21 @@ class InteractiveTerminal {
             this._resizeObserver = null;
         }
 
-        // Pulisci il terminale
         if (this.terminal) {
-            this.terminal.dispose();
+            try {
+                this.terminal.dispose();
+            } catch (error) {
+                console.warn('Failed to dispose interactive terminal:', error);
+            }
             this.terminal = null;
+        }
+
+        this.isOpen = false;
+        this.pendingClose = false;
+
+        const terminalContainer = document.getElementById('terminal-container');
+        if (terminalContainer) {
+            terminalContainer.focus();
         }
     }
 

@@ -140,7 +140,12 @@ class SettingsManager {
             
             if (!this.invoke) this.invoke = await this.getInvoke();
             if (this.invoke) {
-                await this.invoke('set_config', { key: 'full_config', value: formData });
+                await this.invoke('set_config', {
+                    payload: {
+                        key: 'full_config',
+                        value: formData,
+                    },
+                });
                 console.log('Settings saved successfully');
                 this.showNotification('Settings saved successfully!', 'success');
             } else {
@@ -178,7 +183,12 @@ class SettingsManager {
             try {
                 if (!this.invoke) this.invoke = await this.getInvoke();
                 if (this.invoke) {
-                    await this.invoke('set_config', { key: 'reset', value: 'default' });
+                    await this.invoke('set_config', {
+                        payload: {
+                            key: 'reset',
+                            value: 'default',
+                        },
+                    });
                     await this.loadConfig();
                     this.populateForm();
                     this.showNotification('Settings reset to default values', 'success');

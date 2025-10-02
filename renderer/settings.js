@@ -196,7 +196,12 @@ class SettingsManager {
             const fullConfig = this.gatherFormData();
             if (!this.invoke) this.invoke = await this.getInvoke();
             if (this.invoke) {
-                await this.invoke('set_config', { key: 'full_config', value: fullConfig });
+                await this.invoke('set_config', {
+                    payload: {
+                        key: 'full_config',
+                        value: fullConfig,
+                    },
+                });
                 try { 
                     await this.invoke('apply_settings', { config: fullConfig }); 
                     console.log('Settings applied successfully');
@@ -286,7 +291,12 @@ class SettingsManager {
             try {
                 if (!this.invoke) this.invoke = await this.getInvoke();
                 if (this.invoke) {
-                    await this.invoke('set_config', { key: 'reset', value: 'default' });
+                    await this.invoke('set_config', {
+                        payload: {
+                            key: 'reset',
+                            value: 'default',
+                        },
+                    });
                     await this.loadConfig();
                     this.populateForm();
                     this.showNotification('Settings reset to default values', 'success');

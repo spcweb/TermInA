@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 use log::{debug, info};
 use rpassword::read_password;
 
-use crate::pty_manager::PtyManager;
+use super::pty_manager::PtyManager;
 
 /// Handler per i comandi sudo
 pub struct SudoHandler {
@@ -43,14 +43,14 @@ impl SudoHandler {
         let result = self.run_sudo_with_password(actual_command, password)?;
         
         // Invia il risultato alla sessione
-        if let Some(session) = pty_manager.get_session_mut(session_id) {
+        if let Some(_session) = pty_manager.get_session(session_id) {
             let output = if result.success {
                 result.output
             } else {
                 format!("Error: {}\n{}", result.stderr, result.output)
             };
             
-            session.write(&output)?;
+            pty_manager.write_to_session(session_id, &output)?;
         }
 
         Ok(())

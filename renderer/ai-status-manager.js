@@ -80,8 +80,10 @@ class AIStatusManager {
         try {
             console.log(`🔍 AI Status Manager: Verifica ${isManual ? 'manuale' : 'automatica'} dello status AI`);
             
+            const tauriAPI = await this._getApi();
+            
             // Ottieni la configurazione corrente
-            const config = await this.getCurrentConfig();
+            const config = await tauriAPI.invoke('get_config');
             if (!config || !config.ai) {
                 console.warn('⚠️ AI Status Manager: Configurazione AI non trovata');
                 this.setStatus('offline', 'Configurazione non trovata');
@@ -103,7 +105,7 @@ class AIStatusManager {
             this.setStatus('testing', 'Verifica connessione...');
             
             // Testa la connessione
-            const isConnected = await this.testConnection(config.ai);
+            const isConnected = await this.testConnection(config.ai, tauriAPI);
             
             if (isConnected) {
                 this.setStatus('online', 'Connesso');
@@ -126,27 +128,37 @@ class AIStatusManager {
      */
     async getCurrentConfig() {
         try {
-            const inv = await this.getInvoke();
-            if (inv) return await inv('get_config');
+            const tauriAPI = await this._getApi();
+            return await tauriAPI.invoke('get_config');
         } catch (error) {
             console.error('❌ AI Status Manager: Errore nel recupero configurazione:', error);
         }
         return null;
     }
+
+    async _getApi() {
+        if (window.getTauriAPI) {
+            return await window.getTauriAPI();
+        }
+        throw new Error('Tauri API initialization function not found');
+    }
     
     /**
      * Testa la connessione AI
      */
-    async testConnection(aiConfig) {
+    async testConnection(aiConfig, tauriAPI) {
         try {
-            const inv = await this.getInvoke();
-            if (!inv) {
+            if (!tauriAPI) {
                 console.warn('⚠️ AI Status Manager: API Tauri non disponibile');
                 return this.testConnectionFallback(aiConfig);
             }
             
             console.log('🧪 AI Status Manager: Test connessione con backend...');
-            const testResult = await inv('test_ai_connection', { provider: aiConfig.provider, ai_config: aiConfig });
+            const testResult = await tauriAPI.invoke('test_ai_connection', {
+                provider: aiConfig.provider,
+                aiConfig,
+                ai_config: aiConfig,
+            });
             
             // Normalizza la risposta
             let result = testResult;

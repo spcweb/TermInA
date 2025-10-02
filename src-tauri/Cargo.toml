@@ -10,10 +10,6 @@ rust-version = "1.77.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-name = "app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
 tauri-build = { version = "2.4.1", features = ["config-toml"] }
 
@@ -32,4 +28,6 @@ dirs = "5.0"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 env_logger = "0.10"
-termina_terminal = { path = "../rust-terminal" }
+portable-pty = { version = "0.9.0", features = ["serde"] }
+rpassword = "7.3"
+hostname = "0.3"
