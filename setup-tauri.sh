@@ -25,31 +25,18 @@ fi
 echo "📦 Installing Node.js dependencies..."
 npm install
 
-# Create icons directory if it doesn't exist
-mkdir -p src-tauri/icons
+# Assicura che il logo principale sia raggiungibile
+if [ -f "logo.svg" ]; then
+    mkdir -p assets renderer/assets
+    cp logo.svg assets/logo.svg
+    cp logo.svg renderer/assets/logo.svg
+    echo "✅ logo.svg copiato nelle cartelle assets/"
 
-# Copy icon if it exists
-if [ -f "assets/termina.png" ]; then
-    cp assets/termina.png src-tauri/icons/icon.png
-    echo "✅ Icon copied"
-fi
-
-# Generate additional icon sizes
-echo "📦 Generating icon sizes..."
-if command -v convert &> /dev/null; then
-    # Using ImageMagick
-    convert assets/termina.png -resize 32x32 src-tauri/icons/32x32.png
-    convert assets/termina.png -resize 128x128 src-tauri/icons/128x128.png
-    convert assets/termina.png -resize 256x256 src-tauri/icons/128x128@2x.png
-    echo "✅ Icons generated with ImageMagick"
-elif command -v sips &> /dev/null; then
-    # Using macOS sips
-    sips -z 32 32 assets/termina.png --out src-tauri/icons/32x32.png
-    sips -z 128 128 assets/termina.png --out src-tauri/icons/128x128.png
-    sips -z 256 256 assets/termina.png --out src-tauri/icons/128x128@2x.png
-    echo "✅ Icons generated with sips"
+    echo "📦 Generating icon set from logo.svg via Tauri CLI..."
+    npm run prepare:dist
+    npm run icons
 else
-    echo "⚠️  ImageMagick or sips not found. Please generate icons manually."
+    echo "⚠️  logo.svg non trovato: salta la generazione delle icone."
 fi
 
 echo "🎉 Setup complete! You can now run:"

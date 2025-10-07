@@ -7,9 +7,10 @@ class SimpleTerminal {
         this.currentLine = '';
         this.cursorPosition = 0; // Posizione del cursore nella linea corrente
         this.cursorStyle = 'bar'; // Stile del cursore (bar, block, underline)
-        this.history = [];
-        this.historyIndex = -1; // Indice per navigazione cronologia
-        this.output = [];
+    this.history = [];
+    this.historyIndex = -1; // Indice per navigazione cronologia
+    this.output = [];
+    this.commandHistoryLog = []; // Cronologia dettagliata comandi + output
         this.cursor = null;
         this.aiConversation = []; // Cronologia conversazioni AI
     this.ptyModeEnabled = true; // Abilita PTY per comandi interattivi reali
@@ -173,7 +174,7 @@ class SimpleTerminal {
             return this.cwd || '~ (simulato)';
         }
         if (trimmed === 'ls') {
-            return 'Simulated listing (Tauri non disponibile)\nREADME.md  docs/  src/  renderer/';
+            return 'Simulated listing (Tauri non disponibile)\nREADME.md  docs/  renderer/  assets/';
         }
         if (trimmed.startsWith('cd')) {
             const parts = trimmed.split(/\s+/);
@@ -336,20 +337,104 @@ class SimpleTerminal {
             return '~';
         })();
 
+        const resolveLocalizedPath = (baseName, candidates = []) => {
+            const locale = (navigator?.language || '').toLowerCase();
+            const locales = Array.from(new Set([locale, ...(navigator?.languages || [])])).filter(Boolean);
+            const prioritize = (name) => {
+                const lower = name.toLowerCase();
+                for (const loc of locales) {
+                    if (loc.startsWith('it') && lower === 'scrivania') return 0;
+                    if (loc.startsWith('es') && ['escritorio', 'escrivaninha', 'descargas', 'documentos', 'imagenes', 'imágenes', 'películas'].includes(lower)) return 0;
+                    if (loc.startsWith('fr') && ['bureau', 'téléchargements'].includes(lower)) return 0;
+                    if (loc.startsWith('de') && ['schreibtisch', 'herunterladen', 'bilder', 'musik', 'filme', 'vorlagen', 'öffentlich'].includes(lower)) return 0;
+                }
+                return 1;
+            };
+
+            const ordered = [...new Set([baseName, ...candidates])]
+                .sort((a, b) => prioritize(a) - prioritize(b));
+
+            const getPath = (name) => {
+                if (!name) return null;
+                if (name.startsWith('~/') || name.startsWith('%')) {
+                    return name;
+                }
+                return `${home.replace(/\/$/, '')}/${name}`;
+            };
+
+            const basePath = getPath(baseName);
+            for (const name of ordered) {
+                const candidatePath = getPath(name);
+                if (candidatePath) {
+                    return candidatePath;
+                }
+            }
+
+            return basePath;
+        };
+
         this.systemInfo = {
             platform: platformGuess,
             arch: window.navigator?.userAgentData?.architecture || '',
             shell: platformGuess === 'win32' ? 'powershell' : 'bash',
             homeDir: home,
-            desktopDir: platformGuess === 'win32' ? `${home}\\Desktop` : `${home}/Desktop`,
-            documentsDir: platformGuess === 'win32' ? `${home}\\Documents` : `${home}/Documents`,
-            downloadsDir: platformGuess === 'win32' ? `${home}\\Downloads` : `${home}/Downloads`,
-            picturesDir: platformGuess === 'win32' ? `${home}\\Pictures` : `${home}/Pictures`,
-            musicDir: platformGuess === 'win32' ? `${home}\\Music` : `${home}/Music`,
+            desktopDir: platformGuess === 'win32'
+                ? `${home}\\Desktop`
+                : resolveLocalizedPath('Desktop', [
+                    'Scrivania',
+                    'Escritorio',
+                    'Escrivaninha',
+                    'Bureau',
+                    'Schreibtisch',
+                ]),
+            documentsDir: platformGuess === 'win32'
+                ? `${home}\\Documents`
+                : resolveLocalizedPath('Documents', [
+                    'Documenti',
+                    'Documentos',
+                    'Dokumente',
+                ]),
+            downloadsDir: platformGuess === 'win32'
+                ? `${home}\\Downloads`
+                : resolveLocalizedPath('Downloads', [
+                    'Scaricati',
+                    'Download',
+                    'Descargas',
+                    'Téléchargements',
+                ]),
+            picturesDir: platformGuess === 'win32'
+                ? `${home}\\Pictures`
+                : resolveLocalizedPath('Pictures', [
+                    'Immagini',
+                    'Imágenes',
+                    'Fotos',
+                    'Bilder',
+                ]),
+            musicDir: platformGuess === 'win32'
+                ? `${home}\\Music`
+                : resolveLocalizedPath('Music', [
+                    'Musica',
+                    'Música',
+                    'Musique',
+                    'Musik',
+                ]),
             videosDir: platformGuess === 'win32'
-                ? `${home}\\${platformGuess === 'darwin' ? 'Movies' : 'Videos'}`
-                : `${home}/${platformGuess === 'darwin' ? 'Movies' : 'Videos'}`,
-            publicDir: platformGuess === 'win32' ? `${home}\\Public` : `${home}/Public`,
+                ? `${home}\\Videos`
+                : resolveLocalizedPath(platformGuess === 'darwin' ? 'Movies' : 'Videos', [
+                    'Video',
+                    'Videos',
+                    'Películas',
+                    'Filmati',
+                    'Filme',
+                ]),
+            publicDir: platformGuess === 'win32'
+                ? `${home}\\Public`
+                : resolveLocalizedPath('Public', [
+                    'Pubblica',
+                    'Pública',
+                    'Publico',
+                    'Öffentlich',
+                ]),
         };
         this.systemInfoTimestamp = now;
         return this.systemInfo;
@@ -455,6 +540,204 @@ class SimpleTerminal {
             console.warn('Failed to collect terminal context for AI:', error);
             return [];
         }
+    }
+
+    sanitizeCommandForHistory(command) {
+        if (!command) {
+            return '';
+        }
+
+        return command
+            .toString()
+            .replace(/\u001b\[[0-9;]*m/g, '')
+            .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+    }
+
+    sanitizePathForHistory(value) {
+        if (!value) {
+            return '';
+        }
+
+        return value
+            .toString()
+            .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+    }
+
+    sanitizeOutputForHistory(value, maxLength = 1200) {
+        if (!value) {
+            return '';
+        }
+
+        const text = value
+            .toString()
+            .replace(/\u001b\[[0-9;]*m/g, '')
+            .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+            .trim();
+
+        if (!maxLength || maxLength <= 0 || text.length <= maxLength) {
+            return text;
+        }
+
+        return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+    }
+
+    addCommandHistoryEntry(entry = {}) {
+        if (!entry || !entry.command) {
+            return;
+        }
+
+        if (!Array.isArray(this.commandHistoryLog)) {
+            this.commandHistoryLog = [];
+        }
+
+        const commandText = this.sanitizeCommandForHistory(entry.command);
+        if (!commandText.length) {
+            return;
+        }
+
+        const normalized = {
+            command: commandText,
+            cwd: this.sanitizePathForHistory(entry.cwd) || this.sanitizePathForHistory(this.cwd) || '~',
+            success: typeof entry.success === 'boolean' ? entry.success : null,
+            output: this.sanitizeOutputForHistory(entry.output),
+            timestamp: entry.timestamp || Date.now(),
+        };
+
+        this.commandHistoryLog.push(normalized);
+
+        const maxEntries = 30;
+        if (this.commandHistoryLog.length > maxEntries) {
+            this.commandHistoryLog.splice(0, this.commandHistoryLog.length - maxEntries);
+        }
+    }
+
+    getCommandHistoryEntries(limit = 5, maxOutputChars = 400) {
+        if (!Array.isArray(this.commandHistoryLog) || !this.commandHistoryLog.length) {
+            return [];
+        }
+
+        const clamp = (text = '') => this.sanitizeOutputForHistory(text, maxOutputChars);
+
+        return this.commandHistoryLog
+            .slice(-Math.max(1, limit))
+            .map((entry) => ({
+                ...entry,
+                output: clamp(entry.output),
+            }))
+            .reverse();
+    }
+
+    expandUserPath(value, options = {}) {
+        if (!value || typeof value !== 'string') {
+            return value;
+        }
+
+        const normalized = value.trim();
+        if (!normalized) {
+            return normalized;
+        }
+
+        const systemHome = (options.homeDir || this.systemInfo?.homeDir || '').toString();
+        const envHome = window.process?.env?.HOME || window.process?.env?.USERPROFILE || '';
+        const fallbackHome = systemHome || envHome;
+        const preferBackslash = (this.systemInfo?.platform || '').toLowerCase() === 'win32';
+
+        const normalizeSuffix = (suffix = '') => {
+            if (!suffix) {
+                return '';
+            }
+            const cleaned = suffix.replace(/^[~/\\]+/, '');
+            return preferBackslash
+                ? cleaned.replace(/[\/]/g, '\\')
+                : cleaned.replace(/[\\]/g, '/');
+        };
+
+        const replaceWithHome = (suffix = '') => {
+            if (!fallbackHome) {
+                return normalized;
+            }
+            const base = fallbackHome.replace(/[\\/]+$/, '');
+            if (!suffix) {
+                return base;
+            }
+            const normalizedSuffix = normalizeSuffix(suffix);
+            const separator = preferBackslash ? '\\' : '/';
+            return `${base}${separator}${normalizedSuffix}`;
+        };
+
+        if (normalized === '~') {
+            return replaceWithHome('');
+        }
+
+        if (normalized.startsWith('~/') || normalized.startsWith('~\\')) {
+            return replaceWithHome(normalized.slice(1));
+        }
+
+        return normalized;
+    }
+
+    expandUserPath(value, options = {}) {
+        if (!value || typeof value !== 'string') {
+            return value;
+        }
+
+        const normalized = value.trim();
+        if (!normalized) {
+            return normalized;
+        }
+
+        const systemHome = (options.homeDir || this.systemInfo?.homeDir || '').toString();
+        const envHome = window.process?.env?.HOME || window.process?.env?.USERPROFILE || '';
+        const fallbackHome = systemHome || envHome;
+
+        const replaceWithHome = (suffix = '') => {
+            if (!fallbackHome) {
+                return normalized;
+            }
+            const trimmed = fallbackHome.replace(/[\/]+$/, '');
+            return `${trimmed}${suffix}`;
+        };
+
+        if (normalized === '~') {
+            return replaceWithHome('');
+        }
+
+        if (normalized.startsWith('~/')) {
+            return replaceWithHome(normalized.slice(1));
+        }
+
+        if (normalized.startsWith('~\\')) {
+            return replaceWithHome(normalized.slice(1).replace(/\\/g, '/')).replace(/ /g, '');
+        }
+
+        return normalized;
+    }
+
+    formatPathForPrompt(pathValue, homeDir) {
+        if (!pathValue || typeof pathValue !== 'string') {
+            return pathValue || '';
+        }
+
+        const value = pathValue.trim();
+        if (!value.length) {
+            return '';
+        }
+
+        const normalizedHome = typeof homeDir === 'string'
+            ? homeDir.replace(/\\/g, '/').replace(/\/+$/, '')
+            : '';
+        const normalizedValue = value.replace(/\\/g, '/');
+
+        if (normalizedHome && normalizedValue.startsWith(normalizedHome)) {
+            const suffix = normalizedValue.slice(normalizedHome.length);
+            return `~${suffix || ''}`;
+        }
+
+        return value;
     }
 
     async loadSettingsFromBackend() {
@@ -2530,7 +2813,7 @@ class SimpleTerminal {
             const match = trimmed.match(/^(ai|ask|execute|run)\s+/i);
             const keyword = match ? match[1].toLowerCase() : 'ai';
             const question = match ? trimmed.slice(match[0].length).trim() : trimmed;
-            const expectCommand = ['execute', 'run'].includes(keyword);
+            const expectCommand = this.shouldExpectAICommand(keyword, question);
 
             if (!question) {
                 this.addAIOutput('⚠️ Specifica una richiesta per l\'assistente AI.');
@@ -2553,6 +2836,7 @@ class SimpleTerminal {
             const systemInfo = await this.ensureSystemInfo();
             const currentCwd = this.cwd || systemInfo?.homeDir || '~';
             const directorySnapshots = await this.collectDirectorySnapshots(systemInfo, currentCwd, expectCommand);
+            const commandHistoryEntries = this.getCommandHistoryEntries(aiConfig.history_lines || 5);
 
             const contextLines = this.getRecentTerminalContext(aiConfig.context_lines || 5);
             const rawResponse = await this.invokeAIProvider(question, {
@@ -2563,11 +2847,13 @@ class SimpleTerminal {
                 systemInfo,
                 cwd: currentCwd,
                 directorySnapshots,
+                commandHistory: commandHistoryEntries,
             });
 
             const aiResult = this.parseAIResult(rawResponse, {
                 expectCommand,
                 originalQuestion: question,
+                homeDir: systemInfo?.homeDir || currentCwd,
             });
 
             await this.presentAIResult(aiResult, {
@@ -2578,6 +2864,7 @@ class SimpleTerminal {
                 systemInfo,
                 cwd: currentCwd,
                 directorySnapshots,
+                commandHistory: commandHistoryEntries,
                 webSearchDepth: 0,
             });
         } catch (mainError) {
@@ -2601,8 +2888,88 @@ class SimpleTerminal {
         }
     }
 
+    shouldExpectAICommand(keyword = 'ai', rawQuestion = '') {
+        const normalizedKeyword = (keyword || '').toLowerCase();
+        const question = (rawQuestion || '').trim();
+        const lowerQuestion = question.toLowerCase();
+
+        if (!question) {
+            return normalizedKeyword === 'execute' || normalizedKeyword === 'run';
+        }
+
+        if (normalizedKeyword === 'ask') {
+            return false;
+        }
+
+        if (normalizedKeyword === 'execute' || normalizedKeyword === 'run') {
+            return true;
+        }
+
+        const conversationalTriggers = [
+            'ciao',
+            'buongiorno',
+            'buonasera',
+            'come stai',
+            'parlami',
+            'raccontami',
+            'puoi dirmi',
+            'fammi un riassunto',
+            'spiegami',
+            'che cos',
+            'cos\'è',
+            'cos e',
+            'chi è',
+            'chi e',
+            'perché',
+            'perche',
+            'cosa significa',
+            'dimmi di',
+            'informami su',
+            'scrivi una storia',
+            'scrivimi',
+        ];
+
+        const containsConversationalTrigger = conversationalTriggers.some((trigger) =>
+            lowerQuestion.includes(trigger),
+        );
+
+        if (containsConversationalTrigger) {
+            return false;
+        }
+
+        const looksLikeQuestion = /\?|\bperché\b|\bperche\b|\bchi\b|\bcosa\b/.test(lowerQuestion);
+        const directiveVerbs = [
+            'crea',
+            'genera',
+            'installa',
+            'avvia',
+            'esegui',
+            'mostra',
+            'sposta',
+            'copia',
+            'scarica',
+            'costruisci',
+            'configura',
+            'rimuovi',
+            'elimina',
+            'svuota',
+            'abilita',
+            'disabilita',
+            'aggiorna',
+        ];
+
+        const containsDirectiveVerb = directiveVerbs.some((verb) => lowerQuestion.includes(`${verb} `));
+
+        if (!containsDirectiveVerb && looksLikeQuestion) {
+            return false;
+        }
+
+        return true;
+    }
+
     parseAIResult(rawResponse, options = {}) {
-        const { expectCommand = false } = options || {};
+    const { expectCommand = false, homeDir = '' } = options || {};
+    const formatPath = (value) => this.formatPathForPrompt(value, homeDir);
         const text = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse || '');
         const json = this.extractJSONFromText(text);
         const fallbackSummary = 'Comando suggerito dall\'AI';
@@ -2643,7 +3010,7 @@ class SimpleTerminal {
                     summary: entry.summary || defaultExplanation || fallbackSummary,
                     notes: entry.notes || entry.details || entry.comment || '',
                     danger,
-                    cwd: entry.cwd || entry.directory || entry.path || '',
+                    cwd: formatPath(entry.cwd || entry.directory || entry.path || ''),
                 };
             }
 
@@ -2674,6 +3041,13 @@ class SimpleTerminal {
                     searchEngine: (json.searchEngine || json.engine || 'duckduckgo').toString(),
                     maxResults: Math.min(Math.max(3, maxResults || 5), 10),
                     expectCommand,
+                };
+            }
+            if (mode === 'refusal') {
+                const reason = (json.reason || summary || 'Impossibile procedere con la richiesta.').toString();
+                return {
+                    type: 'refusal',
+                    reason,
                 };
             }
             const commands = [];
@@ -2765,6 +3139,7 @@ class SimpleTerminal {
                         {
                             command: commandLine,
                             explanation: fallbackSummary,
+                            cwd: formatPath(homeDir || ''),
                         },
                     ],
                 };
@@ -2830,6 +3205,9 @@ class SimpleTerminal {
         const directorySnapshots = Array.isArray(options.directorySnapshots)
             ? options.directorySnapshots
             : [];
+        const commandHistory = Array.isArray(options.commandHistory)
+            ? options.commandHistory
+            : [];
 
         const contextBlock = contextLines.length
             ? `Contesto recente del terminale:\n${contextLines.join('\n')}`
@@ -2852,7 +3230,7 @@ class SimpleTerminal {
                 systemLines.push(`Identità: ${identity}`);
             }
         }
-        systemLines.push(`Directory corrente del terminale: ${cwd}`);
+    systemLines.push(`Directory corrente del terminale: ${this.formatPathForPrompt(cwd, systemInfo.homeDir)}`);
 
         const systemBlock = systemLines.length ? `Informazioni di sistema:\n${systemLines.join('\n')}` : '';
 
@@ -2866,6 +3244,7 @@ class SimpleTerminal {
             ['Video', systemInfo.videosDir],
             ['Public', systemInfo.publicDir],
         ]
+            .map(([label, value]) => ([label, this.formatPathForPrompt(value, systemInfo.homeDir)]))
             .filter(([, value]) => typeof value === 'string' && value.length);
 
         const directoriesBlock = dirEntries.length
@@ -2877,25 +3256,88 @@ class SimpleTerminal {
         const snapshotBlock = directorySnapshots.length
             ? `Contenuto directory recente:\n${directorySnapshots
                 .map((item) => {
+                    const label = this.formatPathForPrompt(item.directory, systemInfo.homeDir);
                     const list = item.entries
                         .map((entry) => `  - ${entry}`)
                         .join('\n');
-                    return `${item.directory}:\n${list}`;
+                    return `${label}:\n${list}`;
                 })
                 .join('\n')}`
             : '';
+        const historyBlock = commandHistory.length
+            ? `Cronologia comandi recenti (dal più recente):\n${commandHistory
+                .map((item, index) => {
+                    const status = item.success === true
+                        ? 'successo'
+                        : item.success === false
+                            ? 'errore'
+                            : 'sconosciuto';
+                    const formattedOutput = item.output
+                        ? item.output
+                              .split('\n')
+                              .map((line) => line.trimEnd())
+                              .filter((line) => line.length)
+                              .map((line) => `     ${line}`)
+                              .join('\n')
+                        : '';
+                    const lines = [
+                        `${index + 1}. Comando: ${item.command}`,
+                        item.cwd ? `   Directory: ${item.cwd}` : null,
+                        `   Esito: ${status}`,
+                        formattedOutput ? `   Output:\n${formattedOutput}` : null,
+                    ];
+                    return lines.filter(Boolean).join('\n');
+                })
+                .join('\n\n')}`
+            : '';
 
-        const exampleCommandJson = `{"mode":"suggestion","summary":"Sposta 1.png nelle Immagini","commands":[{"command":"mkdir -p ~/Pictures && mv ~/Desktop/1.png ~/Pictures/1.png","explanation":"Crea la cartella se manca e sposta il file","notes":"Usa && per creare la cartella solo se assente","danger":false,"cwd":"~"}]}`;
-        const exampleWebSearchJson = `{"mode":"web_search","searchQuery":"previsioni meteo Reggio Emilia domani","reason":"La richiesta riguarda meteo aggiornato quindi serve una ricerca online","searchEngine":"duckduckgo","maxResults":5}`;
+        const desktopPath = this.formatPathForPrompt(systemInfo.desktopDir, systemInfo.homeDir) || '~/Desktop';
+        const picturesPath = this.formatPathForPrompt(systemInfo.picturesDir, systemInfo.homeDir) || '~/Pictures';
+        const homePath = this.formatPathForPrompt(systemInfo.homeDir, systemInfo.homeDir) || '~';
+
+        const exampleCommandJson = JSON.stringify({
+            mode: 'suggestion',
+            summary: `Crea una cartella di lavoro in ${desktopPath}`,
+            commands: [
+                {
+                    command: `mkdir -p ${desktopPath}/ProgettoDemo`,
+                    explanation: 'Crea la cartella se non esiste già',
+                    notes: `Esegui dalla directory ${desktopPath}`,
+                    danger: false,
+                    cwd: desktopPath,
+                },
+                {
+                    command: `mv ${homePath}/todo.txt ${desktopPath}/ProgettoDemo/todo.txt`,
+                    explanation: 'Sposta il file di note nella nuova cartella',
+                    notes: 'Sostituisci i nomi file/cartella secondo necessità',
+                    danger: false,
+                    cwd: homePath,
+                },
+            ],
+        }).replace(/"/g, '\\"');
+
+        const exampleWebSearchJson = JSON.stringify({
+            mode: 'web_search',
+            searchQuery: 'previsioni meteo Reggio Emilia domani',
+            reason: 'La richiesta riguarda meteo aggiornato quindi serve una ricerca online',
+            searchEngine: 'duckduckgo',
+            maxResults: 5,
+        }).replace(/"/g, '\\"');
+
+        const exampleRefusalJson = JSON.stringify({
+            mode: 'refusal',
+            reason: 'Non dispongo di abbastanza informazioni per eseguire questa operazione in sicurezza',
+        }).replace(/"/g, '\\"');
 
         const guidance = expectCommand
-            ? `Analizza con attenzione la richiesta dell'utente: "${question}". Restituisci SOLO JSON valido (nessun testo extra, nessun markdown) seguendo queste regole in ordine di priorità:\n1. Se la richiesta è un saluto, una conversazione o comunque non richiede comandi (es. "ciao", "raccontami"), rispondi con {"mode":"informational","text":"..."} fornendo una risposta discorsiva nella stessa lingua dell'utente.\n2. Se per rispondere servono informazioni aggiornate, dati in tempo reale o contenuti potenzialmente sconosciuti (meteo, notizie, prezzi, eventi attuali, guide specifiche recenti, ecc.), restituisci ${exampleWebSearchJson} adattando query, motivo, motore e maxResults in base al contesto.\n3. Solo quando la richiesta richiede esplicitamente un comando da terminale, usa "mode":"suggestion" e popola "commands" (array) con comandi completi, già pronti: concatena passaggi multipli con "&&", aggiungi "notes" con prerequisiti o avvertenze, indica "danger"=true se rischioso e specifica "cwd" quando utile.\n4. Se non puoi aiutare, fornisci un JSON con "mode":"informational" spiegando chiaramente perché.\nVincoli aggiuntivi per i comandi: usa percorsi reali forniti (es. ${systemInfo.picturesDir || '~/Pictures'}), crea directory mancanti in modo idempotente (mkdir -p) e non aggiungere testo fuori dal JSON.\nEsempio comando valido: ${exampleCommandJson}`
+            ? `Analizza con attenzione la richiesta dell'utente: "${question}". Restituisci SOLO JSON valido (nessun testo extra, nessun markdown) seguendo queste regole in ordine di priorità:\n1. Se la richiesta è un saluto, una conversazione o comunque non richiede comandi (es. "ciao", "raccontami"), rispondi con {"mode":"informational","text":"..."} fornendo una risposta discorsiva nella stessa lingua dell'utente.\n2. Se per rispondere servono informazioni aggiornate, dati in tempo reale o contenuti potenzialmente sconosciuti (meteo, notizie, prezzi, eventi attuali, guide specifiche recenti, ecc.), restituisci ${exampleWebSearchJson} adattando query, motivo, motore e maxResults in base al contesto.\n3. Solo quando la richiesta richiede esplicitamente un comando da terminale, usa "mode":"suggestion" e popola "commands" (array) con comandi completi, già pronti: concatena passaggi multipli con "&&", aggiungi "notes" con prerequisiti o avvertenze, indica "danger"=true se rischioso e specifica "cwd" quando utile.\n4. Usa ESATTAMENTE i percorsi e i nomi di directory indicati nelle sezioni "Informazioni di sistema" e "Percorsi conosciuti" (es. ${desktopPath}, ${picturesPath}); non inventare percorsi come "~/Desktop" se non compaiono esplicitamente.\n5. Se l'operazione appare rischiosa, distruttiva, ambigua, richiede privilegi possibili mancanti o mancano informazioni essenziali, rispondi con ${exampleRefusalJson} spiegando brevemente il motivo del rifiuto.\n6. Se non puoi aiutare per altri motivi, fornisci un JSON con "mode":"informational" chiarendo la situazione.\nVincoli aggiuntivi per i comandi: crea directory mancanti in modo idempotente (mkdir -p), combina comandi multipli con "&&" e non aggiungere testo fuori dal JSON.\nEsempio comando valido: ${exampleCommandJson}`
             : `Domanda dell'utente: "${question}". Rispondi in modo conciso e utile per l'uso in un terminale, senza includere testo ridondante.`;
 
         const instruction = [
             contextBlock,
             systemBlock,
             directoriesBlock,
+            historyBlock,
             snapshotBlock,
             guidance,
         ]
@@ -3127,6 +3569,13 @@ class SimpleTerminal {
                     expectCommand,
                     webSearchDepth,
                 });
+                break;
+            }
+            case 'refusal': {
+                const reason = (result.reason || 'Richiesta rifiutata dall\'assistente.').toString();
+                const message = `🙅 ${reason}`;
+                this.updateAILineWithText(thinkingLine, message);
+                this.aiConversation.push({ role: 'assistant', text: reason });
                 break;
             }
             case 'informational':
@@ -3416,6 +3865,7 @@ class SimpleTerminal {
             const aiResult = this.parseAIResult(rawResponse, {
                 expectCommand: false,
                 originalQuestion,
+                homeDir: systemInfo?.homeDir || cwd,
             });
 
             processingLine.classList.remove('ai-thinking');
@@ -3587,12 +4037,15 @@ class SimpleTerminal {
 
         const adapted = this.adaptCommandToPlatform(command);
         const targetCwd = (details.cwd || '').trim();
-        const finalCommand = targetCwd && targetCwd !== this.cwd
-            ? `cd ${this.shellQuote(targetCwd)} && ${adapted}`
-            : adapted;
+        const useOverride = targetCwd && targetCwd.length ? targetCwd : '';
+        const promptLine = useOverride && useOverride !== this.cwd
+            ? `(${useOverride}) $ ${adapted}`
+            : `$ ${adapted}`;
 
-        this.addOutput('$ ' + finalCommand);
-        this.executeCommand(finalCommand);
+        this.addOutput(promptLine);
+        this.executeCommand(adapted, {
+            cwdOverride: useOverride,
+        });
         // Rimuovi tutti i suggerimenti dopo l'esecuzione
         this.clearAISuggestions();
     }
@@ -3606,7 +4059,7 @@ class SimpleTerminal {
             return '~';
         }
 
-        if (/^[\w@\/\.\-]+$/.test(value)) {
+        if (/^[\w@\/\.\-~]+$/.test(value)) {
             return value;
         }
 
@@ -3621,6 +4074,8 @@ class SimpleTerminal {
         const info = this.systemInfo || {};
         const platform = (info.platform || '').toLowerCase();
         let result = command.trim();
+
+        result = result.replace(/(['"])(~[\\\/][^'"]*)\1/g, '$2');
 
         const dirMap = {
             Desktop: info.desktopDir,
@@ -3687,7 +4142,8 @@ class SimpleTerminal {
 
     copyAISuggestion(command, meta = {}) {
         const payload = (meta?.cwd && meta.cwd !== this.cwd)
-            ? `cd ${this.shellQuote(meta.cwd)} && ${command}`
+            ? `# Da eseguire in ${meta.cwd}
+${command}`
             : command;
 
         navigator.clipboard.writeText(payload).then(() => {
@@ -4132,10 +4588,42 @@ class SimpleTerminal {
         this.forceDisplayUpdate();
     }
 
-    async executeCommand(command) {
+    async executeCommand(command, options = {}) {
         if (!command) {
             return;
         }
+
+        const normalizedOptions = options && typeof options === 'object' ? options : {};
+        const rawOverrideCwd = typeof normalizedOptions.cwdOverride === 'string'
+            ? normalizedOptions.cwdOverride.trim()
+            : '';
+        const displayOverrideCwd = this.sanitizePathForHistory(rawOverrideCwd);
+        const resolvedOverrideCwd = displayOverrideCwd
+            ? this.expandUserPath(displayOverrideCwd)
+            : '';
+        const effectiveCwd = resolvedOverrideCwd && resolvedOverrideCwd.length
+            ? resolvedOverrideCwd
+            : this.cwd;
+
+        const historyContext = {
+            command,
+            cwd: displayOverrideCwd || this.sanitizePathForHistory(this.cwd),
+            success: null,
+            output: '',
+        };
+
+        const appendHistoryOutput = (value) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+            const text = value.toString();
+            if (!text.trim().length) {
+                return;
+            }
+            historyContext.output = historyContext.output
+                ? `${historyContext.output}\n${text.trimEnd()}`
+                : text.trimEnd();
+        };
 
         const invoke = async (payload) => {
             try {
@@ -4159,22 +4647,25 @@ class SimpleTerminal {
         };
 
         const payloadBase = {};
-        if (this.cwd && this.cwd !== '~') {
-            payloadBase.cwd = this.cwd;
+        if (effectiveCwd && effectiveCwd !== '~') {
+            payloadBase.cwd = effectiveCwd;
         }
 
         try {
             if (command === 'pwd') {
                 const result = await invoke({ ...payloadBase, command: 'pwd' });
                 if (result) {
+                    appendHistoryOutput(result.stdout || result.output);
+                    historyContext.success = result.success === undefined ? true : !!result.success;
                     const output = (result.stdout || result.output || '').trim();
                     if (output) {
                         this.cwd = output;
                         this.addOutput(output);
-                        this.showPrompt();
                     }
                 } else {
-                    this.addOutput(this.executeFallbackCommand(command));
+                    const fallback = this.executeFallbackCommand(command);
+                    appendHistoryOutput(fallback);
+                    this.addOutput(fallback);
                 }
                 return;
             }
@@ -4185,6 +4676,8 @@ class SimpleTerminal {
                 const cdCommand = `cd ${sanitizeArg(resolved)} && pwd`;
                 const result = await invoke({ ...payloadBase, command: cdCommand });
                 if (result && result.success) {
+                    appendHistoryOutput(result.stdout || result.output);
+                    historyContext.success = true;
                     const newPath = (result.stdout || result.output || '').trim();
                     if (newPath) {
                         this.cwd = newPath;
@@ -4192,12 +4685,16 @@ class SimpleTerminal {
                     } else {
                         this.addOutput('❔ Unable to determine the new directory');
                     }
-                    this.showPrompt();
                 } else if (result) {
                     const errorText = result.stderr || result.output || 'cd failed';
+                    appendHistoryOutput(result.stderr || result.output);
+                    historyContext.success = false;
                     this.addOutput(`❌ ${errorText}`);
                 } else {
-                    this.addOutput(this.executeFallbackCommand(command));
+                    const fallback = this.executeFallbackCommand(command);
+                    appendHistoryOutput(fallback);
+                    historyContext.success = null;
+                    this.addOutput(fallback);
                 }
                 return;
             }
@@ -4208,7 +4705,9 @@ class SimpleTerminal {
                 if (fallback) {
                     this.addOutput(`⚠️ Falling back to simulation (invoke missing).`);
                     this.addOutput(fallback);
+                    appendHistoryOutput(fallback);
                 }
+                historyContext.success = null;
                 this.logTauriDiagnostics();
                 return;
             }
@@ -4223,6 +4722,12 @@ class SimpleTerminal {
                     }
                 });
             };
+
+            appendHistoryOutput(result.stdout);
+            appendHistoryOutput(result.stderr);
+            if (!result.stdout && !result.stderr && result.output) {
+                appendHistoryOutput(result.output);
+            }
 
             if (result.stdout) {
                 printLines(result.stdout);
@@ -4239,6 +4744,9 @@ class SimpleTerminal {
             if (!result.success) {
                 const msg = result.stderr || result.output || 'Command failed';
                 this.addOutput(`❌ ${msg}`);
+                historyContext.success = false;
+            } else {
+                historyContext.success = true;
             }
 
             if (/^\s*pwd\s*$/.test(command)) {
@@ -4252,10 +4760,17 @@ class SimpleTerminal {
             const fallback = this.executeFallbackCommand(command);
             if (fallback) {
                 this.addOutput(fallback);
+                appendHistoryOutput(fallback);
             } else {
                 this.addOutput(`❌ ${error.message}`);
+                appendHistoryOutput(error.message);
             }
+            historyContext.success = false;
         } finally {
+            this.addCommandHistoryEntry({
+                ...historyContext,
+                timestamp: Date.now(),
+            });
             this.showPrompt();
         }
     }

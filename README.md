@@ -36,8 +36,10 @@ npm run dev
 
 ### Build for Production
 ```bash
+npm run prepare:dist # Sync renderer/ assets into dist/
+npm run icons        # Regenerate icons from logo.svg
 npm run build        # Build for current platform
-npm run build:all    # Build for all platforms
+npm run build:all    # Build for all platforms (requires rustup targets + Windows host for MSVC)
 ```
 
 ## 📥 Download
@@ -426,28 +428,15 @@ For detailed information about features and configuration, see the [docs/](docs/
 
 ```
 termina/
-├── main.js              # Main Electron process
-├── preload.js           # Preload script for security
-├── src/
-│   ├── config.js        # Configuration management
-│   ├── ai-manager.js    # AI provider abstraction
-│   ├── ai-agent.js      # AI agent with web integration
-│   ├── webscraper.js    # Web scraping capabilities
-│   ├── web-ai-integration.js # Web-AI integration layer
-│   ├── language-detector.js  # Multi-language support
-│   ├── system-info.js        # System information
-│   └── path-alias.js         # Path alias management
-├── renderer/
-│   ├── index.html       # Main window
-│   ├── renderer.js      # Terminal logic
-│   ├── style.css        # Main styles
-│   ├── settings.html    # Settings window
-│   ├── settings.js      # Settings logic
-│   └── settings-style.css
+├── main.js              # Tauri bootstrap for the renderer
+├── preload.js           # Preload script for secure API exposure
+├── renderer/            # Frontend UI, terminals and settings views
+├── src-tauri/           # Rust backend commands and configuration
+├── scripts/             # Build and sync utilities
 ├── docs/                # Documentation
-│   └── WEBSCRAPER_INTEGRATION.md
-├── test-webscraper.js   # Web integration tests
-└── assets/              # Icons and images
+├── assets/              # Icons and images
+├── dist/                # Generated renderer bundle (synced before builds)
+└── examples/            # Sample configs for advanced integrations
 ```
 
 ## 🤝 Contributing
@@ -559,9 +548,10 @@ To verify detection, open DevTools console and check there is no spam of repeate
    ```
 
 ## Project Structure
-- `main.js`: Main Electron process
-- `renderer/`: User interface and terminal (xterm.js)
-- `src/`: AI integration modules
+- `main.js`: Entry point wiring the renderer for Tauri
+- `renderer/`: User interface, terminals, and settings (xterm.js + custom UI)
+- `src-tauri/`: Rust backend commands and configuration
+- `scripts/`: Utility scripts (sync, build helpers)
 
 ## Notes
 - For local AI integration, consult LM Studio documentation or other compatible APIs.

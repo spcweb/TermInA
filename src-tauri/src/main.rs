@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -358,14 +359,94 @@ fn get_system_info() -> Result<Value, String> {
         .or_else(|_| std::env::var("COMSPEC"))
         .unwrap_or_default();
 
-    let home = home_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let desktop = desktop_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let documents = document_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let downloads = download_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let pictures = picture_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let music = audio_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let videos = video_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let public_share = public_dir().map(|p| p.display().to_string()).unwrap_or_default();
+    let home_path = home_dir();
+    let home_display = home_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+    let home_ref = home_path.as_deref();
+
+    fn resolve_localized_dir(default: Option<PathBuf>, home: Option<&Path>, candidates: &[&str]) -> Option<PathBuf> {
+        if let Some(path) = default.as_ref() {
+            if path.exists() {
+                return default;
+            }
+        }
+        if let Some(home_path) = home {
+            for name in candidates {
+                let candidate = home_path.join(name);
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+        }
+        default
+    }
+
+    fn stringify_path(path: Option<PathBuf>, home: Option<&Path>) -> String {
+        if let Some(p) = path {
+            if let Some(home_path) = home {
+                if let Ok(stripped) = p.strip_prefix(home_path) {
+                    if stripped.as_os_str().is_empty() {
+                        return "~".to_string();
+                    }
+                    let relative = stripped.display().to_string();
+                    return format!("~{}{}", std::path::MAIN_SEPARATOR, relative);
+                }
+            }
+            return p.display().to_string();
+        }
+        String::new()
+    }
+
+    let desktop = resolve_localized_dir(desktop_dir(), home_ref, &[
+        "Scrivania",
+        "Escritorio",
+        "Escrivaninha",
+        "Bureau",
+        "Schreibtisch",
+        "Skrivbord",
+        "Desktop",
+    ]);
+    let documents = resolve_localized_dir(document_dir(), home_ref, &[
+        "Documenti",
+        "Documentos",
+        "Dokumente",
+        "Documents",
+    ]);
+    let downloads = resolve_localized_dir(download_dir(), home_ref, &[
+        "Scaricati",
+        "Download",
+        "Descargas",
+        "Téléchargements",
+        "Downloads",
+    ]);
+    let pictures = resolve_localized_dir(picture_dir(), home_ref, &[
+        "Immagini",
+        "Imágenes",
+        "Fotos",
+        "Bilder",
+        "Pictures",
+    ]);
+    let music = resolve_localized_dir(audio_dir(), home_ref, &[
+        "Musica",
+        "Música",
+        "Musique",
+        "Musik",
+        "Music",
+    ]);
+    let videos = resolve_localized_dir(video_dir(), home_ref, &[
+        "Film",
+        "Filmati",
+        "Películas",
+        "Videos",
+        "Video",
+        "Movies",
+    ]);
+    let public_share = resolve_localized_dir(public_dir(), home_ref, &[
+        "Pubblica",
+        "Pública",
+        "Publico",
+        "Öffentlich",
+        "Public",
+    ]);
 
     let username = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -380,14 +461,14 @@ fn get_system_info() -> Result<Value, String> {
         "platform": platform,
         "arch": arch,
         "shell": shell,
-        "homeDir": home,
-        "desktopDir": desktop,
-        "documentsDir": documents,
-        "downloadsDir": downloads,
-        "picturesDir": pictures,
-        "musicDir": music,
-        "videosDir": videos,
-        "publicDir": public_share,
+        "homeDir": home_display,
+        "desktopDir": stringify_path(desktop, home_ref),
+        "documentsDir": stringify_path(documents, home_ref),
+        "downloadsDir": stringify_path(downloads, home_ref),
+        "picturesDir": stringify_path(pictures, home_ref),
+        "musicDir": stringify_path(music, home_ref),
+        "videosDir": stringify_path(videos, home_ref),
+        "publicDir": stringify_path(public_share, home_ref),
         "username": username,
         "hostname": hostname,
     }))

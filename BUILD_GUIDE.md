@@ -1,5 +1,7 @@
 # TermInA Build Guide
 
+> ℹ️ TermInA 2.x usa [Tauri 2](https://tauri.app/) come toolchain di build. I comandi riportati qui sono aggiornati al flusso Tauri; le sezioni legacy su Electron rimangono per contesto storico.
+
 Complete guide for building and distributing TermInA across all platforms.
 
 ## 🚀 Quick Build
@@ -14,10 +16,17 @@ Complete guide for building and distributing TermInA across all platforms.
 # Install dependencies
 npm install
 
+# Sync renderer assets into dist/
+npm run prepare:dist
+
+# Generate platform icons from logo.svg
+npm run icons
+
 # Build for current platform
 npm run build
 
 # Build for all platforms
+# (richiede rustup con i target Linux/Windows installati e la build Windows deve essere eseguita su host Windows)
 npm run build:all
 
 # Create distributable packages
@@ -132,18 +141,18 @@ linux:
 
 ### Generate Icons Script
 ```bash
-# Run the icon generation script
-node build/generate-icons.js
+# Generate icon set from logo.svg via Tauri CLI
+npm run icons
 ```
 
-This script creates:
+This command creates automatically:
 - `icon.icns` (macOS)
 - `icon.ico` (Windows)
 - `icon.png` (Linux)
 - Various sizes for different platforms
 
 ### Icon Requirements
-- **Source**: 512x512 PNG with transparency
+- **Source**: 512x512 (o superiore) SVG con trasparenza (`logo.svg`)
 - **Formats**: PNG, ICO, ICNS
 - **Sizes**: 16, 32, 48, 64, 128, 256, 512 pixels
 

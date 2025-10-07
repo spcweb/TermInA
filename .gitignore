@@ -9,6 +9,9 @@ dist/
 build/
 *.tgz
 *.tar.gz
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/64x64.png
 
 # Electron app binaries (troppo grandi per Git)
 *.app/
