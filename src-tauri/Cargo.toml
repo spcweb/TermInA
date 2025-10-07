@@ -33,3 +33,4 @@ env_logger = "0.10"
 portable-pty = { version = "0.9.0", features = ["serde"] }
 rpassword = "7.3"
 hostname = "0.3"
+os_info = "3.8"

@@ -314,7 +314,7 @@ class SimpleTerminal {
             if (tauriApi?.invoke) {
                 const info = await tauriApi.invoke('get_system_info');
                 if (info && typeof info === 'object') {
-                    this.systemInfo = info;
+                    this.systemInfo = this.normalizeSystemInfo(info);
                     this.systemInfoTimestamp = now;
                     return this.systemInfo;
                 }
@@ -328,6 +328,19 @@ class SimpleTerminal {
             if (raw.includes('win')) return 'win32';
             if (raw.includes('mac')) return 'darwin';
             return 'linux';
+        })();
+
+        const platformPrettyFallback = (() => {
+            switch (platformGuess) {
+                case 'win32':
+                    return 'Windows';
+                case 'darwin':
+                    return 'macOS';
+                case 'linux':
+                    return 'Linux';
+                default:
+                    return platformGuess;
+            }
         })();
 
         const home = (() => {
@@ -373,8 +386,10 @@ class SimpleTerminal {
             return basePath;
         };
 
-        this.systemInfo = {
+        const fallbackInfo = {
             platform: platformGuess,
+            platformPretty: platformPrettyFallback,
+            platformVersion: '',
             arch: window.navigator?.userAgentData?.architecture || '',
             shell: platformGuess === 'win32' ? 'powershell' : 'bash',
             homeDir: home,
@@ -436,6 +451,7 @@ class SimpleTerminal {
                     'Öffentlich',
                 ]),
         };
+        this.systemInfo = this.normalizeSystemInfo(fallbackInfo);
         this.systemInfoTimestamp = now;
         return this.systemInfo;
     }
@@ -458,17 +474,28 @@ class SimpleTerminal {
                 if (!value || typeof value !== 'string') {
                     return null;
                 }
-                if (value.startsWith('~') && systemInfo?.homeDir) {
-                    return `${systemInfo.homeDir}${value.slice(1)}`;
-                }
-                return value;
+                const expanded = this.expandUserPath(value, {
+                    homeDir: systemInfo?.homeDir,
+                    forceWindows: systemInfo?.isWindows ?? isWindows,
+                    preferBackslash: systemInfo?.isWindows ?? isWindows,
+                });
+                const candidate = (expanded || value).trim();
+                return candidate.length ? candidate : null;
             };
 
             const candidates = [
                 currentCwd,
+                systemInfo?.paths?.desktop?.absolute,
+                systemInfo?.paths?.desktop?.display,
                 systemInfo?.desktopDir,
+                systemInfo?.paths?.documents?.absolute,
+                systemInfo?.paths?.documents?.display,
                 systemInfo?.documentsDir,
+                systemInfo?.paths?.downloads?.absolute,
+                systemInfo?.paths?.downloads?.display,
                 systemInfo?.downloadsDir,
+                systemInfo?.paths?.pictures?.absolute,
+                systemInfo?.paths?.pictures?.display,
                 systemInfo?.picturesDir,
             ]
                 .map((item) => resolvePath(item))
@@ -632,89 +659,191 @@ class SimpleTerminal {
     }
 
     expandUserPath(value, options = {}) {
-        if (!value || typeof value !== 'string') {
+        if (typeof value !== 'string') {
             return value;
         }
 
-        const normalized = value.trim();
-        if (!normalized) {
-            return normalized;
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return trimmed;
         }
 
-        const systemHome = (options.homeDir || this.systemInfo?.homeDir || '').toString();
-        const envHome = window.process?.env?.HOME || window.process?.env?.USERPROFILE || '';
-        const fallbackHome = systemHome || envHome;
-        const preferBackslash = (this.systemInfo?.platform || '').toLowerCase() === 'win32';
+        const info = this.systemInfo || {};
+        const platformRaw = (info.platform || '').toString().toLowerCase();
+        const isWindows = options.forceWindows === true
+            || (options.forceWindows !== false && (platformRaw.startsWith('win') || platformRaw === 'windows'));
 
-        const normalizeSuffix = (suffix = '') => {
-            if (!suffix) {
+        const homeAbsolute = (options.homeDir
+            || info.paths?.home?.absolute
+            || info.homeDir
+            || window.process?.env?.HOME
+            || window.process?.env?.USERPROFILE
+            || '')
+            .toString();
+
+        const preferBackslash = options.preferBackslash === true
+            || (options.preferBackslash !== false && isWindows);
+
+        const normalizeSeparators = (text = '') => {
+            if (!text) {
                 return '';
             }
-            const cleaned = suffix.replace(/^[~/\\]+/, '');
             return preferBackslash
-                ? cleaned.replace(/[\/]/g, '\\')
-                : cleaned.replace(/[\\]/g, '/');
+                ? text.replace(/\//g, '\\')
+                : text.replace(/\\/g, '/');
         };
 
-        const replaceWithHome = (suffix = '') => {
-            if (!fallbackHome) {
-                return normalized;
+        const joinHome = (suffix = '') => {
+            const cleanedSuffix = suffix.replace(/^[\\/]+/, '');
+            const suffixPortion = normalizeSeparators(cleanedSuffix);
+            if (!homeAbsolute) {
+                const base = preferBackslash ? '%USERPROFILE%' : '~';
+                return suffixPortion
+                    ? `${base}${preferBackslash ? '\\' : '/'}${suffixPortion}`
+                    : base;
             }
-            const base = fallbackHome.replace(/[\\/]+$/, '');
-            if (!suffix) {
+            const base = homeAbsolute.replace(/[\\/]+$/, '');
+            if (!suffixPortion) {
                 return base;
             }
-            const normalizedSuffix = normalizeSuffix(suffix);
-            const separator = preferBackslash ? '\\' : '/';
-            return `${base}${separator}${normalizedSuffix}`;
+            return `${base}${preferBackslash ? '\\' : '/'}${suffixPortion}`;
         };
 
-        if (normalized === '~') {
-            return replaceWithHome('');
+        const expandEnvTokens = (input) => {
+            let output = input;
+            output = output.replace(/\$(HOME|USERPROFILE)\b/g, joinHome(''));
+            output = output.replace(/\$\{HOME\}/g, joinHome(''));
+            output = output.replace(/\$\{USERPROFILE\}/g, joinHome(''));
+            if (/^%USERPROFILE%/i.test(output)) {
+                output = joinHome(output.replace(/^%USERPROFILE%/i, ''));
+            }
+            if (/^%HOMEPATH%/i.test(output)) {
+                output = joinHome(output.replace(/^%HOMEPATH%/i, ''));
+            }
+            return output;
+        };
+
+        let expanded = expandEnvTokens(trimmed);
+
+        if (expanded === '~') {
+            expanded = joinHome('');
+        } else if (/^~[\\/]/.test(expanded)) {
+            expanded = joinHome(expanded.slice(2));
+        } else if (expanded.startsWith('~')) {
+            if (homeAbsolute) {
+                expanded = joinHome(expanded.slice(1));
+            }
         }
 
-        if (normalized.startsWith('~/') || normalized.startsWith('~\\')) {
-            return replaceWithHome(normalized.slice(1));
-        }
-
-        return normalized;
+        return normalizeSeparators(expanded);
     }
 
-    expandUserPath(value, options = {}) {
-        if (!value || typeof value !== 'string') {
-            return value;
-        }
+    normalizeSystemInfo(rawInfo = {}) {
+        const info = rawInfo && typeof rawInfo === 'object' ? { ...rawInfo } : {};
+        const platform = (info.platform || '').toString();
+        const platformLower = platform.toLowerCase();
+        const isWindows = platformLower.startsWith('win') || platformLower === 'windows';
 
-        const normalized = value.trim();
-        if (!normalized) {
-            return normalized;
-        }
+        const candidateHomeAbsolute = (info.homeDir
+            || info.home
+            || info.homeDirAbsolute
+            || info.paths?.home?.absolute
+            || '').toString();
 
-        const systemHome = (options.homeDir || this.systemInfo?.homeDir || '').toString();
-        const envHome = window.process?.env?.HOME || window.process?.env?.USERPROFILE || '';
-        const fallbackHome = systemHome || envHome;
-
-        const replaceWithHome = (suffix = '') => {
-            if (!fallbackHome) {
-                return normalized;
+        const ensureAbsolute = (candidate) => {
+            if (!candidate || typeof candidate !== 'string') {
+                return '';
             }
-            const trimmed = fallbackHome.replace(/[\/]+$/, '');
-            return `${trimmed}${suffix}`;
+            const trimmed = candidate.trim();
+            if (!trimmed) {
+                return '';
+            }
+            if (
+                trimmed.startsWith('~')
+                || /^%HOMEPATH%/i.test(trimmed)
+                || /^%USERPROFILE%/i.test(trimmed)
+                || /^\$HOME\b/.test(trimmed)
+                || /^\$\{(HOME|USERPROFILE)\}/.test(trimmed)
+            ) {
+                return this.expandUserPath(trimmed, {
+                    homeDir: candidateHomeAbsolute,
+                    forceWindows: isWindows,
+                    preferBackslash: isWindows,
+                });
+            }
+            return isWindows ? trimmed.replace(/\//g, '\\') : trimmed.replace(/\\/g, '/');
         };
 
-        if (normalized === '~') {
-            return replaceWithHome('');
+        const ensureDisplay = (absolute, fallback) => {
+            if (absolute && candidateHomeAbsolute) {
+                return this.formatPathForPrompt(absolute, candidateHomeAbsolute);
+            }
+            return (fallback || absolute || '').toString();
+        };
+
+        const paths = {
+            ...(info.paths || {}),
+        };
+
+        const directoryKeys = ['desktop', 'documents', 'downloads', 'pictures', 'music', 'videos', 'public'];
+        const directories = {};
+
+        directoryKeys.forEach((key) => {
+            const dirKey = `${key}Dir`;
+            const absKey = `${dirKey}Absolute`;
+            const displayKey = `${dirKey}Display`;
+            const fromPaths = paths[key] || {};
+
+            const absolute = ensureAbsolute(fromPaths.absolute || info[absKey] || info[dirKey]);
+            const display = ensureDisplay(absolute, fromPaths.display || info[displayKey] || info[dirKey]);
+
+            info[dirKey] = display;
+            info[absKey] = absolute;
+            info[displayKey] = display;
+
+            directories[key] = {
+                absolute,
+                display,
+            };
+
+            paths[key] = {
+                absolute,
+                display,
+            };
+        });
+
+        const homeAbsolute = ensureAbsolute(candidateHomeAbsolute || info.homeDir);
+        const homeDisplay = ensureDisplay(homeAbsolute, info.homeDirDisplay || paths.home?.display);
+
+        paths.home = {
+            absolute: homeAbsolute || paths.home?.absolute || info.homeDir || '',
+            display: homeDisplay || paths.home?.display || '',
+        };
+
+        if (!paths.home.absolute) {
+            paths.home.absolute = ensureAbsolute(paths.home.display || candidateHomeAbsolute || info.homeDir || '~');
         }
 
-        if (normalized.startsWith('~/')) {
-            return replaceWithHome(normalized.slice(1));
+        if (!paths.home.display) {
+            const fallbackDisplay = paths.home.absolute
+                ? this.formatPathForPrompt(paths.home.absolute, paths.home.absolute)
+                : '~';
+            paths.home.display = fallbackDisplay || '~';
         }
 
-        if (normalized.startsWith('~\\')) {
-            return replaceWithHome(normalized.slice(1).replace(/\\/g, '/')).replace(/ /g, '');
-        }
+        info.homeDir = paths.home.absolute;
+        info.homeDirDisplay = paths.home.display
+            || (paths.home.absolute ? this.formatPathForPrompt(paths.home.absolute, paths.home.absolute) : '')
+            || '~';
+        info.platform = platform || platformLower || '';
+        info.platformNormalized = platformLower || info.platform;
+        info.platformPretty = info.platformPretty || info.platformLabel || info.platform;
+        info.platformLabel = info.platformPretty;
+        info.isWindows = isWindows;
+        info.paths = paths;
+        info.directories = directories;
 
-        return normalized;
+        return info;
     }
 
     formatPathForPrompt(pathValue, homeDir) {
@@ -3214,9 +3343,16 @@ class SimpleTerminal {
             : '';
 
         const systemLines = [];
-        if (systemInfo.platform) {
-            const release = systemInfo.release ? ` ${systemInfo.release}` : '';
-            systemLines.push(`Sistema operativo: ${systemInfo.platform}${release}`.trim());
+        if (systemInfo.platform || systemInfo.platformPretty) {
+            const label = systemInfo.platformPretty || systemInfo.platform;
+            const version = systemInfo.platformVersion || systemInfo.release || '';
+            const kernel = systemInfo.kernelVersion || '';
+            const composed = [
+                label,
+                version,
+            ].filter(Boolean).join(' ').trim();
+            const suffix = kernel ? ` (kernel ${kernel})` : '';
+            systemLines.push(`Sistema operativo: ${composed || label}${suffix}`.trim());
         }
         if (systemInfo.arch) {
             systemLines.push(`Architettura: ${systemInfo.arch}`);
@@ -4077,14 +4213,35 @@ class SimpleTerminal {
 
         result = result.replace(/(['"])(~[\\\/][^'"]*)\1/g, '$2');
 
+        const absoluteFor = (name) => {
+            const lower = name.toLowerCase();
+            const entry = info.paths?.[lower];
+            if (entry?.absolute) {
+                return entry.absolute;
+            }
+            const dirKey = `${lower}Dir`;
+            const absKey = `${dirKey}Absolute`;
+            if (info[absKey]) {
+                return info[absKey];
+            }
+            if (info[dirKey]) {
+                return this.expandUserPath(info[dirKey], {
+                    homeDir: info.homeDir,
+                    forceWindows: platform === 'win32',
+                    preferBackslash: platform === 'win32',
+                });
+            }
+            return null;
+        };
+
         const dirMap = {
-            Desktop: info.desktopDir,
-            Documents: info.documentsDir,
-            Downloads: info.downloadsDir,
-            Pictures: info.picturesDir,
-            Music: info.musicDir,
-            Videos: info.videosDir,
-            Public: info.publicDir,
+            Desktop: absoluteFor('desktop'),
+            Documents: absoluteFor('documents'),
+            Downloads: absoluteFor('downloads'),
+            Pictures: absoluteFor('pictures'),
+            Music: absoluteFor('music'),
+            Videos: absoluteFor('videos'),
+            Public: absoluteFor('public'),
         };
 
         const quoteForPlatform = (value) => {
@@ -4640,10 +4797,24 @@ ${command}`
         };
 
         const sanitizeArg = (arg) => {
-            if (!arg) return "";
-            if (arg === '~') return '~';
-            const escaped = arg.split("'").join("'\\''");
-            return "'" + escaped + "'";
+            if (arg === undefined || arg === null) {
+                return "''";
+            }
+
+            const rawValue = `${arg}`.trim();
+            if (!rawValue) {
+                return "''";
+            }
+
+            const expanded = this.expandUserPath(rawValue);
+            const target = expanded || rawValue;
+
+            if (target === '~') {
+                return '~';
+            }
+
+            const escaped = target.split("'").join("'\\''");
+            return `'${escaped}'`;
         };
 
         const payloadBase = {};

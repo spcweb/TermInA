@@ -353,15 +353,24 @@ fn get_cwd() -> Result<String, String> {
 
 #[tauri::command]
 fn get_system_info() -> Result<Value, String> {
-    let platform = std::env::consts::OS;
+    let platform_raw = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
     let shell = std::env::var("SHELL")
         .or_else(|_| std::env::var("COMSPEC"))
         .unwrap_or_default();
 
+    let os_metadata = os_info::get();
+    let platform_pretty = os_metadata.to_string();
+    let platform_family = os_metadata.os_type().to_string();
+    let platform_version = os_metadata.version().to_string();
     let home_path = home_dir();
-    let home_display = home_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+    let home_absolute = home_path
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
     let home_ref = home_path.as_deref();
+
+    let home_display = stringify_path(home_path.clone(), home_ref);
 
     fn resolve_localized_dir(default: Option<PathBuf>, home: Option<&Path>, candidates: &[&str]) -> Option<PathBuf> {
         if let Some(path) = default.as_ref() {
@@ -457,20 +466,102 @@ fn get_system_info() -> Result<Value, String> {
         .and_then(|h| h.into_string().ok())
         .unwrap_or_default();
 
+    let desktop_absolute = desktop
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let documents_absolute = documents
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let downloads_absolute = downloads
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let pictures_absolute = pictures
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let music_absolute = music
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let videos_absolute = videos
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let public_absolute = public_share
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+
+    let desktop_display = stringify_path(desktop.clone(), home_ref);
+    let documents_display = stringify_path(documents.clone(), home_ref);
+    let downloads_display = stringify_path(downloads.clone(), home_ref);
+    let pictures_display = stringify_path(pictures.clone(), home_ref);
+    let music_display = stringify_path(music.clone(), home_ref);
+    let videos_display = stringify_path(videos.clone(), home_ref);
+    let public_display = stringify_path(public_share.clone(), home_ref);
+
     Ok(json!({
-        "platform": platform,
+        "platform": platform_raw,
+        "platformFamily": platform_family,
+        "platformPretty": platform_pretty,
+        "platformVersion": platform_version,
         "arch": arch,
         "shell": shell,
-        "homeDir": home_display,
-        "desktopDir": stringify_path(desktop, home_ref),
-        "documentsDir": stringify_path(documents, home_ref),
-        "downloadsDir": stringify_path(downloads, home_ref),
-        "picturesDir": stringify_path(pictures, home_ref),
-        "musicDir": stringify_path(music, home_ref),
-        "videosDir": stringify_path(videos, home_ref),
-        "publicDir": stringify_path(public_share, home_ref),
+        "homeDir": home_absolute,
+        "homeDirDisplay": home_display,
+        "desktopDir": desktop_display,
+        "desktopDirAbsolute": desktop_absolute,
+        "documentsDir": documents_display,
+        "documentsDirAbsolute": documents_absolute,
+        "downloadsDir": downloads_display,
+        "downloadsDirAbsolute": downloads_absolute,
+        "picturesDir": pictures_display,
+        "picturesDirAbsolute": pictures_absolute,
+        "musicDir": music_display,
+        "musicDirAbsolute": music_absolute,
+        "videosDir": videos_display,
+        "videosDirAbsolute": videos_absolute,
+        "publicDir": public_display,
+        "publicDirAbsolute": public_absolute,
         "username": username,
         "hostname": hostname,
+        "paths": {
+            "home": {
+                "absolute": home_absolute,
+                "display": home_display,
+            },
+            "desktop": {
+                "absolute": desktop_absolute,
+                "display": desktop_display,
+            },
+            "documents": {
+                "absolute": documents_absolute,
+                "display": documents_display,
+            },
+            "downloads": {
+                "absolute": downloads_absolute,
+                "display": downloads_display,
+            },
+            "pictures": {
+                "absolute": pictures_absolute,
+                "display": pictures_display,
+            },
+            "music": {
+                "absolute": music_absolute,
+                "display": music_display,
+            },
+            "videos": {
+                "absolute": videos_absolute,
+                "display": videos_display,
+            },
+            "public": {
+                "absolute": public_absolute,
+                "display": public_display,
+            },
+        },
     }))
 }
 

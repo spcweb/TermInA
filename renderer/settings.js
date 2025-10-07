@@ -101,6 +101,15 @@ class SettingsManager {
         // Theme preview functionality
         this.setupThemePreview();
         this.setupThemePresets();
+
+        const providerSelect = document.getElementById('ai-provider');
+        if (providerSelect) {
+            providerSelect.addEventListener('change', (event) => {
+                const provider = event?.target?.value;
+                this.updateProviderConfigVisibility(provider);
+            });
+            this.updateProviderConfigVisibility(providerSelect.value);
+        }
     }
 
     activateSection(sectionId, linkEl) {
@@ -147,6 +156,7 @@ class SettingsManager {
             this.setValueSafely('ai-provider', cfg.ai.provider);
             this.setValueSafely('ai-auto-execute', cfg.ai.auto_execute);
             this.setValueSafely('ai-context-lines', cfg.ai.context_lines);
+            this.updateProviderConfigVisibility(cfg.ai.provider);
             // Gemini
             if (cfg.ai.gemini) {
                 this.setValueSafely('gemini-api-key', cfg.ai.gemini.api_key);
@@ -176,6 +186,23 @@ class SettingsManager {
                 element.value = String(value || '');
             }
         }
+    }
+
+    updateProviderConfigVisibility(provider) {
+        const normalized = (provider || '').toString().toLowerCase();
+        const sections = {
+            gemini: document.getElementById('gemini-config'),
+            'lm-studio': document.getElementById('lm-studio-config'),
+            ollama: document.getElementById('ollama-config'),
+            openai: document.getElementById('openai-config'),
+        };
+
+        Object.entries(sections).forEach(([key, element]) => {
+            if (!element) return;
+            const isActive = key === normalized;
+            element.style.display = isActive ? '' : 'none';
+            element.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        });
     }
 
     async saveSettings() {
